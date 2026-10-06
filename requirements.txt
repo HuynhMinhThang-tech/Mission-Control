@@ -1,0 +1,8 @@
+flask
+pandas>=2.0
+numpy
+openpyxl
+xlrd
+openai
+python-pptx
+python-dotenv

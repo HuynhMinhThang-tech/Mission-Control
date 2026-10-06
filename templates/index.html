@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@500;600&display=swap" rel="stylesheet">
+<title>Mission Control</title>
+<link rel="stylesheet" href="/static/css/app.css">
+</head><body>
+<div class="app"><div class="body">
+<aside class="side" id="side">
+  <div class="brand"><div class="logo txt">Mission <i>Control</i></div><button class="ib" data-a="sbt" id="sbi" aria-label="Thu gọn hoặc mở rộng thanh bên" data-ic="chevL"></button></div>
+  <button class="nv" data-a="nav" data-v="overview" data-n="overview"><span class="ic" data-ic="home"></span><span class="txt">Tổng quan</span></button>
+  <button class="nv" data-a="nav" data-v="history" data-n="history"><span class="ic" data-ic="history"></span><span class="txt">Lịch sử</span></button>
+  <button class="nv on" data-a="nav" data-v="flow" data-n="flow"><span class="ic" data-ic="workflow"></span><span class="txt">Luồng phân tích</span></button>
+  <button class="nv" data-a="new"><span class="ic" data-ic="plus"></span><span class="txt">Phân tích mới</span></button>
+  <div class="grow"></div>
+  <button class="nv" data-a="theme" aria-label="Đổi giao diện sáng hoặc tối"><span class="ic" id="themeIc" data-ic="moon"></span><span class="txt">Sáng / Tối</span></button>
+</aside>
+<main class="main" id="main">
+  <div id="vOv" hidden></div><div id="vHi" hidden></div>
+  <div id="vFlow"><div id="robar"></div><div class="stepper" id="stepper"></div>
+    <div class="ask"><label for="q">Câu hỏi kinh doanh</label><input id="q" placeholder="Nhập câu hỏi bạn muốn dữ liệu trả lời"></div>
+    <div id="stage"></div></div>
+</main>
+<aside class="drawer" id="drawer">
+  <div class="dh"><b>AI Agent</b><button class="ib" data-a="drt" id="dri" aria-label="Thu gọn hoặc mở rộng bảng AI Agent" data-ic="chevL"></button></div>
+  <div class="in">
+    <section class="ps"><div class="ph"><span>Tác vụ</span><span class="pill" id="ast"></span></div><div id="agents"></div></section>
+    <section class="ps lg"><div class="ph"><span>Nhật ký</span><small id="lgc"></small></div><div class="log" id="log"></div></section>
+  </div>
+</aside>
+</div></div>
+<script src="/static/js/icons.js"></script>
+<script src="/static/js/app.js"></script>
+</body></html>

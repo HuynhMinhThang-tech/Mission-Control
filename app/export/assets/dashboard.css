@@ -1,0 +1,45 @@
+:root{--bg:#F5F6FA;--panel:#fff;--p2:#F1F2F8;--ink:#121626;--sub:#5F657B;--line:#E3E5EF;--pri:#4F46E5;--soft:#ECEBFD;--mut:#B9BDDA;--ok:#0F8F6A;--okb:#DFF5EC;--warn:#B76A00;--warnb:#FCF0D9;--bad:#D6304A;--badb:#FDE7EA;--hd:#0F172A;--badb2:#FDE7EA;--okb2:#E7F6EF}
+@media(prefers-color-scheme:dark){:root{--bg:#14161F;--panel:#1E2130;--p2:#272B3E;--ink:#F3F5FB;--sub:#A7ADC4;--line:#363B52;--pri:#A3A1FF;--soft:#33346A;--mut:#4A5072;--ok:#4BE0AE;--okb:#1D3F34;--warn:#F7BE5C;--warnb:#3D3219;--bad:#FF8A9A;--badb:#43212A;--hd:#0B0D14}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:60px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif}
+.wrap{max-width:1120px;margin:auto;padding:0 28px}
+.hd{background:var(--hd);color:#fff;padding:44px 0 34px}
+.eyebrow{margin:0 0 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#A9B0FF;font-weight:700}
+.hd h1{margin:0 0 14px;font-weight:700;font-size:32px;line-height:1.3;max-width:36ch}
+.hd .q{margin:0;max-width:80ch;color:#D8DBF0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.chip{font-size:12px;border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:3px 12px;color:#E5E7FA}
+nav.tabs{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto}nav.tabs a{padding:12px 14px;color:var(--sub);text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap;border-bottom:2px solid transparent}
+nav.tabs a:hover{color:var(--pri);border-color:var(--pri)}
+section{margin:34px 0}section>h2{font-size:21px;font-weight:700;margin:0 0 14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.answer{border-left:5px solid var(--pri)}.answer .big{font-size:19px;line-height:1.55;margin:0 0 12px;font-weight:600}.answer p{margin:0 0 10px;color:var(--sub)}.answer p.big{color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}.kpi b{display:block;font-size:28px;font-weight:700;line-height:1.2;color:var(--pri);font-variant-numeric:tabular-nums}
+.kpi span{display:block;color:var(--sub);font-size:13px;margin-top:4px}.kpi em{font-style:normal;font-weight:700;font-size:12px}.up{color:var(--ok)}.dn{color:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:16px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.wrap{padding:0 16px}.hd h1{font-size:26px}}
+figure{margin:0}figure.card{padding:20px 22px 16px}figcaption h3{margin:0 0 2px;font-size:16px;line-height:1.4}figcaption .sub{margin:0 0 10px;color:var(--sub);font-size:12.5px}
+svg.chart{width:100%;height:auto;display:block}svg .lb{fill:var(--sub);font-size:12px}svg .vl{fill:var(--ink);font-size:12px;font-weight:600}svg .vl.b{font-weight:800}
+svg .bar{fill:var(--mut)}svg .hi{fill:var(--pri)}svg .neg{fill:var(--bad)}svg .ax{stroke:var(--line);stroke-width:1.2}
+svg .area{fill:var(--soft);opacity:.7}svg .ln{fill:none;stroke:var(--pri);stroke-width:2.5;stroke-linejoin:round}svg .dot{fill:var(--panel);stroke:var(--pri);stroke-width:1.8}svg .dot.k{fill:var(--pri)}
+.facts{margin:10px 0 0;padding:10px 12px;background:var(--p2);border-radius:10px;font-size:12.5px;color:var(--sub);list-style:none}.facts li{padding:2px 0}.facts li:before{content:"▸ ";color:var(--pri)}
+.src{margin:8px 0 0;font-size:11.5px;color:var(--sub)}
+.ins{display:grid;gap:12px}.in{display:grid;grid-template-columns:40px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+.in .n{width:34px;height:34px;border-radius:50%;background:var(--soft);color:var(--pri);display:grid;place-items:center;font-weight:800}
+.in h3{margin:0 0 6px;font-size:15.5px;line-height:1.45}.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;margin-left:6px;vertical-align:middle}
+.b-Cao{background:var(--okb);color:var(--ok)}.b-Trung{background:var(--warnb);color:var(--warn)}.b-Thấp{background:var(--badb);color:var(--bad)}
+.ev{font-size:13px;color:var(--sub);margin:0}.ev b{color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--p2);color:var(--sub);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.tw table tr:last-child td{border:0}
+.pr{font-weight:800;font-size:12px;padding:2px 10px;border-radius:12px;white-space:nowrap}.p-Cao{background:var(--badb);color:var(--bad)}.p-Trung{background:var(--warnb);color:var(--warn)}.p-Thấp{background:var(--p2);color:var(--sub)}
+.risks li{margin:6px 0}.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+details{margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:var(--panel)}summary{cursor:pointer;font-weight:600}
+footer.ft{margin:48px 0 28px;color:var(--sub);font-size:12px;text-align:center}
+@media print{nav.tabs{display:none}body{background:#fff}.card,.kpi,.in{break-inside:avoid}.hd{background:#fff;color:#000;border-bottom:2px solid #000}.hd .q,.chip,.eyebrow{color:#333;border-color:#999}}
+
+/* ba nhóm nội dung có màu nhận diện riêng: INSIGHT (chàm) · HÀNH ĐỘNG (xanh lá) · RỦI RO (đỏ) */
+.hs{padding-left:12px;border-left:5px solid var(--line)}.hs.ins{border-color:var(--pri)}.hs.act{border-color:var(--ok)}.hs.risk{border-color:var(--bad)}
+.in{border-left:4px solid var(--pri);background:var(--panel)}
+.act-tbl{border-color:var(--ok)}.act-tbl th{background:var(--okb);color:var(--ok)}.act-tbl td:nth-child(2){border-left:3px solid var(--ok)}
+.riskbox{background:var(--badb);border:1px solid var(--bad);border-left:5px solid var(--bad)}.riskbox ul{margin:8px 0 0;padding-left:20px}.riskbox li{margin:6px 0}.riskbox b{color:var(--bad)}
