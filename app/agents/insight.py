@@ -3,7 +3,7 @@
 from ..state import A, put, tick
 from ..llm import llm_json
 from ..utils import J
-from .base import SYS, ctx_txt
+from .base import SYS, ctx_txt, prev
 
 ROLE = "Agent Insight và tư vấn kinh doanh"
 
@@ -20,5 +20,5 @@ def run(fb=""):
     txt = "\n\n".join(f"### [{i}] {t['title']}\n{A['x'][3][i].head(30).to_csv(index=False)}"
                       for i, t in enumerate(r3["tables"]) if A["x"][3][i] is not None)
     tick(1)
-    r = llm_json(SYS(ROLE), ctx_txt(fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + PROMPT)
+    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + PROMPT)
     put(4, {"summary": r.get("summary", ""), "insights": r.get("insights", []), "actions": r.get("actions", []), "risks": r.get("risks", [])})

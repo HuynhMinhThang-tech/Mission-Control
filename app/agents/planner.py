@@ -5,7 +5,7 @@ from ..data.sandbox import df_table, run_code
 from ..llm import llm, llm_json, strip_code
 from ..state import A, LOCK, bump, next_gen, put, tick
 from ..utils import J
-from .base import SYS, ctx_txt
+from .base import SYS, ctx_txt, prev
 from .charts import is_num, valid_charts
 
 ROLE_PLAN = "Agent Hoạch định phân tích"
@@ -33,31 +33,60 @@ PROMPT_SUM = (
 
 def menu(fb=""):
     tick(0)
-    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + PROMPT_MENU)
+    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + PROMPT_MENU
+                 + ("\nNgười dùng đã góp ý: hãy ĐIỀU CHỈNH danh sách theo đúng góp ý (thêm/bớt/đổi mục), giữ các mục không liên quan." if fb else ""))
     items = r["menu"]
     for k, m in enumerate(items):
         m["id"] = f"m{k}"
     put(3, {"phase": "menu", "menu": items, "tasks": None, "result": None})
 
 
-def write_code(ids, custom):
-    tick(0)
+def write_code(ids, custom, fb="", t0=0):
+    tick(t0)
     d = A["d"][3]
     items = [m for m in d["menu"] if m["id"] in ids]
+    old = ""
+    if fb and d.get("tasks"):
+        old = (f"CODE LẦN TRƯỚC:\n{J([{'title': t['title'], 'code': t['code']} for t in d['tasks']], 5000)}\n"
+               f"NGƯỜI DÙNG GÓP Ý: {fb}\nHãy SỬA code/cách tính theo đúng góp ý (đổi chỉ số, nhóm theo cột khác, lọc, thêm/bớt mục...), giữ phần không bị góp ý.\n")
     r = llm_json(SYS(ROLE_CODE),
-                 ctx_txt() + f"Dữ liệu đã làm sạch (biến `dfs` là dict tên file→DataFrame):\n{J(schema(A['clean'], 3), 6000)}\n"
-                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n\n" + PROMPT_CODE)
+                 ctx_txt(fb) + f"Dữ liệu đã làm sạch (biến `dfs` là dict tên file→DataFrame):\n{J(schema(A['clean'], 3), 6000)}\n"
+                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n{old}\n" + PROMPT_CODE, 12000)
+    tasks = [t for t in r.get("tasks", []) if isinstance(t, dict) and t.get("code")]
+    if not tasks:
+        raise RuntimeError("AI không trả về code nào. Hãy bấm Thử lại hoặc mô tả góp ý rõ hơn.")
     with LOCK:
-        d["tasks"] = r["tasks"]
+        d["tasks"] = tasks
+        d["ids"], d["custom"] = list(ids), custom
         d["phase"] = "code"
         d["result"] = None
         d["gen"] = next_gen()
         bump()
 
 
-def execute(codes):
+def revise(fb):
+    """Góp ý ở bước Phân tích: áp vào ĐÚNG pha đang xem. Pha kết quả -> viết lại code rồi chạy lại luôn."""
+    d = A["d"].get(3) or {}
+    ph = d.get("phase", "menu")
+    if ph == "menu" or not d.get("tasks"):
+        return menu(fb)
+    write_code(d.get("ids", []), d.get("custom", ""), fb, t0=1)
+    if ph == "result":
+        execute([], t0=2)
+
+
+def labels_for(fb):
+    """Nhãn tác vụ hiển thị ở bảng AI Agent, tùy pha đang góp ý."""
+    ph = (A["d"].get(3) or {}).get("phase", "menu")
+    if ph == "menu":
+        return ["Đọc góp ý và chỉnh danh sách phân tích"]
+    base = ["Đọc góp ý của bạn", "Viết lại code theo góp ý"]
+    return base + (["Chạy lại code", "Tự sửa lỗi nếu có", "Tổng hợp KPI và phát hiện"] if ph == "result" else [])
+
+
+def execute(codes, t0=0):
     d = A["d"][3]
-    tick(0)
+    tick(t0)
     dfs, tabs = [], []
     for t, task in enumerate(d["tasks"]):
         code = codes[t] if t < len(codes) and codes[t].strip() else task["code"]
@@ -70,7 +99,7 @@ def execute(codes):
             except Exception as e:
                 err = f"{type(e).__name__}: {e}"
                 if attempt == 0:
-                    tick(1)
+                    tick(t0 + 1)
                     code = strip_code(llm(SYS(ROLE_FIX),
                                           f"Sửa code lỗi, chỉ trả code (không import).\nLỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}"))
         task["code"] = code
@@ -78,7 +107,7 @@ def execute(codes):
         tabs.append(df_table(df, task["title"], err))
     if all(x is None for x in dfs):
         raise RuntimeError("Không có phân tích nào chạy thành công: " + "; ".join(t["err"] or "" for t in tabs)[:300])
-    tick(2)
+    tick(t0 + 2)
     A["x"][3] = dfs
     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)

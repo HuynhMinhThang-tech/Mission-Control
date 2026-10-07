@@ -110,3 +110,38 @@ select,.hint input{background:var(--p2);border:1px solid var(--line);border-radi
 .sc .sh{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}.sc .sh span{color:var(--sub);font-size:12px}
 .sc.ok .sh b{color:var(--ok)}.sc.warn .sh b{color:var(--warn)}.sc.bad .sh b{color:var(--bad)}
 .sc .sl2{font-size:11.5px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}.sc ul{margin:4px 0 4px;padding-left:20px}.sc li{margin:2px 0}
+/* ---- Làm sạch: mỗi cột là một khối, mỗi thao tác là một thẻ chứa đủ mô tả + cách xử lý + kết quả ---- */
+.cg{border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;background:var(--panel)}
+.cgh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}.cgh b{font-size:15.5px}.cgh .found{color:var(--warn);font-size:12.5px;font-weight:600}
+.op{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px;background:var(--p2)}.op.on{border-color:var(--pri);background:var(--soft)}
+.oph{display:flex;gap:10px;align-items:center;cursor:pointer;font-size:14px}.oph input{margin:0}
+.op .why,.op .mn,.op .rk{margin:6px 0 0 26px;font-size:13px;color:var(--sub);line-height:1.5}.op .rk{color:var(--warn)}.op .mn{margin-top:4px;font-size:12.5px}
+.mt{margin:8px 0 0 26px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--sub)}
+.mc{position:relative;border:1px solid var(--line);border-radius:16px;padding:3px 11px;cursor:pointer;background:var(--panel);color:var(--ink);font-size:12.5px;font-weight:600}
+.mc.on{background:var(--pri);color:var(--panel);border-color:var(--pri)}.mc input{position:absolute;opacity:0;inset:0;cursor:pointer}.mc:has(input:focus-visible){outline:2px solid var(--pri);outline-offset:2px}
+.mt .vi{border:1px solid var(--line);border-radius:8px;padding:3px 9px;background:var(--panel);color:var(--ink);font-size:12.5px;width:150px}
+.fx{margin:8px 0 0 26px;display:flex;gap:7px;align-items:center;font-size:13px;padding:6px 10px;border-radius:8px;background:var(--okb);color:var(--ok);width:fit-content;max-width:calc(100% - 26px)}.fx.off{background:var(--p2);color:var(--sub)}
+
+/* ---- Xem trước dữ liệu ---- */
+.fl .pvb{margin-left:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.fl .pvb:hover,.fl .pvb.on{border-color:var(--pri);color:var(--pri)}
+.pvp{border:1px solid var(--line);border-top:0;border-radius:0 0 10px 10px;margin:-4px 0 6px;padding:12px;background:var(--panel)}
+.pvh{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}.seg button{border:0;background:var(--p2);color:var(--sub);padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}.seg button+button{border-left:1px solid var(--line)}.seg button.on{background:var(--pri);color:var(--panel)}
+.cs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.cc{font-size:11.5px;border:1px solid var(--line);border-radius:12px;padding:2px 9px;background:var(--p2);color:var(--sub)}.cc b{color:var(--ink)}.cc.w{border-color:var(--warn);color:var(--warn);background:var(--warnb)}
+.pvp .tw{max-height:360px;overflow:auto}.pvp td.rn{color:var(--sub);font-size:11.5px}.pvp .nul{color:var(--warn);opacity:.7}
+
+/* ---- Lịch sử: lưới 2 cột, cụm nút cố định chiều rộng để các hàng thẳng nhau ---- */
+.hrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 28px;align-items:center}
+.hrow .hmain{min-width:0}.hrow .q{margin-bottom:10px}
+.hrow .meta{align-items:center;row-gap:6px}.hrow .meta .pill{margin:0}
+.hbtn{display:grid;grid-template-columns:repeat(3,104px);gap:8px;max-width:none;justify-content:end}
+.hbtn .btn{width:100%;justify-content:center;white-space:nowrap}
+.btn.g.dng:hover:not(:disabled){border-color:var(--bad);color:var(--bad);background:var(--badb)}
+.hbtn .btn.sm{height:36px;padding:0 10px}
+@media(max-width:900px){.hrow{grid-template-columns:1fr}.hbtn{justify-content:start}}
+.hrow .hbtn:has(.pill){display:flex}
+
+.dashf{width:100%;height:78vh;min-height:620px;border:1px solid var(--line);border-radius:12px;background:var(--p2)}
+
+.fbh{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 0;font-size:12.5px;color:var(--sub)}.fbh span{background:var(--soft);color:var(--pri);border-radius:12px;padding:3px 10px;max-width:100%}

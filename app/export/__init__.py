@@ -9,6 +9,7 @@ from ..config import WORK
 from ..state import A, now_iso, save_history
 from ..utils import clean_json
 from .dashboard import build_html
+from .interactive import build_dashboard
 from .deck import build_pptx
 from .common import dedupe_charts
 from .markdown import build_md
@@ -29,6 +30,14 @@ def make_final():
             "period": period, "quality": A["d"].get(2, {}).get("pv")}
 
 
+def live_meta(title=None):
+    """Thông tin chữ đi kèm dashboard tương tác. Dùng được cả khi chưa duyệt (xem trước ở bước Báo cáo)."""
+    d4, d5 = A["d"].get(4) or {}, A["d"].get(5) or {}
+    return {"title": title or (d5.get("final") or {}).get("title") or d5.get("title") or "Dashboard phân tích", "question": A["question"], "ctx": A["ctx"],
+            "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": d4.get("insights", []),
+            "actions": d4.get("actions", []), "risks": d4.get("risks", [])}
+
+
 def snapshot():
     """Toàn bộ các bước đã thực hiện, để xem lại ở chế độ chỉ đọc."""
     keys = ("id", "question", "ctx", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
@@ -42,15 +51,16 @@ def publish():
     F = make_final()
     out = WORK / A["id"]
     out.mkdir(exist_ok=True)
-    (out / "dashboard.html").write_text(build_html(F), "utf-8")
+    (out / "dashboard.html").write_text(build_dashboard(live_meta(F["title"]), A["clean"]), "utf-8")   # dashboard TƯƠNG TÁC (lọc, lọc chéo)
+    (out / "bao_cao.html").write_text(build_html(F), "utf-8")                                          # báo cáo tĩnh có bằng chứng
     (out / "bao_cao.pptx").write_bytes(build_pptx(F))
     (out / "bao_cao.md").write_text(build_md(F), "utf-8")
     with zipfile.ZipFile(out / "share.zip", "w", zipfile.ZIP_DEFLATED) as z:
-        for n in ("dashboard.html", "bao_cao.pptx", "bao_cao.md"):
+        for n in ("dashboard.html", "bao_cao.html", "bao_cao.pptx", "bao_cao.md"):
             z.write(out / n, n)
         for n, d in A["clean"].items():
             z.writestr("du_lieu_sach/" + re.sub(r"[^\w.\-]", "_", n) + ("" if n.endswith(".csv") else ".csv"), d.to_csv(index=False))
-    A["outputs"] = ["dashboard.html", "bao_cao.pptx", "share.zip"]
+    A["outputs"] = ["dashboard.html", "bao_cao.html", "bao_cao.pptx", "share.zip"]
     A["approved"] = True
     A["finished"] = now_iso()
     (out / "snapshot.json").write_text(json.dumps(snapshot(), ensure_ascii=False), "utf-8")

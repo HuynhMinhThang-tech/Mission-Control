@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 import numpy as np
+from ..utils import to_num_if_mostly
 import pandas as pd
 
 PERIOD = re.compile(r"^(t|th|q|quý|tháng)\s?\d{1,2}$|^(19|20)\d{2}$", re.I)
@@ -195,7 +196,7 @@ def analyze(raw, plain, merged=0):
                 df = raw.iloc[top + 1:, keep].copy()
                 df.columns = [str(hrow.iat[j]).strip() for j in keep]
                 df = df.dropna(how="all").reset_index(drop=True)
-                df = df.apply(lambda s: pd.to_numeric(s, errors="ignore") if s.dtype == object else s)
+                df = df.apply(to_num_if_mostly)
                 fixed = df
                 actions.append(f"Dùng dòng {top + 1} làm tiêu đề cột, bỏ {top} dòng phía trên")
             else:

@@ -50,3 +50,19 @@ def clean_json(o):
     if isinstance(o, (float, np.floating)):
         return None if (np.isnan(o) or np.isinf(o)) else float(o)
     return o
+
+
+def is_text(s):
+    """Cột chữ: pandas 2 dùng object, pandas 3 dùng kiểu str riêng -> kiểm tra cả hai."""
+    import pandas as pd
+    return pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s)
+
+
+def to_num_if_mostly(s, ratio=.9):
+    """Đổi cột chữ sang số nếu >= ratio giá trị không rỗng đọc được thành số (thay cho to_numeric(errors='ignore') đã bị bỏ)."""
+    import pandas as pd
+    if not is_text(s):
+        return s
+    nn = s.notna().sum()
+    n = pd.to_numeric(s, errors="coerce")
+    return n if nn and n.notna().sum() >= ratio * nn else s

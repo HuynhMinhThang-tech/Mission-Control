@@ -6,7 +6,7 @@ from ..data.quality import date_range, join_info, profile_rows, quality, schema
 from ..llm import llm_json
 from ..state import A, put, tick
 from ..utils import J, vn
-from .base import SYS, ctx_txt
+from .base import SYS, ctx_txt, prev
 
 ROLE = "Agent Thống kê và kiểm tra chất lượng dữ liệu"
 
@@ -37,7 +37,7 @@ def run(fb=""):
     st = {n: m for n, m in A.get("struct", {}).items() if m["verdict"] != "tidy"}
     stxt = "\n".join(f"- {n}: {m['verdict']} (điểm cấu trúc gốc {m['score']}/100); vấn đề: {'; '.join(m['issues'][:4])}; đã xử lý: {'; '.join(m['actions'][:4]) or 'chưa'}" for n, m in st.items()) or "tất cả tệp đều có cấu trúc bảng chuẩn"
     f = llm_json(SYS(ROLE),
-                 ctx_txt(fb) + f"Kết quả kiểm tra cấu trúc tệp:\n{stxt}\n" + f"Schema:\n{J(schema(dfs, 2), 4000)}\nThống kê số:\n{J(desc, 3000)}\n"
+                 ctx_txt(fb) + prev(1, fb) + f"Kết quả kiểm tra cấu trúc tệp:\n{stxt}\n" + f"Schema:\n{J(schema(dfs, 2), 4000)}\nThống kê số:\n{J(desc, 3000)}\n"
                  f"Vấn đề phát hiện:\n{q.to_csv(index=False)[:4000]}\nKhóa ghép: {jtxt}\n\n" + PROMPT)["findings"]
     sample = {"cols": [str(c) for c in m.columns[:7]], "rows": json.loads(m.iloc[:5, :7].to_json(orient="values", date_format="iso"))}
     A["dirty"] = sorted(set(q["file"])) if len(q) else []

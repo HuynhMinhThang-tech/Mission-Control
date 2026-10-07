@@ -1,23 +1,100 @@
 # -*- coding: utf-8 -*-
 """Đọc tệp người dùng tải lên + bộ dữ liệu mẫu (chỉ dùng khi người dùng chủ động bấm)."""
+import csv
 import io
+import json
+import re
+import traceback
 
 import numpy as np
 import pandas as pd
 
-from .structure import analyze, meta
+from .structure import analyze, find_header_rows, meta
+from .tables import detect_tables, excel_tables
 
 
-def _merged_count(b, sheet):
+def _open_wb(b):
+    """Mở workbook openpyxl MỘT lần cho cả file (xlsx/xlsm); lỗi thì trả None."""
     try:
         import openpyxl
-        return len(openpyxl.load_workbook(io.BytesIO(b), read_only=False)[sheet].merged_cells.ranges)
+        return openpyxl.load_workbook(io.BytesIO(b), data_only=True)
     except Exception:
-        return 0
+        return None
+
+
+def _csv_grid(b):
+    """CSV -> lưới ô GIỮ nguyên dòng trống (pandas mặc định bỏ dòng trống nên không dò được ranh giới bảng)."""
+    text = b.decode("utf-8-sig", "replace")
+    try:
+        dialect = csv.Sniffer().sniff(text[:20000], delimiters=",;\t|")
+    except Exception:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text), dialect))
+    w = max((len(r) for r in rows), default=0)
+    if not w:
+        return None
+
+    def cell(x):
+        x = x.strip()
+        if not x:
+            return np.nan
+        try:
+            return float(x) if re.fullmatch(r"-?\d+(\.\d+)?", x) else x
+        except ValueError:
+            return x
+    return pd.DataFrame([[cell(c) for c in r] + [np.nan] * (w - len(r)) for r in rows])
+
+
+def _sheet_grid(wb, sheet):
+    """Lưới ô của sheet theo đúng tọa độ Excel. Trả về (DataFrame, (dòng_gốc, cột_gốc))."""
+    ws = wb[sheet]
+    rows = [list(r) for r in ws.iter_rows(values_only=True)]
+    return (pd.DataFrame(rows) if rows else None), (ws.min_row - 1, ws.min_column - 1)
+
+
+BIG = 3_000_000   # sheet quá lớn mà đã "tidy" thì bỏ qua bước dò bảng cho nhanh
+
+
+def _found_tables(src, raw, res):
+    """Trả về danh sách bảng nhận diện được, hoặc [] để dùng luồng cũ."""
+    kind, wb, sheet, blob = src
+    tidy = res["verdict"] == "tidy"
+    try:
+        if kind == "xlsx" and wb is not None:
+            ex = excel_tables(wb[sheet])                      # ưu tiên 1: bảng Excel thật
+            if ex and (len(ex) >= 2 or not tidy):
+                return ex
+            grid, off = _sheet_grid(wb, sheet)
+        else:
+            grid, off = (_csv_grid(blob) if kind == "csv" else raw), (0, 0)
+        if grid is None or (tidy and grid.size > BIG):
+            return []
+        tabs = detect_tables(grid, off)
+        # chỉ một bảng, bắt đầu ở A1 và cùng hình dạng với cách đọc thường -> không có gì mới, giữ luồng cũ
+        if len(tabs) == 1 and tabs[0]["ref"].startswith("A1:") and tabs[0]["df"].shape == res["plain"].shape:
+            return []
+        return tabs
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
+def _table_meta(t, n_tables, res):
+    where = "Bảng Excel (Table)" if t["source"] == "excel_table" else "Bảng nhận diện từ bố cục"
+    acts = [f"{where} «{t['name']}» tại {t['ref']}: {t['rows']:,} dòng × {t['cols']} cột".replace(",", ".")] + t["notes"]
+    if n_tables > 1:
+        acts.append(f"Ưu tiên #{t['rank']}/{n_tables} trong sheet" + (" (bảng chính)" if t["rank"] == 1 else ""))
+    issues = list(res["issues"])[:3] if (res["verdict"] != "tidy" and t["rank"] == 1) else []   # nêu vấn đề của sheet một lần, ở bảng chính
+    d = t["df"]
+    pv = d.head(6)
+    return {"verdict": "detected", "score": t["score"], "issues": issues, "actions": acts,
+            "mode": "fixed", "ack": False, "range": t["ref"], "rank": t["rank"], "sheet_tables": n_tables,
+            "preview": {"cols": [str(c) for c in pv.columns], "rows": json.loads(pv.to_json(orient="values", date_format="iso"))}}
 
 
 def load_files(fs):
-    """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa)."""
+    """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa).
+    Sheet không chuẩn nhưng có bảng bên trong -> tách bảng ra dùng (xem tables.py); ngược lại giữ luồng cũ."""
     dfs, reports, alts = {}, {}, {}
     for f in fs:
         b = f.read()
@@ -25,9 +102,11 @@ def load_files(fs):
         items = []
         if name.lower().endswith((".xlsx", ".xls", ".xlsm")):
             xl = pd.ExcelFile(io.BytesIO(b))
+            wb = _open_wb(b) if name.lower().endswith((".xlsx", ".xlsm")) else None
             for sh in xl.sheet_names:
                 key = f"{name}::{sh}" if len(xl.sheet_names) > 1 else name
-                items.append((key, xl.parse(sh, header=None), xl.parse(sh), _merged_count(b, sh) if name.lower().endswith("x") or name.lower().endswith("m") else 0))
+                merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
+                items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
         else:
             kw = dict(sep=None, engine="python", encoding="utf-8-sig", encoding_errors="replace")
             try:
@@ -40,9 +119,19 @@ def load_files(fs):
                 raw = pd.read_csv(io.BytesIO(b), header=None, **kw)
             except Exception:
                 raw = None
-            items.append((name, raw, plain, 0))
-        for key, raw, plain, merged in items:
+            items.append((name, raw, plain, 0, ("csv", None, None, b)))
+        for key, raw, plain, merged, src in items:
             res = analyze(raw, plain, merged)
+            # báo cáo nhiều khối chồng nhau (tiêu đề lặp lại) đã có bộ chuẩn hóa riêng -> giữ nguyên luồng đó
+            report_style = res["verdict"] == "fixed" and raw is not None and len(find_header_rows(raw)) >= 2
+            tabs = [] if report_style else _found_tables(src, raw, res)
+            if tabs:
+                for t in tabs:
+                    k = key if len(tabs) == 1 else f"{key}::{t['name']}"
+                    dfs[k] = t["df"]
+                    reports[k] = _table_meta(t, len(tabs), res)
+                    alts[k] = {"plain": res["plain"], "fixed": t["df"]}
+                continue
             dfs[key] = res["fixed"] if res["fixed"] is not None else res["plain"]
             reports[key] = meta(res)
             alts[key] = {"plain": res["plain"], "fixed": res["fixed"]}

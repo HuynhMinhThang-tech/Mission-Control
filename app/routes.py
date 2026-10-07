@@ -11,12 +11,13 @@ from . import config
 from .agents import NEXT, RUN
 from .agents.charts import valid_charts
 from .agents.cleaner import apply_choice, preview
-from .agents.planner import execute, write_code
+from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, write_code
 from .agents.profiler import run as s1_profile
 from .constants import STEP_T
 from .data.loader import load_files, make_sample
-from .export import publish
-from .state import A, HIST, LOCK, bump, log, now_iso, reset, snapshot_path, start_job
+from .export import live_meta, publish
+from .export.interactive import build_dashboard
+from .state import A, HIST, LOCK, bump, delete_history, log, now_iso, reset, snapshot_path, start_job
 from .utils import clean_json
 
 bp = Blueprint("api", __name__)
@@ -34,7 +35,7 @@ def index():
 @bp.get("/api/state")
 def api_state():
     with LOCK:
-        o = {k: A[k] for k in ("id", "question", "ctx", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished")}
+        o = {k: A[k] for k in ("id", "question", "ctx", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
         o["hist"] = [dict(h, snap=snapshot_path(h["id"]).exists()) for h in HIST]
         return jsonify(clean_json(o))
 
@@ -66,7 +67,14 @@ def notices(reps, dfs):
     out = []
     for n, m in reps.items():
         top = "; ".join(m["issues"][:3])
-        if m["verdict"] == "fixed":
+        if m["verdict"] == "detected":
+            if m["rank"] == 1:     # mỗi sheet báo một lần, ở bảng chính
+                base = n.rsplit("::", 1)[0] if m["sheet_tables"] > 1 else n
+                k, rows = m["sheet_tables"], f"{len(dfs[n]):,}".replace(",", ".")
+                msg = (f"Tìm thấy {k} bảng trong sheet; bảng chính ở {m['range']} ({rows} dòng). Các bảng khác nằm trong danh sách tệp, hãy xóa bảng bạn không cần."
+                       if k > 1 else f"Bảng nằm ở {m['range']} ({rows} dòng), hệ thống đã tự cắt đúng vùng dữ liệu.")
+                out.append({"type": "ok", "title": f"Đã tự nhận diện bảng: {base}", "msg": msg})
+        elif m["verdict"] == "fixed":
             out.append({"type": "warn", "title": f"Đã tự chuẩn hóa: {n}",
                         "msg": f"Tệp có cấu trúc kiểu báo cáo ({top}). Hệ thống đã chuyển thành bảng dữ liệu {len(dfs[n]):,} dòng. Hãy xem phần 'Xem trước dữ liệu' trong danh sách tệp để xác nhận.".replace(",", ".")})
         elif m["verdict"] == "warn":
@@ -99,6 +107,35 @@ def struct_act(act):
         A["files"] = [{"name": n, "rows": len(d), **({"demo": True} if any(f["name"] == n and f.get("demo") for f in A["files"]) else {})} for n, d in A["raw"].items()]
         bump()
     return jsonify(ok=True)
+
+
+@bp.get("/api/preview")
+def preview_file():
+    """Xem trước dữ liệu của MỌI tệp (sạch hay xấu): bản đang dùng, bản gốc, bản chuẩn hóa, và bản sau làm sạch nếu đã có."""
+    name, src = request.args.get("name", ""), request.args.get("src", "current")
+    n = max(5, min(int(request.args.get("n", 30) or 30), 200))
+    with LOCK:
+        alt = A["alt"].get(name, {})
+        variants = {"current": A["raw"].get(name)}
+        if alt.get("plain") is not None and alt["plain"] is not variants["current"]:
+            variants["original"] = alt["plain"]
+        if alt.get("fixed") is not None and alt["fixed"] is not variants["current"]:
+            variants["fixed"] = alt["fixed"]
+        if A["clean"] and name in A["clean"]:
+            variants["clean"] = A["clean"][name]
+        df = variants.get(src)
+        if df is None:
+            return bad("Không có dữ liệu để xem trước.", 404)
+        m = A["struct"].get(name) or {}
+        head = df.head(n)
+        cols = []
+        for c in df.columns[:60]:
+            s = df[c]
+            cols.append({"name": str(c), "dtype": str(s.dtype), "missing": int(s.isna().sum()), "unique": int(s.nunique(dropna=True))})
+        out = {"name": name, "src": src, "variants": list(variants), "mode": m.get("mode"), "verdict": m.get("verdict"),
+               "shape": [int(df.shape[0]), int(df.shape[1])], "cols": cols, "extra_cols": max(0, df.shape[1] - 60),
+               "rows": json.loads(head.iloc[:, :60].to_json(orient="values", date_format="iso", default_handler=str))}
+    return jsonify(out)
 
 
 @bp.post("/api/remove_file")
@@ -163,13 +200,27 @@ def start():
 
 @bp.post("/api/run/<int:i>")
 def run(i):
-    fb = (request.get_json(silent=True) or {}).get("feedback", "")
+    fb = ((request.get_json(silent=True) or {}).get("feedback") or "").strip()
     if i not in RUN:
         return bad("Bước không hợp lệ")
+    labels = A["ag"][i]
+    fn = RUN[i]
+    if i == 3:
+        ph = (A["d"].get(3) or {}).get("phase", "menu")
+        if not fb and A["st"][3] == "error":          # "Thử lại" sau lỗi: chạy lại đúng việc đang dở, không bắt chọn lại từ đầu
+            if ph == "code":
+                fn, labels = (lambda _fb: execute([])), ["Chạy code phân tích", "Tự sửa lỗi nếu có", "Tổng hợp KPI và phát hiện"]
+            else:
+                fn, labels = planner_menu, ["Đề xuất phân tích và chỉ số"]
+        else:
+            labels = planner_labels(fb)
     if fb:
+        with LOCK:
+            A["fbh"].setdefault(str(i), []).append(fb)
+            bump()
         log("Phản hồi: " + fb)
     try:
-        start_job(i, A["ag"][i], RUN[i], fb)
+        start_job(i, labels, fn, fb)
     except RuntimeError as e:
         return bad(str(e), 409)
     return jsonify(ok=True)
@@ -258,6 +309,7 @@ def redo(i):
         for j in range(i + 1, 7):
             A["st"][j] = "pending"
             A["d"].pop(j, None)
+            A["fbh"].pop(str(j), None)
         if i == 0:
             A["st"][0] = "pending"
             A["d"].clear()
@@ -287,6 +339,19 @@ def history_item(aid):
     return jsonify(json.loads(f.read_text("utf-8")))
 
 
+@bp.post("/api/history/<aid>/delete")
+def history_delete(aid):
+    with LOCK:
+        if A["id"] == aid:
+            if A["job"]["running"]:
+                return bad("Phân tích này đang chạy, hãy chờ xong rồi xóa.", 409)
+            reset()          # đang mở đúng luồng này -> đưa về trạng thái trống
+        bump()
+    if not delete_history(aid):
+        return bad("Không tìm thấy phân tích này.", 404)
+    return jsonify(ok=True)
+
+
 def _file(aid, name):
     return config.WORK / re.sub(r"[^\w\-]", "", aid) / Path(name).name
 
@@ -297,7 +362,19 @@ def download(aid, name):
     return send_file(f, as_attachment=True) if f.exists() else bad("Không tìm thấy tệp", 404)
 
 
-@bp.get("/api/view/<aid>/dashboard.html")
-def view_dashboard(aid):
-    f = _file(aid, "dashboard.html")
-    return send_file(f, mimetype="text/html") if f.exists() else bad("Không tìm thấy dashboard", 404)
+@bp.get("/api/view/<aid>/<name>")
+def view_file(aid, name):
+    if name not in ("dashboard.html", "bao_cao.html"):
+        return bad("Không hợp lệ", 404)
+    f = _file(aid, name)
+    return send_file(f, mimetype="text/html") if f.exists() else bad("Không tìm thấy tệp (có thể là bản cũ chưa có tệp này)", 404)
+
+
+@bp.get("/api/dash_preview")
+def dash_preview():
+    """Dashboard tương tác dựng từ dữ liệu ĐÃ LÀM SẠCH, dùng để xem thử ở bước Báo cáo (trước khi duyệt)."""
+    with LOCK:
+        if not A["clean"]:
+            return bad("Chưa có dữ liệu đã làm sạch.", 404)
+        html = build_dashboard(live_meta(request.args.get("title") or None), A["clean"])
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}

@@ -20,7 +20,7 @@ def fresh():
     return {"id": uuid.uuid4().hex[:8], "created": datetime.now().isoformat(timespec="seconds"), "started": None, "finished": None,
             "question": "", "ctx": "", "files": [], "dirty": [], "raw": {}, "struct": {}, "alt": {}, "clean": None, "st": ["pending"] * 7, "d": {}, "x": {},
             "ag": dict(AG), "approved": False, "job": {"running": False, "step": None, "k": -1}, "err": None, "log": [],
-            "ver": next(_VER), "outputs": [], "applied": []}
+            "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}}
 
 
 A = fresh()
@@ -105,3 +105,20 @@ def save_history(entry):
 
 def snapshot_path(aid):
     return WORK / aid / "snapshot.json"
+
+
+def delete_history(aid):
+    """Xóa HẲN một luồng phân tích: dòng trong lịch sử + thư mục chứa bản lưu và tệp xuất."""
+    import re
+    import shutil
+    aid = re.sub(r"[^\w\-]", "", aid)
+    with LOCK:
+        keep = [h for h in HIST if h["id"] != aid]
+        found = len(keep) != len(HIST)
+        HIST[:] = keep
+        HF.write_text(json.dumps(HIST, ensure_ascii=False), "utf-8")
+    d = (WORK / aid).resolve()
+    if aid and d.parent == WORK.resolve() and d.is_dir():
+        shutil.rmtree(d, ignore_errors=True)
+        found = True
+    return found
