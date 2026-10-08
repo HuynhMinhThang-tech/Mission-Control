@@ -145,3 +145,18 @@ select,.hint input{background:var(--p2);border:1px solid var(--line);border-radi
 .dashf{width:100%;height:78vh;min-height:620px;border:1px solid var(--line);border-radius:12px;background:var(--p2)}
 
 .fbh{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 0;font-size:12.5px;color:var(--sub)}.fbh span{background:var(--soft);color:var(--pri);border-radius:12px;padding:3px 10px;max-width:100%}
+
+/* khối tài khoản ở thanh bên */
+.acct{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.acct .who{display:flex;align-items:center;gap:10px;padding:6px 12px;min-width:0}.side.c .acct .who{justify-content:center;padding:6px 0}
+.acct .av{width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--pri);display:grid;place-items:center;font-weight:700;flex:none}
+.acct .who .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}.acct .who b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct .who small{color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.nv{text-decoration:none}.nv .bdg{margin-left:auto;background:var(--pri);color:var(--panel);border-radius:999px;font-size:11px;padding:1px 7px}
+
+/* tab API & Model */
+.sf{display:flex;flex-direction:column;gap:16px;max-width:560px}.sf label{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:5px}
+.sf input{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--p2);outline:none}.sf input:focus{border-color:var(--pri)}
+.sf small{display:block;color:var(--sub);margin-top:4px}.sr{display:flex;gap:8px}.sr input{flex:1;min-width:0}.sr .btn{white-space:nowrap}.sb{display:flex;gap:8px;flex-wrap:wrap}
+.sf .pill{margin-left:0}
+.sf [hidden]{display:none!important}

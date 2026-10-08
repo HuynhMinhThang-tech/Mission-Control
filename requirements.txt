@@ -6,3 +6,8 @@ xlrd
 openai
 python-pptx
 python-dotenv
+sqlalchemy>=2.0
+psycopg2-binary
+gunicorn
+cryptography
+httpx

@@ -1,0 +1,56 @@
+/* Trang đăng nhập / đăng ký / quản trị: cùng bộ màu và font với app chính (các lớp đều có tiền tố au-) */
+:root{--bg:#F6F7F9;--panel:#fff;--p2:#F1F2F6;--ink:#14161F;--sub:#646A7E;--line:#E4E6EE;--pri:#4F46E5;--soft:#ECEBFD;--ok:#0F8F6A;--okb:#DFF5EC;--warn:#B76A00;--warnb:#FCF0D9;--bad:#E0364F;--badb:#FDE7EA;
+--f:'DM Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--fh:'Source Serif 4',Georgia,'Times New Roman',serif}
+@media(prefers-color-scheme:dark){:root{--bg:#1B1D2A;--panel:#252838;--p2:#2E3245;--ink:#F3F5FB;--sub:#A7ADC4;--line:#3E4359;--pri:#A3A1FF;--soft:#37386A;--ok:#4BE0AE;--okb:#1D3F34;--warn:#F7BE5C;--warnb:#3D3219;--bad:#FF8A9A;--badb:#43212A}}
+*{box-sizing:border-box}[hidden]{display:none!important}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--f)}
+button,input{font:inherit;color:inherit}
+.au-logo{font-family:var(--fh);font-weight:600;font-size:24px;letter-spacing:.01em;margin:0}.au-logo i{font-style:normal;color:var(--pri)}
+.au-sub{color:var(--sub);margin:4px 0 0}
+a{color:var(--pri)}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+
+/* khung đăng nhập */
+.au-wrap{min-height:100%;display:grid;place-items:center;padding:24px}
+.au-box{width:100%;max-width:400px}
+.au-card{margin-top:22px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.au-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--p2);border-radius:10px;padding:4px;margin-bottom:18px}
+.au-tabs button{border:0;background:none;padding:8px;border-radius:7px;font-weight:600;color:var(--sub);cursor:pointer}
+.au-tabs button[aria-selected=true]{background:var(--panel);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.au-f{display:flex;flex-direction:column;gap:14px}
+.au-f label{display:block;font-weight:600;margin-bottom:5px}
+.au-f input{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);outline:none}
+.au-f input:focus{border-color:var(--pri)}
+.au-f small{display:block;color:var(--sub);margin-top:4px}
+.au-f input[aria-invalid=true]{border-color:var(--bad)}
+.au-go{border:0;border-radius:10px;padding:11px 18px;font-weight:700;cursor:pointer;background:var(--pri);color:var(--panel);width:100%}
+.au-go:disabled{opacity:.5;cursor:wait}
+.au-link{border:0;background:none;color:var(--pri);font-weight:600;cursor:pointer;padding:2px;text-align:center}.au-link:hover{text-decoration:underline}
+.au-hint{background:var(--warnb);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px}
+.au-msg{border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+.au-msg.bad{background:var(--badb);color:var(--bad)}.au-msg.ok{background:var(--okb);color:var(--ok)}.au-msg.warn{background:var(--warnb);color:var(--warn)}
+.au-done{text-align:center;padding:8px 4px}.au-done h2{font-family:var(--fh);font-size:19px;margin:0 0 8px}.au-done p{color:var(--sub);margin:0 0 16px}
+.au-note{color:var(--sub);font-size:12px;margin:14px 2px 0}
+
+/* trang quản trị */
+.au-page{max-width:940px;margin:0 auto;padding:28px 22px 60px}
+.au-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.au-top a.back{color:var(--sub);text-decoration:none;font-weight:600}.au-top a.back:hover{color:var(--pri)}
+.au-seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.au-seg button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 14px;font-weight:600;color:var(--sub);cursor:pointer}
+.au-seg button[aria-selected=true]{background:var(--soft);border-color:var(--pri);color:var(--pri)}
+.au-seg b{margin-left:6px}
+.au-tbl{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.au-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) 120px auto;gap:14px;align-items:center;padding:12px 16px;border-top:1px solid var(--line)}
+.au-row:first-child{border-top:0}
+.au-row .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.au-row .em{color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.au-row .dt{color:var(--sub);font-size:12px}
+.au-act{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.au-b{border:1px solid var(--line);background:var(--p2);border-radius:8px;padding:6px 12px;font-weight:600;cursor:pointer}
+.au-b:hover{border-color:var(--pri);color:var(--pri)}
+.au-b.pri{background:var(--pri);border-color:var(--pri);color:var(--panel)}.au-b.pri:hover{color:var(--panel);opacity:.9}
+.au-b.dng:hover{border-color:var(--bad);color:var(--bad);background:var(--badb)}
+.au-b:disabled{opacity:.5;cursor:wait}
+.au-empty{padding:30px 16px;text-align:center;color:var(--sub)}
+@media(max-width:640px){.au-row{grid-template-columns:1fr;gap:4px}.au-act{justify-content:flex-start;margin-top:6px}}

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """Gói xuất file: dashboard.html, bao_cao.pptx, bao_cao.md, share.zip + bản lưu để xem lại trong Lịch sử."""
-import json
+import io
 import re
 import zipfile
 from datetime import datetime
 
-from ..config import WORK
-from ..state import A, now_iso, save_history
+from .. import db
+from ..state import A, current_user_id, now_iso
 from ..utils import clean_json
 from .dashboard import build_html
 from .interactive import build_dashboard
@@ -48,22 +48,30 @@ def snapshot():
 
 
 def publish():
+    """Dựng toàn bộ tệp xuất trong bộ nhớ rồi lưu một lượt vào database (không còn ghi ra đĩa)."""
     F = make_final()
-    out = WORK / A["id"]
-    out.mkdir(exist_ok=True)
-    (out / "dashboard.html").write_text(build_dashboard(live_meta(F["title"]), A["clean"]), "utf-8")   # dashboard TƯƠNG TÁC (lọc, lọc chéo)
-    (out / "bao_cao.html").write_text(build_html(F), "utf-8")                                          # báo cáo tĩnh có bằng chứng
-    (out / "bao_cao.pptx").write_bytes(build_pptx(F))
-    (out / "bao_cao.md").write_text(build_md(F), "utf-8")
-    with zipfile.ZipFile(out / "share.zip", "w", zipfile.ZIP_DEFLATED) as z:
+    mt_html, mt_md = "text/html; charset=utf-8", "text/markdown; charset=utf-8"
+    files = {
+        "dashboard.html": (build_dashboard(live_meta(F["title"]), A["clean"]).encode("utf-8"), mt_html),   # dashboard TƯƠNG TÁC (lọc, lọc chéo)
+        "bao_cao.html": (build_html(F).encode("utf-8"), mt_html),                                           # báo cáo tĩnh có bằng chứng
+        "bao_cao.pptx": (build_pptx(F), "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        "bao_cao.md": (build_md(F).encode("utf-8"), mt_md),
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for n in ("dashboard.html", "bao_cao.html", "bao_cao.pptx", "bao_cao.md"):
-            z.write(out / n, n)
+            z.writestr(n, files[n][0])
         for n, d in A["clean"].items():
             z.writestr("du_lieu_sach/" + re.sub(r"[^\w.\-]", "_", n) + ("" if n.endswith(".csv") else ".csv"), d.to_csv(index=False))
-    A["outputs"] = ["dashboard.html", "bao_cao.html", "bao_cao.pptx", "share.zip"]
-    A["approved"] = True
-    A["finished"] = now_iso()
-    (out / "snapshot.json").write_text(json.dumps(snapshot(), ensure_ascii=False), "utf-8")
-    save_history({"id": A["id"], "question": A["question"], "title": A["question"], "ctx": A["ctx"], "started": A["started"],
-                  "finished": A["finished"], "files": A["outputs"], "report_title": F["title"],
-                  "sources": [f["name"] for f in A["files"]]})
+    files["share.zip"] = (buf.getvalue(), "application/zip")
+    outputs = ["dashboard.html", "bao_cao.html", "bao_cao.pptx", "share.zip"]
+
+    A["outputs"], A["approved"], A["finished"] = outputs, True, now_iso()
+    try:
+        db.save_analysis(current_user_id(),
+                         {"id": A["id"], "question": A["question"], "title": A["question"], "ctx": A["ctx"], "started": A["started"], "finished": A["finished"],
+                          "files": outputs, "report_title": F["title"], "sources": [f["name"] for f in A["files"]]},
+                         snapshot(), files)
+    except Exception:
+        A["outputs"], A["approved"], A["finished"] = [], False, None        # lưu lỗi thì không để phiên kẹt ở trạng thái "đã duyệt"
+        raise

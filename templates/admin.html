@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@500;600&display=swap" rel="stylesheet">
+<title>Quản trị tài khoản · Mission Control</title>
+<link rel="stylesheet" href="/static/css/auth.css">
+</head><body>
+<main class="au-page">
+  <div class="au-top">
+    <div><h1 class="au-logo">Quản trị <i>tài khoản</i></h1><p class="au-sub">Chỉ hiển thị tên và email. Mật khẩu được mã hóa một chiều nên không ai xem được.</p></div>
+    <a class="back" href="/">← Về ứng dụng</a>
+  </div>
+  <div id="msg" class="au-msg" hidden role="alert"></div>
+  <div class="au-seg" role="tablist" id="seg"></div>
+  <div class="au-hint" id="hint" hidden></div>
+  <div class="au-tbl" id="tbl" aria-live="polite"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TABS = [
+  { k: 'pending', t: 'Chờ duyệt', st: ['pending'], empty: 'Không có yêu cầu nào đang chờ.' },
+  { k: 'reset', t: 'Đặt lại mật khẩu', reset: true, empty: 'Không có yêu cầu đặt lại mật khẩu nào.',
+    hint: 'Email không được xác minh. Trước khi duyệt, hãy hỏi lại chính người đó (Zalo, điện thoại...) xem có đúng họ vừa yêu cầu không. Nếu không, người khác biết email của họ có thể chiếm tài khoản.' },
+  { k: 'active', t: 'Đang hoạt động', st: ['approved'], empty: 'Chưa có tài khoản nào được duyệt.' },
+  { k: 'blocked', t: 'Đã khóa / từ chối', st: ['disabled', 'rejected'], empty: 'Không có tài khoản nào.' }];
+const BTN = {
+  pending: [['approve', 'Duyệt', 'pri'], ['reject', 'Từ chối', 'dng']],
+  approved: [['disable', 'Khóa', ''], ['delete', 'Xóa', 'dng']],
+  disabled: [['enable', 'Mở khóa', 'pri'], ['delete', 'Xóa', 'dng']],
+  rejected: [['approve', 'Duyệt lại', 'pri'], ['delete', 'Xóa', 'dng']]};
+const LBL = { approve: 'Duyệt', reject: 'Từ chối', disable: 'Khóa', enable: 'Mở khóa', delete: 'Xóa', 'approve-reset': 'Đổi mật khẩu', 'reject-reset': 'Từ chối đặt lại' };
+const RBTN = [['approve-reset', 'Duyệt', 'pri'], ['reject-reset', 'Từ chối', 'dng']];
+const inTab = (t, u) => t.reset ? u.reset_pending && u.status === 'approved' : t.st.includes(u.status);
+let USERS = [], TAB = 'pending', timer;
+function msg(t, k = 'bad') { const m = $('msg'); if (!t) { m.hidden = true; return } m.className = 'au-msg ' + k; m.textContent = t; m.hidden = false }
+function draw() {
+  $('seg').innerHTML = TABS.map(t => `<button role="tab" data-t="${t.k}" aria-selected="${t.k === TAB}">${t.t}<b>${USERS.filter(u => inTab(t, u)).length}</b></button>`).join('');
+  const t = TABS.find(x => x.k === TAB), rows = USERS.filter(u => inTab(t, u));
+  const day = x => x ? new Date(x + 'Z').toLocaleDateString('vi-VN') : '';
+  $('tbl').innerHTML = rows.length ? rows.map(u => `<div class="au-row"><div class="nm" title="${esc(u.display_name)}">${esc(u.display_name)}</div><div class="em" title="${esc(u.email)}">${esc(u.email)}</div>
+    <div class="dt">${day(t.reset ? u.reset_requested_at : u.created_at)}</div>
+    <div class="au-act">${(t.reset ? RBTN : BTN[u.status]).map(([a, l, c]) => `<button class="au-b ${c}" data-id="${u.id}" data-a="${a}">${l}</button>`).join('')}</div></div>`).join('') : `<div class="au-empty">${t.empty}</div>`;
+  $('hint').hidden = !(t.hint && rows.length); $('hint').textContent = t.hint || '';
+}
+async function load() {
+  try {
+    const r = await fetch('/api/admin/users');
+    if (r.status === 401) { location.href = '/login'; return }
+    if (r.status === 403) { location.href = '/'; return }
+    USERS = (await r.json()).users || []; draw();
+  } catch (e) { msg('Không kết nối được máy chủ.') }
+}
+$('seg').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { TAB = b.dataset.t; draw() } };
+$('tbl').onclick = async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const u = USERS.find(x => x.id == b.dataset.id), a = b.dataset.a;
+  if (a === 'delete' && !confirm(`Xóa vĩnh viễn tài khoản ${u.display_name} (${u.email}) cùng toàn bộ lịch sử phân tích của người này?`)) return;
+  if (a === 'reject' && !confirm(`Từ chối yêu cầu của ${u.display_name} (${u.email})?`)) return;
+  if (a === 'approve-reset' && !confirm(`Đổi mật khẩu của ${u.display_name} (${u.email}) thành mật khẩu mới họ vừa đặt? Mọi phiên đăng nhập cũ của họ sẽ bị đăng xuất.`)) return;
+  b.disabled = true; msg('');
+  try {
+    const r = await fetch(`/api/admin/users/${u.id}/${a}`, { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) msg(j.error || 'Thao tác thất bại.'); else msg(`${LBL[a]}: ${u.display_name}. ${j.message || ''}`, 'ok');
+  } catch (e) { msg('Không kết nối được máy chủ.') }
+  await load();
+};
+load(); timer = setInterval(() => { if (!document.hidden) load() }, 20000);
+</script>
+</body></html>

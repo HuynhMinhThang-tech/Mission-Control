@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@500;600&display=swap" rel="stylesheet">
+<title>Đăng nhập · Mission Control</title>
+<link rel="stylesheet" href="/static/css/auth.css">
+</head><body>
+<div class="au-wrap"><div class="au-box">
+  <h1 class="au-logo">Mission <i>Control</i></h1>
+  <p class="au-sub">Phân tích dữ liệu kinh doanh cùng nhóm AI agent.</p>
+  <div class="au-card">
+    <div class="au-tabs" role="tablist">
+      <button role="tab" id="tLogin" aria-selected="true">Đăng nhập</button>
+      <button role="tab" id="tReg" aria-selected="false">Đăng ký</button>
+    </div>
+    <div id="msg" class="au-msg" hidden role="alert"></div>
+
+    <form id="fLogin" class="au-f" novalidate>
+      <div><label for="lEmail">Email / Gmail</label><input id="lEmail" type="email" autocomplete="username" required></div>
+      <div><label for="lPw">Mật khẩu</label><input id="lPw" type="password" autocomplete="current-password" required></div>
+      <button class="au-go" type="submit">Đăng nhập</button>
+      <button class="au-link" id="toReset" type="button">Quên mật khẩu?</button>
+    </form>
+
+    <form id="fReset" class="au-f" novalidate hidden>
+      <p class="au-sub" style="margin:0">Nhập email của bạn và mật khẩu <b>mới</b>. Yêu cầu sẽ được gửi tới admin để duyệt; trong lúc chờ, mật khẩu cũ vẫn dùng được.</p>
+      <div><label for="qEmail">Email / Gmail</label><input id="qEmail" type="email" autocomplete="username" required></div>
+      <div><label for="qPw">Mật khẩu mới</label><input id="qPw" type="password" autocomplete="new-password" minlength="8" required><small>Ít nhất 8 ký tự.</small></div>
+      <div><label for="qPw2">Nhập lại mật khẩu mới</label><input id="qPw2" type="password" autocomplete="new-password" required></div>
+      <button class="au-go" type="submit">Gửi yêu cầu đặt lại</button>
+      <button class="au-link" id="fromReset" type="button">← Về đăng nhập</button>
+    </form>
+
+    <form id="fReg" class="au-f" novalidate hidden>
+      <div><label for="rName">Tên hiển thị</label><input id="rName" autocomplete="name" maxlength="80" required></div>
+      <div><label for="rEmail">Email / Gmail</label><input id="rEmail" type="email" autocomplete="email" required>
+        <small>Admin sẽ dựa vào email này để nhận ra bạn và duyệt tài khoản.</small></div>
+      <div><label for="rPw">Mật khẩu</label><input id="rPw" type="password" autocomplete="new-password" minlength="8" required><small>Ít nhất 8 ký tự.</small></div>
+      <div><label for="rPw2">Nhập lại mật khẩu</label><input id="rPw2" type="password" autocomplete="new-password" required></div>
+      <button class="au-go" type="submit">Gửi yêu cầu đăng ký</button>
+    </form>
+
+    <div id="done" class="au-done" hidden>
+      <h2>Đã gửi yêu cầu</h2>
+      <p id="doneTxt"></p>
+      <button class="au-go" id="back" type="button">Về trang đăng nhập</button>
+    </div>
+  </div>
+  <p class="au-note">Chưa có tài khoản? Đăng ký và chờ admin duyệt. Mật khẩu được mã hóa một chiều, admin không xem được.</p>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const msg = (t, k = 'bad') => { const m = $('msg'); if (!t) { m.hidden = true; return } m.className = 'au-msg ' + k; m.textContent = t; m.hidden = false };
+function mode(m) {            // m: false/'login' | true/'reg' | 'reset'
+  const reg = m === true || m === 'reg', rst = m === 'reset';
+  $('tLogin').setAttribute('aria-selected', !reg); $('tReg').setAttribute('aria-selected', reg);
+  $('fLogin').hidden = reg || rst; $('fReg').hidden = !reg; $('fReset').hidden = !rst; $('done').hidden = true; $('msg').hidden = true;
+  document.title = (reg ? 'Đăng ký' : rst ? 'Đặt lại mật khẩu' : 'Đăng nhập') + ' · Mission Control';
+}
+$('tLogin').onclick = () => mode(false); $('tReg').onclick = () => mode(true); $('back').onclick = () => { mode(false); $('lEmail').focus() };
+$('toReset').onclick = () => { $('qEmail').value = $('lEmail').value; mode('reset'); $('qEmail').focus() }; $('fromReset').onclick = () => mode(false);
+const DONE_REG = 'Admin sẽ xem và duyệt tài khoản của bạn. Sau khi được chấp nhận, hãy quay lại đây để đăng nhập bằng mật khẩu bạn vừa đặt.';
+async function call(url, body, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, j };
+  } catch (e) { return { ok: false, j: { error: 'Không kết nối được máy chủ.' } } }
+  finally { btn.disabled = false }
+}
+$('fLogin').onsubmit = async e => {
+  e.preventDefault(); msg('');
+  const r = await call('/api/auth/login', { email: $('lEmail').value, password: $('lPw').value }, e.submitter);
+  if (r.ok) { location.href = '/'; return }
+  msg(r.j.error || 'Không đăng nhập được.', r.status === 403 ? 'warn' : 'bad');
+};
+$('fReg').onsubmit = async e => {
+  e.preventDefault(); msg('');
+  const pw = $('rPw').value, pw2 = $('rPw2').value;
+  $('rPw2').setAttribute('aria-invalid', pw !== pw2);
+  if (pw !== pw2) { msg('Mật khẩu xác nhận không khớp.'); $('rPw2').focus(); return }
+  const r = await call('/api/auth/register', { name: $('rName').value, email: $('rEmail').value, password: pw, confirm: pw2 }, e.submitter);
+  if (!r.ok) { msg(r.j.error || 'Không gửi được yêu cầu.'); return }
+  $('fReg').reset(); $('fReg').hidden = true; $('done').hidden = false; $('msg').hidden = true; $('doneTxt').textContent = DONE_REG;
+};
+$('fReset').onsubmit = async e => {
+  e.preventDefault(); msg('');
+  const pw = $('qPw').value, pw2 = $('qPw2').value;
+  $('qPw2').setAttribute('aria-invalid', pw !== pw2);
+  if (pw !== pw2) { msg('Mật khẩu xác nhận không khớp.'); $('qPw2').focus(); return }
+  const r = await call('/api/auth/reset-request', { email: $('qEmail').value, password: pw, confirm: pw2 }, e.submitter);
+  if (!r.ok) { msg(r.j.error || 'Không gửi được yêu cầu.'); return }
+  $('fReset').reset(); $('fReset').hidden = true; $('done').hidden = false; $('msg').hidden = true; $('doneTxt').textContent = r.j.message;
+};
+</script>
+</body></html>

@@ -3,11 +3,13 @@
 import json
 import re
 import traceback
-from pathlib import Path
+import io
 
-from flask import Blueprint, jsonify, request, send_file, send_from_directory
+from flask import Blueprint, Response, jsonify, request, send_file, send_from_directory
 
-from . import config
+from . import config, db
+from .errors import UserError
+from .llm import ensure_ready
 from .agents import NEXT, RUN
 from .agents.charts import valid_charts
 from .agents.cleaner import apply_choice, preview
@@ -17,7 +19,7 @@ from .constants import STEP_T
 from .data.loader import load_files, make_sample
 from .export import live_meta, publish
 from .export.interactive import build_dashboard
-from .state import A, HIST, LOCK, bump, delete_history, log, now_iso, reset, snapshot_path, start_job
+from .state import A, LOCK, bump, current_user_id, log, now_iso, reset, start_job
 from .utils import clean_json
 
 bp = Blueprint("api", __name__)
@@ -36,7 +38,7 @@ def index():
 def api_state():
     with LOCK:
         o = {k: A[k] for k in ("id", "question", "ctx", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
-        o["hist"] = [dict(h, snap=snapshot_path(h["id"]).exists()) for h in HIST]
+        o["hist"] = db.list_history(current_user_id())
         return jsonify(clean_json(o))
 
 
@@ -174,6 +176,10 @@ def start():
     q = (p.get("question") or "").strip()
     if not q:
         return bad("Hãy nhập câu hỏi kinh doanh")
+    try:
+        ensure_ready()            # chưa có key/model riêng -> báo ngay bằng panel, đừng chạy rồi mới lỗi
+    except UserError as e:
+        return bad(str(e))
     with LOCK:
         if not A["raw"]:
             return bad("Hãy tải tệp dữ liệu lên (hoặc bấm 'Dùng bộ dữ liệu mẫu') trước khi bắt đầu.")
@@ -333,41 +339,42 @@ def new():
 
 @bp.get("/api/history/<aid>")
 def history_item(aid):
-    f = snapshot_path(re.sub(r"[^\w\-]", "", aid))
-    if not f.exists():
-        return bad("Phân tích này không có bản lưu để xem lại (tạo bởi phiên bản cũ).", 404)
-    return jsonify(json.loads(f.read_text("utf-8")))
+    snap = db.get_snapshot(current_user_id(), re.sub(r"[^\w\-]", "", aid))
+    if not snap:
+        return bad("Phân tích này không có bản lưu để xem lại.", 404)
+    return jsonify(snap)
 
 
 @bp.post("/api/history/<aid>/delete")
 def history_delete(aid):
+    aid = re.sub(r"[^\w\-]", "", aid)
     with LOCK:
         if A["id"] == aid:
             if A["job"]["running"]:
                 return bad("Phân tích này đang chạy, hãy chờ xong rồi xóa.", 409)
             reset()          # đang mở đúng luồng này -> đưa về trạng thái trống
         bump()
-    if not delete_history(aid):
+    if not db.delete_analysis(current_user_id(), aid):
         return bad("Không tìm thấy phân tích này.", 404)
     return jsonify(ok=True)
 
 
-def _file(aid, name):
-    return config.WORK / re.sub(r"[^\w\-]", "", aid) / Path(name).name
-
-
 @bp.get("/api/download/<aid>/<name>")
 def download(aid, name):
-    f = _file(aid, name)
-    return send_file(f, as_attachment=True) if f.exists() else bad("Không tìm thấy tệp", 404)
+    f = db.get_file(current_user_id(), re.sub(r"[^\w\-]", "", aid), name)
+    if not f:
+        return bad("Không tìm thấy tệp", 404)
+    return send_file(io.BytesIO(f[0]), mimetype=f[1], as_attachment=True, download_name=name)
 
 
 @bp.get("/api/view/<aid>/<name>")
 def view_file(aid, name):
     if name not in ("dashboard.html", "bao_cao.html"):
         return bad("Không hợp lệ", 404)
-    f = _file(aid, name)
-    return send_file(f, mimetype="text/html") if f.exists() else bad("Không tìm thấy tệp (có thể là bản cũ chưa có tệp này)", 404)
+    f = db.get_file(current_user_id(), re.sub(r"[^\w\-]", "", aid), name)
+    if not f:
+        return bad("Không tìm thấy tệp", 404)
+    return Response(f[0], mimetype="text/html", headers={"Content-Disposition": "inline"})
 
 
 @bp.get("/api/dash_preview")

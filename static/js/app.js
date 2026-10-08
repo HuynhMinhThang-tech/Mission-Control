@@ -189,7 +189,7 @@ function histRow(h) {
 <div class="hbtn"><button class="btn g sm" data-a="viewh" data-v="${esc(h.id)}" ${h.snap ? '' : 'disabled title="Bản cũ, không có dữ liệu để xem lại"'}>${ico('eye', 15)}Xem lại</button>${zip ? `<a class="btn g sm" href="/api/download/${esc(h.id)}/share.zip" title="Tải gói chia sẻ: dashboard, báo cáo, slide và dữ liệu sạch">${ico('archive', 15)}ZIP</a>` : '<button class="btn g sm" disabled>' + ico('archive', 15) + 'ZIP</button>'}<button class="btn g sm dng" data-a="delh" data-v="${esc(h.id)}" title="Xóa toàn bộ phân tích này">${ico('trash', 15)}Xóa</button></div></div>` }
 function renderNav() { const n = R ? 'history' : NAV;
   document.querySelectorAll('[data-n]').forEach(b => b.classList.toggle('on', b.dataset.n === n));
-  $('vOv').hidden = NAV !== 'overview' || !!R; $('vHi').hidden = NAV !== 'history' || !!R; $('vFlow').hidden = NAV !== 'flow' && !R;
+  $('vOv').hidden = NAV !== 'overview' || !!R; $('vHi').hidden = NAV !== 'history' || !!R; $('vSet').hidden = NAV !== 'settings' || !!R; $('vFlow').hidden = NAV !== 'flow' && !R;
   const dn = ST.st.filter(x => x === 'done').length, cur = ST.st[0] === 'done' && !ST.approved, H = ST.hist || [];
   const curRow = `<div class="hrow"><div><div class="q">${esc(ST.question || 'Phân tích mới')}</div><div class="meta"><span>${dn}/7 bước hoàn tất</span>${ST.started ? `<span>${ico('clock', 14)}Bắt đầu ${fmtDate(new Date(ST.started))} ${fmtTime(new Date(ST.started))}</span>` : ''}</div></div><div class="hbtn"><span class="pill w">Đang làm</span><button class="btn g sm" data-a="nav" data-v="flow">Mở luồng</button></div></div>`;
   $('vOv').innerHTML = `<div class="card"><h2>Tổng quan</h2><p class="lead">Trạng thái các phân tích của bạn.</p>${kp([['Tổng phân tích', H.length + (cur ? 1 : 0), ''], ['Đang làm', cur ? 1 : 0, ''], ['Hoàn tất', H.length, '']])}${cur ? curRow : ''}${H.slice(0, 5).map(histRow).join('')}${H.length > 5 ? '<div class="hint">Xem đầy đủ ở mục Lịch sử.</div>' : ''}</div>`;
@@ -239,7 +239,7 @@ function syncIcons() { const dark = document.documentElement.dataset.theme ? doc
 document.addEventListener('click', async e => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a, v = b.dataset.v;
   if (a === 'sbt') { const c = $('side').classList.toggle('c'); $('sbi').innerHTML = ic(c ? 'chevR' : 'chevL') }
   else if (a === 'drt') { const o = $('drawer').classList.toggle('open'); $('dri').innerHTML = ic(o ? 'chevR' : 'chevL') }
-  else if (a === 'nav') { leaveRO(); NAV = v; all(); toTop() }
+  else if (a === 'nav') { leaveRO(); NAV = v; all(); if (v === 'settings') window.renderSettings && window.renderSettings(); toTop() }
   else if (a === 'theme') setTheme()
   else if (a === 'new') {
     if (ST.job.running) { notify('Đang có tác vụ chạy, hãy chờ xong rồi tạo phân tích mới.', 'warn'); return }
