@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """AGENT 3 · Hoạch định phân tích → viết code pandas → tổng hợp kết quả (bước 4)."""
 from ..data.quality import schema
-from ..data.sandbox import df_table, run_code
+from ..data.sandbox import describe_error, df_table, prepare, run_code
+from ..errors import UserError
 from ..llm import llm, llm_json, strip_code
 from ..state import A, LOCK, bump, next_gen, put, tick
 from ..utils import J
@@ -22,7 +23,7 @@ PROMPT_MENU = (
 
 PROMPT_CODE = (
     'Viết code cho TỪNG mục (đúng thứ tự, thêm 1 mục riêng cho yêu cầu bổ sung nếu có). Trả về DUY NHẤT JSON: {"tasks":[{"title":"...","goal":"...","code":"..."}]}\n'
-    "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file; kết quả gán vào biến `result` là DataFrame đã tổng hợp "
+    "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file, KHÔNG dùng .query()/.eval()/thuộc tính bắt đầu bằng gạch dưới (dùng lọc bool df[df['x']>0]); kết quả gán vào biến `result` là DataFrame đã tổng hợp "
     "(<=50 dòng, tên cột rõ ràng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file'].")
 
 PROMPT_SUM = (
@@ -88,23 +89,26 @@ def execute(codes, t0=0):
     d = A["d"][3]
     tick(t0)
     dfs, tabs = [], []
-    for t, task in enumerate(d["tasks"]):
-        code = codes[t] if t < len(codes) and codes[t].strip() else task["code"]
-        err = df = None
-        for attempt in range(2):
-            try:
-                df = run_code(code, A["clean"])
-                err = None
-                break
-            except Exception as e:
-                err = f"{type(e).__name__}: {e}"
-                if attempt == 0:
-                    tick(t0 + 1)
-                    code = strip_code(llm(SYS(ROLE_FIX),
-                                          f"Sửa code lỗi, chỉ trả code (không import).\nLỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}"))
-        task["code"] = code
-        dfs.append(df)
-        tabs.append(df_table(df, task["title"], err))
+    with prepare(A["clean"]):                          # ghi dữ liệu cho sandbox một lần, dùng cho mọi tác vụ bên dưới
+        for t, task in enumerate(d["tasks"]):
+            code = codes[t] if t < len(codes) and codes[t].strip() else task["code"]
+            err = df = None
+            for attempt in range(2):
+                try:
+                    df = run_code(code, A["clean"])
+                    err = None
+                    break
+                except UserError:
+                    raise                                    # hệ thống bận / lỗi không phải do code: đừng nhờ AI sửa code
+                except Exception as e:
+                    err = describe_error(e)
+                    if attempt == 0:
+                        tick(t0 + 1)
+                        code = strip_code(llm(SYS(ROLE_FIX),
+                                              f"Sửa code lỗi, chỉ trả code (không import, không .query()/.eval()).\nLỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}"))
+            task["code"] = code
+            dfs.append(df)
+            tabs.append(df_table(df, task["title"], err))
     if all(x is None for x in dfs):
         raise RuntimeError("Không có phân tích nào chạy thành công: " + "; ".join(t["err"] or "" for t in tabs)[:300])
     tick(t0 + 2)

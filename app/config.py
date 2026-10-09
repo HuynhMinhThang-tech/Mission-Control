@@ -24,6 +24,10 @@ HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
 OPEN_BROWSER = os.getenv("OPEN_BROWSER", "1") == "1"
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "50"))
+# --- Sandbox chạy code phân tích (tiến trình con riêng) ---
+SANDBOX_TIMEOUT = int(os.getenv("SANDBOX_TIMEOUT", "60"))            # giây tối đa cho MỘT lần chạy code
+SANDBOX_MEM_MB = int(os.getenv("SANDBOX_MEM_MB", "0"))              # RAM tối đa của tiến trình con; 0 = tự tính (50% RAM của máy/container)
+SANDBOX_PARALLEL = max(1, int(os.getenv("SANDBOX_PARALLEL", "2")))  # số sandbox chạy cùng lúc (RAM server nhỏ thì để 1-2)
 IS_PROD = os.getenv("APP_ENV", "dev").strip().lower() == "production"
 TRUST_PROXY = os.getenv("TRUST_PROXY", "1" if IS_PROD else "0") == "1"      # sau Railway/Render: tin header X-Forwarded-*
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1" if IS_PROD else "0") == "1"

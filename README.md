@@ -23,5 +23,13 @@ Admin quên mật khẩu: `python manage.py set-password email@gmail.com` (chạ
 - Mật khẩu được băm một chiều; API key được mã hóa (Fernet, khóa chủ `MASTER_KEY`) và không bao giờ trả lại cho trình duyệt.
 - Chỉ phân tích đã duyệt xong mới được lưu vào lịch sử; phân tích đang dở sẽ mất nếu đóng phiên hoặc server khởi động lại.
 
+## Sandbox chạy code phân tích (mức tối giản, khoảng 6/10)
+Code pandas do AI viết (hoặc người dùng sửa) KHÔNG chạy trong tiến trình web. Ba lớp bảo vệ:
+1. `ast` chặn trước: import, thuộc tính riêng `_x`, module hệ thống/mạng, hàm đọc/ghi tệp, `.query()/.eval()`, `.format()` đi sâu thuộc tính.
+2. Tiến trình con: môi trường rỗng (không có `MASTER_KEY`, `DATABASE_URL`...), thư mục tạm riêng, giới hạn thời gian / CPU / RAM / dung lượng ghi, tối đa `SANDBOX_PARALLEL` cùng lúc, bị giết khi vượt giới hạn.
+3. Audit hook trong tiến trình con: chặn mạng, sinh tiến trình, đọc tệp ngoài thư viện Python (gồm `/proc`, `.env`), ghi/xóa tệp ngoài thư mục tạm.
+
+Hạn chế còn lại (chưa phải cô lập mức container): tiến trình con vẫn cùng người dùng hệ điều hành, cùng nhân và cùng container với máy chủ web; chặn mạng và chặn đọc tệp chỉ ở tầng Python (mã gốc/lỗ hổng trong thư viện C vẫn là rủi ro); không có hạn mức theo người dùng; Windows/macOS chỉ có timeout, không có giới hạn RAM/CPU của hệ điều hành. Dùng cho nhóm nhỏ quen biết; trước khi cho người lạ dùng nên chuyển sang dịch vụ sandbox riêng không có mạng.
+
 ## Kiểm thử
-`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py`
+`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py` · `python tests/sandbox_test.py` (cần Linux)
