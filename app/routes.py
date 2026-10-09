@@ -16,7 +16,7 @@ from .agents.cleaner import apply_choice, preview
 from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, write_code
 from .agents.profiler import run as s1_profile
 from .constants import STEP_T
-from .data.loader import load_files, make_sample
+from .data.loader import list_sheets, load_files, make_sample
 from .export import live_meta, publish
 from .export.interactive import build_dashboard
 from .state import A, LOCK, bump, current_user_id, log, now_iso, reset, start_job
@@ -42,13 +42,27 @@ def api_state():
         return jsonify(clean_json(o))
 
 
+@bp.post("/api/inspect")
+def inspect_files():
+    """Bước 1 của tải lên: liệt kê sheet của các tệp Excel để người dùng chọn sheet cần tải (không lưu gì vào phiên)."""
+    fs = request.files.getlist("files")
+    if not fs:
+        return bad("Chưa chọn tệp")
+    return jsonify(files=list_sheets(fs))
+
+
 @bp.post("/api/upload")
 def upload():
     fs = request.files.getlist("files")
     if not fs:
         return bad("Chưa chọn tệp")
     try:
-        raw, reps, alts = load_files(fs)
+        sheets = json.loads(request.form.get("sheets") or "{}")
+        sheets = {str(k): str(v) for k, v in sheets.items()} if isinstance(sheets, dict) else {}
+    except (ValueError, AttributeError):
+        sheets = {}
+    try:
+        raw, reps, alts = load_files(fs, sheets)
     except Exception as e:
         return bad(f"Không đọc được tệp: {e}")
     with LOCK:

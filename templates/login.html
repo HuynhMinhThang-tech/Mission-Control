@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <title>Đăng nhập · Mission Control</title>
 <link rel="stylesheet" href="/static/css/auth.css">
 </head><body>
@@ -49,6 +50,7 @@
   </div>
   <p class="au-note">Chưa có tài khoản? Đăng ký và chờ admin duyệt. Mật khẩu được mã hóa một chiều, admin không xem được.</p>
 </div></div>
+<script src="/static/js/loading.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const msg = (t, k = 'bad') => { const m = $('msg'); if (!t) { m.hidden = true; return } m.className = 'au-msg ' + k; m.textContent = t; m.hidden = false };

@@ -13,7 +13,7 @@
     $s('sBase').value = S.base_url || '';
     $s('sModel').value = S.model || (S.configured ? '' : defModel || '');
     $s('sKey').value = '';
-    $s('sKey').placeholder = S.has_key ? 'Đã lưu (kết thúc bằng ' + S.key_hint + '). Để trống nếu muốn giữ nguyên' : 'Dán API key của bạn';
+    $s('sKey').placeholder = S.has_key ? 'Đã lưu (…' + S.key_hint + ')' : 'API key';
     $s('sState').className = 'pill ' + (S.broken ? 'w' : S.has_key ? 'g' : 'w');
     $s('sState').textContent = S.broken ? 'Không đọc được key, hãy nhập lại' : S.has_key ? 'Đã có API key' : 'Chưa có API key';
     $s('sClear').hidden = !S.has_key && !S.broken;
@@ -25,7 +25,6 @@
   window.renderSettings = async function () {
     const box = $s('vSet');
     box.innerHTML = `<div class="card"><h2>API &amp; Model</h2>
-      <p class="lead">Mỗi người dùng khóa API riêng. Khóa được mã hóa trước khi lưu vào cơ sở dữ liệu nên admin hay người quản lý dữ liệu đều không xem lại được. Bất kỳ endpoint nào tương thích OpenAI đều dùng được.</p>
       <div class="sf">
         <div><label for="sKey">API key <span id="sState" class="pill w"></span></label><input id="sKey" type="password" autocomplete="off" spellcheck="false"></div>
         <div><label for="sBase">Base URL</label><input id="sBase" type="url" autocomplete="off" spellcheck="false" placeholder="https://..."><small>Mặc định là Gemini. Đổi nếu dùng nhà cung cấp khác (OpenAI, OpenRouter...).</small></div>

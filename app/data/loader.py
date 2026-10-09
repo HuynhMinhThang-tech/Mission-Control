@@ -92,21 +92,48 @@ def _table_meta(t, n_tables, res):
             "preview": {"cols": [str(c) for c in pv.columns], "rows": json.loads(pv.to_json(orient="values", date_format="iso"))}}
 
 
-def load_files(fs):
+EXCEL_EXT = (".xlsx", ".xls", ".xlsm")
+
+
+def list_sheets(fs):
+    """Trả về tên các sheet của từng tệp Excel (CSV bỏ qua) để giao diện cho người dùng chọn đúng một sheet."""
+    out = []
+    for f in fs:
+        name = f.filename or ""
+        if not name.lower().endswith(EXCEL_EXT):
+            continue
+        try:
+            names = [str(x) for x in pd.ExcelFile(io.BytesIO(f.read())).sheet_names]
+            out.append({"name": name, "sheets": names})
+        except Exception as e:
+            out.append({"name": name, "error": f"không đọc được tệp Excel ({type(e).__name__})"})
+    return out
+
+
+def load_files(fs, sheets=None):
     """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa).
+    Tệp Excel nhiều sheet: chỉ đọc đúng sheet người dùng đã chọn (sheets = {tên tệp: tên sheet}); tệp 1 sheet tự dùng sheet đó.
     Sheet không chuẩn nhưng có bảng bên trong -> tách bảng ra dùng (xem tables.py); ngược lại giữ luồng cũ."""
+    sheets = sheets or {}
     dfs, reports, alts = {}, {}, {}
     for f in fs:
         b = f.read()
         name = f.filename
         items = []
-        if name.lower().endswith((".xlsx", ".xls", ".xlsm")):
+        if name.lower().endswith(EXCEL_EXT):
             xl = pd.ExcelFile(io.BytesIO(b))
+            names = list(xl.sheet_names)
+            sh = sheets.get(name)
+            if sh is None:
+                if len(names) != 1:
+                    raise ValueError(f"Tệp '{name}' có {len(names)} sheet, hãy chọn một sheet để tải lên.")
+                sh = names[0]
+            if sh not in names:
+                raise ValueError(f"Tệp '{name}' không có sheet '{sh}'.")
             wb = _open_wb(b) if name.lower().endswith((".xlsx", ".xlsm")) else None
-            for sh in xl.sheet_names:
-                key = f"{name}::{sh}" if len(xl.sheet_names) > 1 else name
-                merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
-                items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
+            key = f"{name}::{sh}" if len(names) > 1 else name
+            merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
+            items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
         else:
             kw = dict(sep=None, engine="python", encoding="utf-8-sig", encoding_errors="replace")
             try:

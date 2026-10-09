@@ -1,5 +1,5 @@
 /* Trang đăng nhập / đăng ký / quản trị: cùng bộ màu và font với app chính (các lớp đều có tiền tố au-) */
-:root{--bg:#F6F7F9;--panel:#fff;--p2:#F1F2F6;--ink:#14161F;--sub:#646A7E;--line:#E4E6EE;--pri:#4F46E5;--soft:#ECEBFD;--ok:#0F8F6A;--okb:#DFF5EC;--warn:#B76A00;--warnb:#FCF0D9;--bad:#E0364F;--badb:#FDE7EA;
+:root{--bg:#EBEDF2;--panel:#FAFAFC;--p2:#F0F1F6;--ink:#14161F;--sub:#646A7E;--line:#DCDFE8;--pri:#4F46E5;--soft:#ECEBFD;--ok:#0F8F6A;--okb:#DFF5EC;--warn:#B76A00;--warnb:#FCF0D9;--bad:#E0364F;--badb:#FDE7EA;
 --f:'DM Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--fh:'Source Serif 4',Georgia,'Times New Roman',serif}
 @media(prefers-color-scheme:dark){:root{--bg:#1B1D2A;--panel:#252838;--p2:#2E3245;--ink:#F3F5FB;--sub:#A7ADC4;--line:#3E4359;--pri:#A3A1FF;--soft:#37386A;--ok:#4BE0AE;--okb:#1D3F34;--warn:#F7BE5C;--warnb:#3D3219;--bad:#FF8A9A;--badb:#43212A}}
 *{box-sizing:border-box}[hidden]{display:none!important}html,body{height:100%}
