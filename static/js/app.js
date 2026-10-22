@@ -87,7 +87,24 @@ const outline = (S, ch) => [['Trang bìa', (S.d[5].final || S.d[5]).title], ['T�
   ['Quyết định và rủi ro', 'Cần lãnh đạo phê duyệt'], ['Phụ lục', 'Dữ liệu, làm sạch, phân tích']];
 
 /* thẻ một thao tác làm sạch: mô tả + cách xử lý + rủi ro + kết quả áp dụng, KHỐI LẠI trong cùng một thẻ */
+/* Kết quả lệnh value_counts chạy trên từng cột + phần AI tổng hợp (các cách viết khác nhau của cùng một giá trị) */
+function vcBlock(v) {
+  if (!v || !v.cols || !v.cols.length) return '';
+  const chip = (k, n, on) => `<span class="vgc ${on ? 'canon' : ''}">«${esc(k)}» <small>×${N(n)}</small></span>`;
+  const fs = (v.findings || []).map(f => `<div class="vf"><div class="cgh"><b>${esc(f.col)}</b><span class="tag">${esc(f.file)}</span>${f.ng ? `<span class="found">${f.ng} nhóm viết khác nhau</span>` : ''}</div>
+<p class="why0">${esc(f.text)}</p>${(f.groups || []).map(g => `<div class="vg">${g.items.map(([k, n]) => chip(k, n, k === g.canon)).join('')}</div>`).join('')}${f.ng > (f.groups || []).length ? `<small class="sub">…và ${f.ng - f.groups.length} nhóm khác</small>` : ''}</div>`).join('');
+  const tabs = v.cols.map(c => { const m = new Map(); c.variants.forEach(g => g.items.forEach(([k]) => m.set(k, g.canon)));
+    const rows = c.top.map(([k, n]) => [esc(k) + (m.has(k) && k !== m.get(k) ? ` <span class="tag">→ ${esc(m.get(k))}</span>` : ''), N(n), (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%']);
+    return `<details class="vcd"><summary><b>${esc(c.col)}</b> · ${esc(c.file)} · ${N(c.distinct)} giá trị khác nhau${c.variants.length ? ` · <span class="found">${c.variants.length} nhóm trùng nghĩa</span>` : ''}</summary>
+<p class="sub"><code>${esc(c.cmd)}</code></p>${c.skipped ? `<p class="sub">${esc(c.skipped)}</p>` : ''}${tbl(['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác</small>` : ''}</details>` }).join('');
+  return `<div class="vcb"><div class="vch"><b>Đếm giá trị từng cột</b><code>${esc(v.cmd)}</code><span class="tag">Đã chạy trên ${N(v.ncols)} cột văn bản</span></div>
+<h4>AI tổng hợp</h4>${v.overview ? `<p class="why0">${esc(v.overview)}</p>` : ''}${fs || '<p class="sub">Không thấy giá trị nào bị viết khác nhau.</p>'}
+<details><summary>Bảng đếm theo cột (${N(v.ncols)})</summary>${tabs}</details></div>` }
 const MLAB = { median: 'Trung vị', mean: 'Trung bình', mode: 'Phổ biến nhất', drop_rows: 'Xóa dòng thiếu', value: 'Giá trị cố định' };
+function mapView(o) {
+  if (o.op !== 'standardize_text' || !o.map_view || !o.map_view.length) return '';
+  const r = o.map_view, top = r.slice(0, 8);
+  return `<div class="mpv">${top.map(([a, b, n]) => `<div><s>${esc(a)}</s> → <b>${esc(b)}</b> <small>${N(n)} ô</small></div>`).join('')}${r.length > top.length ? `<small>…và ${r.length - top.length} giá trị khác</small>` : ''}</div>` }
 function opCard(o, d, aw, s, fx) {
   const on = aw ? (s['c' + o.id] ?? o.recommended) : (o.chosen ?? o.recommended), fill = o.op === 'fill_missing', m = aw ? (s['m' + o.id] ?? o.method) : o.method;
   const alt = fill ? (o.alts || []).find(a => a.method === m) : null, MI = d.meth || {};
@@ -95,7 +112,7 @@ function opCard(o, d, aw, s, fx) {
   const opts = (o.numeric ? ['median', 'mean', 'mode', 'drop_rows', 'value'] : ['mode', 'drop_rows', 'value']);
   const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${MLAB[x]}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
   return `<div class="op ${on ? 'on' : ''}"><label class="oph"><input type="checkbox" data-s="2" data-k="c${o.id}" ${on ? 'checked' : ''} ${aw ? '' : 'disabled'}><b>${esc(o.label || o.title)}</b></label>
-${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
+${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${mapView(o)}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
 ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ? 'Kết quả' : 'Nếu áp dụng'}: <b>${esc(fx[o.id])}</b></span></div>` : ''}</div>` }
 
 /* ---------- 7 bước ---------- */
@@ -115,7 +132,7 @@ ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 
     const html = [...groups.values()].map(g => { const f = g[0], found = [...new Set(g.map(o => o.found).filter(Boolean))].join('; ');
       return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${g.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }).join('');
     const keys = Object.keys(pv.before).filter(k => pv.before[k] || pv.after[k]);
-    return `<h2>Làm sạch dữ liệu</h2>${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
+    return `<h2>Làm sạch dữ liệu</h2>${vcBlock(d.vc)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
 <div class="two"><div class="box"><h4>Trước</h4>${bar(keys.map(k => [k, pv.before[k]]))}</div><div class="box"><h4>Sau khi áp dụng</h4>${bar(keys.map(k => [k, pv.after[k]]))}</div></div>
 <div><small style="color:var(--sub)">Đã xử lý khoảng ${N(pv.n)} mục.${aw ? ' Thao tác rủi ro mặc định không được chọn.' : ''}</small></div>` },
   () => { const S = S_(), d = S.d[3], s = sel(3);

@@ -2,6 +2,7 @@
 """AGENT 2 · Làm sạch dữ liệu (bước 3). AI chỉ ĐỀ XUẤT, người dùng quyết định."""
 import pandas as pd
 
+from ..data import valuecounts as vcm
 from ..data.cleaning import OPL, apply_plan
 from ..data.quality import issue_counts, quality, schema
 from ..llm import llm_json
@@ -18,23 +19,79 @@ METH = {"median": ("Điền trung vị", "Ít bị ngoại lai kéo lệch; ch�
         "drop_rows": ("Xóa dòng thiếu", "Mất cả dòng, kể cả thông tin ở các cột khác."),
         "value": ("Điền giá trị cố định", "Giữ nguyên số dòng và đánh dấu được dòng thiếu; giá trị điền có thể không phản ánh đúng thực tế.")}
 
+OPK = ("file", "op", "column", "method", "value", "mapping")     # các khóa của một thao tác được đem đi áp dụng
+
 PROMPT = (
     "Hãy ĐỀ XUẤT danh sách thao tác làm sạch để NGƯỜI DÙNG TỰ CHỌN (không quyết định thay họ). Trả về DUY NHẤT JSON: "
-    '{"operations":[{"file":"tên file đúng như schema","op":"...","column":"...","method":"...","value":"...",'
-    '"reason":"vấn đề gì, vì sao nên xử lý, ảnh hưởng tới phân tích","risk":"rủi ro nếu áp dụng","recommended":true}]}\n'
+    '{"operations":[{"file":"tên file đúng như schema","op":"...","column":"...","method":"...","value":"...","mapping":{"giá trị cũ":"giá trị chuẩn"},'
+    '"reason":"vấn đề gì, vì sao nên xử lý, ảnh hưởng tới phân tích","risk":"rủi ro nếu áp dụng","recommended":true}],'
+    '"value_counts":{"overview":"1-2 câu tổng hợp kết quả đếm giá trị","columns":[{"file":"...","column":"...","finding":"điều thấy khi đếm giá trị cột này"}]}}\n'
     "op hợp lệ: drop_duplicates, drop_column, strip_text, lowercase, to_numeric, to_datetime, clip_outliers, "
-    "flag_nonpositive (gắn cờ giá trị âm, không sửa), fill_missing.\n"
+    "flag_nonpositive (gắn cờ giá trị âm, không sửa), fill_missing, standardize_text.\n"
     "fill_missing có method: median|mean|mode|drop_rows|value (kèm value). Thao tác rủi ro (xóa dữ liệu, cắt ngoại lai) "
-    "đặt recommended=false. Không bỏ sót vấn đề quan trọng.")
+    "đặt recommended=false. Không bỏ sót vấn đề quan trọng.\n"
+    "KẾT QUẢ ĐẾM GIÁ TRỊ (value_counts) của từng cột văn bản đã được CHẠY THẬT ở trên: hãy đọc kỹ rồi tổng hợp trong value_counts.columns "
+    "(chỉ nêu cột có điều đáng nói: cùng một giá trị nhưng viết khác nhau như 'Ban Giám đốc' và 'ban giam doc', giá trị lạ như 'N/A', '-', '?', "
+    "giá trị chiếm áp đảo, ít giá trị bất thường). Với cột có các cách viết khác nhau của CÙNG một giá trị, đề xuất op standardize_text "
+    "kèm mapping từ từng cách viết sai/khác về MỘT giá trị chuẩn. Mỗi khóa của mapping phải là giá trị CÓ THẬT trong bảng đếm, không được bịa; "
+    "chỉ gộp khi chắc chắn cùng nghĩa (viết tắt rõ ràng như 'BGĐ' = 'Ban Giám đốc' chỉ gộp khi bảng đếm cho thấy đúng như vậy).")
+
+
+def fold_standardize(ops, rep):
+    """Kiểm tra các thao tác gộp giá trị AI đề xuất (chặn giá trị bịa) và BỔ SUNG các nhóm trùng nghĩa mà phép đếm đã tìm thấy nhưng AI bỏ sót."""
+    by = {(c["file"], c["col"]): c for c in rep}
+    out, seen = [], {}
+    for o in ops:
+        if not isinstance(o, dict) or o.get("op") != "standardize_text":
+            out.append(o)
+            continue
+        c = by.get((o.get("file"), o.get("column")))
+        if c is None:
+            continue
+        valid = set(A["raw"][o["file"]][o["column"]].dropna().astype(str)) if o["column"] in A["raw"][o["file"]].columns else set()
+        mp = vcm.clean_mapping(o.get("mapping"), valid)
+        k = (c["file"], c["col"])
+        if k in seen:                                  # AI đề xuất hai thao tác cho cùng một cột -> gộp làm một
+            seen[k]["mapping"].update(mp)
+            continue
+        o["mapping"] = mp
+        seen[k] = o
+        out.append(o)
+    for c in rep:
+        auto = vcm.auto_mapping(c)
+        if not auto:
+            continue
+        k = (c["file"], c["col"])
+        if k in seen:
+            seen[k]["mapping"] = {**auto, **seen[k]["mapping"]}
+        else:
+            o = {"file": c["file"], "op": "standardize_text", "column": c["col"], "mapping": dict(auto), "recommended": True,
+                 "reason": vcm.auto_text(c) + " Gộp về một cách viết để các nhóm, biểu đồ và phép tính theo cột này không bị chia nhỏ.",
+                 "risk": "Có thể gộp nhầm hai giá trị thật sự khác nhau; xem danh sách gộp bên dưới trước khi chọn."}
+            seen[k] = o
+            out.append(o)
+    for o in seen.values():
+        o["mapping"] = dict(list(vcm.resolve(o["mapping"]).items())[:vcm.MAX_MAP])
+    return [o for o in out if not (isinstance(o, dict) and o.get("op") == "standardize_text" and not o["mapping"])]
+
+
+def map_view(o):
+    """Danh sách 'cũ -> chuẩn (số ô bị đổi)' để người dùng soát trước khi chọn."""
+    cnt = A["raw"][o["file"]][o["column"]].value_counts()
+    rows = [[k, v, int(cnt.get(k, 0))] for k, v in o["mapping"].items()]
+    return sorted(rows, key=lambda r: -r[2])
 
 
 def run(fb=""):
     tick(0)
     iss = quality(A["raw"])
+    rep = vcm.report(A["raw"])                         # CHẠY THẬT value_counts(dropna=False) cho từng cột văn bản
+    tick(1)
     res = llm_json(SYS(ROLE),
-                   ctx_txt(fb) + prev(2, fb) + f"Schema:\n{J(schema(A['raw'], 3), 5000)}\nVấn đề:\n{iss.to_csv(index=False)[:5000]}\n\n" + PROMPT)
+                   ctx_txt(fb) + prev(2, fb) + f"Schema:\n{J(schema(A['raw'], 3), 5000)}\nVấn đề:\n{iss.to_csv(index=False)[:5000]}\n"
+                   f"Kết quả đếm giá trị từng cột (lệnh {vcm.CMD}):\n{vcm.for_llm(rep)}\n\n" + PROMPT)
     ops = []
-    for k, o in enumerate(res.get("operations", [])):
+    for k, o in enumerate(fold_standardize(res.get("operations", []), rep)):
         f, c = o.get("file"), o.get("column")
         if f not in A["raw"] or o.get("op") not in OPL:
             continue
@@ -49,8 +106,11 @@ def run(fb=""):
         o["recommended"] = bool(o.get("recommended", True))
         ops.append(o)
     ops = merge_fill(ops)
-    tick(1)
-    d = {"ops": ops, "meth": METH}
+    for o in ops:
+        if o["op"] == "standardize_text":
+            o["map_view"] = map_view(o)
+    tick(2)
+    d = {"ops": ops, "meth": METH, "vc": vcm.view(rep, res.get("value_counts"))}
     A["d"][2] = d
     d["pv"] = preview({"sel": {}, "meth": {}, "val": {}})
     put(2, d)
@@ -111,6 +171,8 @@ def effect(o, o2):
         return f"Sửa {vi(int(((d[c].astype(str) != n[c].astype(str)) & d[c].notna()).sum()))} ô"
     if op == "flag_nonpositive":
         return f"Gắn cờ {vi(int(n[c + '_nghi_van'].sum()))} dòng (không sửa giá trị)"
+    if op == "standardize_text":
+        return f"Gộp {vi(int(d[c].nunique()))} → {vi(int(n[c].nunique()))} giá trị khác nhau · sửa {vi(int(((d[c] != n[c]) & d[c].notna()).sum()))} ô"
     if op == "drop_column":
         return f"Bỏ cột «{c}» (mất {vi(int(d[c].notna().sum()))} giá trị)"
     return ""
@@ -120,7 +182,7 @@ def pick_ops(p):
     out = []
     for o in A["d"][2]["ops"]:
         if (p.get("sel") or {}).get(o["id"], o["recommended"]):
-            o2 = {k: o[k] for k in ("file", "op", "column", "method", "value") if k in o}
+            o2 = {k: o[k] for k in OPK if k in o}
             if o["op"] == "fill_missing":
                 o2["method"] = (p.get("meth") or {}).get(o["id"], o.get("method", "median"))
                 if o2["method"] == "value":
@@ -134,7 +196,7 @@ def preview(p):
     b, a = issue_counts(A["raw"]), issue_counts(out)
     fx = {}
     for o in A["d"][2]["ops"]:
-        o2 = {k: o[k] for k in ("file", "op", "column", "method", "value") if k in o}
+        o2 = {k: o[k] for k in OPK if k in o}
         if o["op"] == "fill_missing":
             o2["method"] = (p.get("meth") or {}).get(o["id"], o.get("method", "median"))
             o2["value"] = (p.get("val") or {}).get(o["id"], o.get("value") or "Không rõ")

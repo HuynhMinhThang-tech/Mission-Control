@@ -177,3 +177,18 @@ a.nv{text-decoration:none}.nv .bdg{margin-left:auto;background:var(--pri);color:
 .sp label{min-width:0;display:flex;flex-direction:column;font-weight:600}.sp label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp label small{color:var(--sub);font-weight:400}
 .sp select{width:100%;padding:9px 10px;font-size:13.5px;border-radius:8px;cursor:pointer}.sp select:focus{outline:2px solid var(--pri);outline-offset:1px}
 .dlg .act{justify-content:flex-end;margin-top:18px}
+
+/* ---- Đếm giá trị từng cột (value_counts) ---- */
+.found{color:var(--warn);font-size:12.5px;font-weight:600}
+.vcb{border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;background:var(--panel)}
+.vch{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:4px}.vch b{font-size:15.5px}
+.vcb code{background:var(--p2);border-radius:6px;padding:2px 7px;font-size:12.5px;color:var(--ink)}
+.vcb h4{margin:12px 0 4px;font-size:13px;color:var(--sub)}
+.vcb .sub{color:var(--sub);font-size:12.5px;margin:4px 0}
+.vcb .why0{margin:4px 0 6px;font-size:13.5px;line-height:1.5}
+.vf{padding:10px 0;border-top:1px solid var(--line)}
+.vg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.vgc{padding:2px 10px;border-radius:999px;background:var(--p2);border:1px solid var(--line);font-size:12.5px}.vgc small{color:var(--sub)}
+.vgc.canon{background:var(--okb);color:var(--ok);border-color:transparent;font-weight:600}.vgc.canon small{color:inherit}
+.vcd{margin-top:6px}.vcd summary{cursor:pointer}
+.mpv{margin:8px 0 0 26px;display:grid;gap:3px;font-size:12.5px;color:var(--sub)}.mpv s{color:var(--sub)}.mpv b{color:var(--ink)}

@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
 """Mô tả dữ liệu + quét vấn đề chất lượng."""
+import re
+import unicodedata
+
 import pandas as pd
 
 from ..utils import vn  # noqa: F401  (giữ để các agent import chung)
+
+
+def norm_key(v):
+    """Khóa so sánh: bỏ hoa/thường, dấu tiếng Việt, khoảng trắng thừa và dấu câu. «Ban Giám đốc» = «ban giam doc» = «BAN GIÁM ĐỐC »."""
+    t = unicodedata.normalize("NFD", str(v))
+    t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn").replace("đ", "d").replace("Đ", "D")
+    return re.sub(r"[\W_]+", " ", t.lower()).strip()
 
 
 def to_dt(s):
@@ -60,7 +70,7 @@ def join_info(dfs):
 
 CAT = {"Giá trị thiếu": "Thiếu", "Dòng trùng lặp": "Trùng", "Thừa khoảng trắng": "Định dạng", "Không nhất quán hoa/thường": "Định dạng",
        "Số đang lưu dạng text": "Định dạng", "Ngày đang lưu dạng text": "Định dạng", "Ngày sai định dạng": "Định dạng",
-       "Ngoại lai (IQR)": "Ngoại lai", "Giá trị âm": "Giá trị âm"}
+       "Giá trị viết khác nhau": "Định dạng", "Ngoại lai (IQR)": "Ngoại lai", "Giá trị âm": "Giá trị âm"}
 
 
 def quality(dfs):
@@ -92,6 +102,12 @@ def quality(dfs):
                         add(n, c, "Ngày sai định dạng", len(t) - shapes.iloc[0])
                     else:
                         add(n, c, "Ngày đang lưu dạng text", len(t))
+                else:
+                    u = pd.Series(t.unique())
+                    if len(u) <= 20000:       # cùng một giá trị nhưng khác dấu/ký tự: bị đếm thành nhiều giá trị riêng
+                        extra = int(u.str.strip().str.lower().nunique()) - int(pd.Series([norm_key(x) or x for x in u]).nunique())
+                        if extra > 0:
+                            add(n, c, "Giá trị viết khác nhau", extra)
             elif pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
                 q1, q3 = s.quantile(.25), s.quantile(.75)
                 i = q3 - q1

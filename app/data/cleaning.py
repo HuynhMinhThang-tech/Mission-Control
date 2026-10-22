@@ -8,7 +8,8 @@ from .quality import to_dt
 
 OPL = {"drop_duplicates": "Xóa dòng trùng", "drop_column": "Bỏ cột", "strip_text": "Cắt khoảng trắng", "lowercase": "Chuẩn hóa chữ thường",
        "to_numeric": "Chuyển sang số", "to_datetime": "Chuẩn hóa ngày", "clip_outliers": "Cắt ngoại lai",
-       "fill_missing": "Xử lý giá trị thiếu", "flag_nonpositive": "Gắn cờ giá trị âm"}
+       "fill_missing": "Xử lý giá trị thiếu", "flag_nonpositive": "Gắn cờ giá trị âm",
+       "standardize_text": "Gộp giá trị viết khác nhau"}
 
 
 def apply_plan(dfs, ops):
@@ -27,6 +28,9 @@ def apply_plan(dfs, ops):
                 d[c] = d[c].where(d[c].isna(), d[c].astype(str).str.strip())
             elif o == "lowercase":
                 d[c] = d[c].where(d[c].isna(), d[c].astype(str).str.strip().str.lower())
+            elif o == "standardize_text":
+                mp = op.get("mapping") or {}
+                d[c] = d[c].map(lambda v: mp.get(v, v) if isinstance(v, str) else v)
             elif o == "to_numeric":
                 d[c] = pd.to_numeric(d[c].astype(str).str.replace(r"[^\d.\-]", "", regex=True), errors="coerce")
             elif o == "to_datetime":

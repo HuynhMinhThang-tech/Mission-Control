@@ -18,5 +18,5 @@ def prev(i, fb, n=4500):
     if not fb or i not in A["d"]:
         return ""
     import json
-    d = {k: v for k, v in A["d"][i].items() if k not in ("gen", "pv", "profile", "issues")}
+    d = {k: v for k, v in A["d"][i].items() if k not in ("gen", "pv", "profile", "issues", "vc")}
     return f"BẢN LẦN TRƯỚC (hãy GIỮ phần không bị góp ý, chỉ sửa theo góp ý):\n{json.dumps(d, ensure_ascii=False, default=str)[:n]}\n"
