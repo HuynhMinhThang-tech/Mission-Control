@@ -6,7 +6,7 @@ from ..utils import J
 from .base import SYS, ctx_txt, prev
 from .charts import valid_charts
 
-ROLE = "Agent Thiết kế dashboard và báo cáo"
+ROLE = "Agent Thiết kế bảng điều khiển và báo cáo"
 
 PROMPT = (
     'ĐỀ XUẤT 6-10 biểu đồ ứng viên để NGƯỜI DÙNG CHỌN. Trả về DUY NHẤT JSON: {"title":"tiêu đề báo cáo (nêu kết luận chính)","narrative":"2-3 đoạn tóm tắt báo cáo",'
@@ -20,7 +20,7 @@ def run(fb=""):
     r3 = A["d"][3]["result"]
     tabs = r3["tables"]
     cols = {i: {"title": t["title"], "cols": t["cols"], "sample": t["rows"][:3]} for i, t in enumerate(tabs) if t["cols"]}
-    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nInsight: {J(A['d'][4], 4000)}\n\n" + PROMPT)
+    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\n\n" + PROMPT)
     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
     tick(1)
     put(5, {"title": r.get("title") or "Báo cáo phân tích", "narrative": r.get("narrative", A["d"][4]["summary"]), "charts": charts})

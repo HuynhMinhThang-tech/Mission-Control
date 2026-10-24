@@ -1,7 +1,7 @@
 /* Mission Control · giao diện. ST = phiên đang làm (live); R = bản lưu đang xem lại (chỉ đọc). */
 const $ = id => document.getElementById(id), esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STEPS = [{ t: 'Dữ liệu và bối cảnh', i: 'database' }, { t: 'Kiểm tra và mô tả dữ liệu', i: 'search' }, { t: 'Làm sạch dữ liệu', i: 'sparkles' }, { t: 'Phân tích', i: 'chart' },
-  { t: 'Insight và hành động', i: 'bulb' }, { t: 'Báo cáo', i: 'file' }, { t: 'Review và export', i: 'shield' }];
+  { t: 'Phát hiện và hành động', i: 'bulb' }, { t: 'Báo cáo', i: 'file' }, { t: 'Duyệt và xuất file', i: 'shield' }];
 const N = v => Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 }), NC = v => new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
 const pad = n => String(n).padStart(2, '0');
 const fmtDate = d => d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '—';
@@ -87,20 +87,38 @@ const outline = (S, ch) => [['Trang bìa', (S.d[5].final || S.d[5]).title], ['T�
   ['Quyết định và rủi ro', 'Cần lãnh đạo phê duyệt'], ['Phụ lục', 'Dữ liệu, làm sạch, phân tích']];
 
 /* thẻ một thao tác làm sạch: mô tả + cách xử lý + rủi ro + kết quả áp dụng, KHỐI LẠI trong cùng một thẻ */
-/* Kết quả lệnh value_counts chạy trên từng cột + phần AI tổng hợp (các cách viết khác nhau của cùng một giá trị) */
-function vcBlock(v) {
+/* Kết quả lệnh value_counts chạy trên từng cột: người dùng thấy ngay từng giá trị và số lần xuất hiện để phát hiện chỗ ghi sai/ghi nhầm,
+   thấy cái nào hệ thống nghi là một (viết khác, viết tắt, gõ sai) và có thể tự chọn "Gộp vào…" ngay trên dòng. */
+function vcBlock(v, aw) {
   if (!v || !v.cols || !v.cols.length) return '';
+  const mm = sel(2).mm || {}, KEY = c => c.file + '\u0001' + c.col;
   const chip = (k, n, on) => `<span class="vgc ${on ? 'canon' : ''}">«${esc(k)}» <small>×${N(n)}</small></span>`;
-  const fs = (v.findings || []).map(f => `<div class="vf"><div class="cgh"><b>${esc(f.col)}</b><span class="tag">${esc(f.file)}</span>${f.ng ? `<span class="found">${f.ng} nhóm viết khác nhau</span>` : ''}</div>
-<p class="why0">${esc(f.text)}</p>${(f.groups || []).map(g => `<div class="vg">${g.items.map(([k, n]) => chip(k, n, k === g.canon)).join('')}</div>`).join('')}${f.ng > (f.groups || []).length ? `<small class="sub">…và ${f.ng - f.groups.length} nhóm khác</small>` : ''}</div>`).join('');
-  const tabs = v.cols.map(c => { const m = new Map(); c.variants.forEach(g => g.items.forEach(([k]) => m.set(k, g.canon)));
-    const rows = c.top.map(([k, n]) => [esc(k) + (m.has(k) && k !== m.get(k) ? ` <span class="tag">→ ${esc(m.get(k))}</span>` : ''), N(n), (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%']);
-    return `<details class="vcd"><summary><b>${esc(c.col)}</b> · ${esc(c.file)} · ${N(c.distinct)} giá trị khác nhau${c.variants.length ? ` · <span class="found">${c.variants.length} nhóm trùng nghĩa</span>` : ''}</summary>
-<p class="sub"><code>${esc(c.cmd)}</code></p>${c.skipped ? `<p class="sub">${esc(c.skipped)}</p>` : ''}${tbl(['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác</small>` : ''}</details>` }).join('');
-  return `<div class="vcb"><div class="vch"><b>Đếm giá trị từng cột</b><code>${esc(v.cmd)}</code><span class="tag">Đã chạy trên ${N(v.ncols)} cột văn bản</span></div>
-<h4>AI tổng hợp</h4>${v.overview ? `<p class="why0">${esc(v.overview)}</p>` : ''}${fs || '<p class="sub">Không thấy giá trị nào bị viết khác nhau.</p>'}
-<details><summary>Bảng đếm theo cột (${N(v.ncols)})</summary>${tabs}</details></div>` }
-const MLAB = { median: 'Trung vị', mean: 'Trung bình', mode: 'Phổ biến nhất', drop_rows: 'Xóa dòng thiếu', value: 'Giá trị cố định' };
+  const colTable = (c, ci) => {
+    const strong = new Map(), weak = new Map(), man = mm[KEY(c)] || {}, mx = Math.max(...c.top.map(r => r[1]), 1);
+    c.variants.forEach(g => g.items.forEach(([k]) => { if (k !== g.canon) strong.set(k, g.canon) }));
+    (c.weak || []).forEach(g => Object.entries(g.map).forEach(([k, t]) => weak.set(k, t)));
+    const opts = c.top.filter(r => r[0] !== '(thiếu)');
+    const rows = c.top.map(([k, n]) => {
+      const tag = man[k] ? `<span class="tag me">gộp vào «${esc(man[k])}» (bạn chọn)</span>` : strong.has(k) ? `<span class="tag st">trùng «${esc(strong.get(k))}»</span>` : weak.has(k) ? `<span class="tag wk">nghi là «${esc(weak.get(k))}»</span>` : '';
+      const pick = aw ? (k === '(thiếu)' ? '' : `<select class="mmsel" data-mm="${ci}" data-val="${esc(k)}" aria-label="Gộp «${esc(k)}» vào"><option value="">Giữ nguyên</option>${opts.filter(o => o[0] !== k).map(o => `<option value="${esc(o[0])}" ${man[k] === o[0] ? 'selected' : ''}>${esc(o[0])}</option>`).join('')}</select>`) : '';
+      const cell = `<span class="vv">${esc(k)}</span>${tag}`;
+      return aw ? [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%', pick]
+                : [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%'] });
+    return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Gộp vào'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` };
+  const flagged = new Set((v.findings || []).map(f => f.file + '\u0001' + f.col));
+  const card = (c, ci, f) => {
+    const nm = Object.keys(mm[KEY(c)] || {}).length, op = flagged.has(KEY(c)) || nm;
+    return `<div class="vcol"><div class="cgh"><b>${esc(c.col)}</b><span class="tag">${esc(c.file)}</span><span class="sub">${N(c.distinct)} giá trị khác nhau${c.missing ? ` · ${N(c.missing)} ô thiếu` : ''}</span>
+${c.variants.length ? `<span class="found">${c.variants.length} nhóm viết khác nhau</span>` : ''}${(c.weak || []).length ? `<span class="found">${c.weak.length} nhóm nghi trùng</span>` : ''}${nm ? `<span class="found ok">${nm} giá trị bạn chọn gộp</span>` : ''}</div>
+${f ? `<p class="why0">${esc(f.text)}</p>${(f.groups || []).map(g => `<div class="vg">${g.items.map(([k, n]) => chip(k, n, k === g.canon)).join('')}<small class="sub">chắc chắn là một</small></div>`).join('')}${(f.weak || []).map(g => `<div class="vg">${g.items.slice(0, 6).map(([k, n]) => chip(k, n, k === g.canon)).join('<span class="sim">~</span>')}<small class="sub">nghi là một (${esc(g.why.join(', '))})</small></div>`).join('')}` : ''}
+<details class="vcd" ${op ? 'open' : ''}><summary>Bảng đếm giá trị của cột này</summary>${colTable(c, ci)}</details></div>` };
+  const fmap = new Map((v.findings || []).map(f => [f.file + '\u0001' + f.col, f]));
+  const flagC = [], restC = [];
+  v.cols.forEach((c, ci) => (flagged.has(KEY(c)) || Object.keys(mm[KEY(c)] || {}).length ? flagC : restC).push([c, ci]));
+  return `<div class="vcb"><div class="vch"><b>Kiểm tra giá trị từng cột</b><code>${esc(v.cmd)}</code><span class="tag">Đã chạy trên ${N(v.ncols)} cột văn bản</span></div>
+${v.overview ? `<p class="why0">${esc(v.overview)}</p>` : ''}
+${flagC.length ? flagC.map(([c, ci]) => card(c, ci, fmap.get(KEY(c)))).join('') : '<p class="sub">Không thấy giá trị nào bị viết khác nhau hay nghi ngờ trùng.</p>'}
+${restC.length ? `<details class="vrest"><summary>Các cột còn lại, chưa thấy bất thường (${N(restC.length)})</summary>${restC.map(([c, ci]) => card(c, ci, null)).join('')}</details>` : ''}</div>` }
 function mapView(o) {
   if (o.op !== 'standardize_text' || !o.map_view || !o.map_view.length) return '';
   const r = o.map_view, top = r.slice(0, 8);
@@ -132,7 +150,7 @@ ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 
     const html = [...groups.values()].map(g => { const f = g[0], found = [...new Set(g.map(o => o.found).filter(Boolean))].join('; ');
       return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${g.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }).join('');
     const keys = Object.keys(pv.before).filter(k => pv.before[k] || pv.after[k]);
-    return `<h2>Làm sạch dữ liệu</h2>${vcBlock(d.vc)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
+    return `<h2>Làm sạch dữ liệu</h2>${vcBlock(d.vc, aw)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
 <div class="two"><div class="box"><h4>Trước</h4>${bar(keys.map(k => [k, pv.before[k]]))}</div><div class="box"><h4>Sau khi áp dụng</h4>${bar(keys.map(k => [k, pv.after[k]]))}</div></div>
 <div><small style="color:var(--sub)">Đã xử lý khoảng ${N(pv.n)} mục.${aw ? ' Thao tác rủi ro mặc định không được chọn.' : ''}</small></div>` },
   () => { const S = S_(), d = S.d[3], s = sel(3);
@@ -148,8 +166,8 @@ ${d.tasks.map((t, i) => `<div class="f"><span class="tg">${i + 1}</span><b>${esc
 <details><summary>Bảng kết quả đầy đủ</summary>${T.map(t => `<p><b>${esc(t.title)}</b></p>` + tableOf(t)).join('')}</details>
 <details><summary>Code đã chạy</summary>${d.tasks.map(t => `<p><b>${esc(t.title)}</b></p><pre style="white-space:pre-wrap;font-size:12px">${esc(t.code)}</pre>`).join('')}</details>` },
   () => { const S = S_(), d = S.d[4], s = sel(4), aw = S.st[4] === 'await' && !RO(), ck = (k, i) => aw ? `<label style="float:right;font-size:12px;color:var(--sub)"><input type="checkbox" data-s="4" data-k="${k}${i}" ${(s[k + i] ?? true) ? 'checked' : ''}> Đưa vào báo cáo</label>` : '';
-    return `<h2>Insight và hành động</h2>${d.summary ? fnd(esc(d.summary), 'Tóm tắt', 'sum') : ''}
-${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Insight ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small><details><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}</details></div>`).join('')}
+    return `<h2>Phát hiện và hành động</h2>${d.summary ? fnd(esc(d.summary), 'Tóm tắt', 'sum') : ''}
+${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Phát hiện ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small><details><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}</details></div>`).join('')}
 ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
     const panel = aw ? `<details open><summary>Chọn biểu đồ và chỉ số đưa lên báo cáo và slide</summary><div class="ask" style="padding-top:10px"><label>Tiêu đề báo cáo</label><input data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
@@ -158,16 +176,16 @@ ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hàn
       return `<label class="opt ${on ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')} (từ: ${esc(t.title)})</small></span></label><div class="hint" style="margin:-4px 0 8px 34px">Loại ${kindSel(5, 'k' + i, kd)} Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div>` }).join('')}</details>` : '';
     const title = (d.final && !aw) ? d.final.title : (aw ? (s.rt ?? d.title) : d.title);
     return `<h2>Báo cáo</h2>${panel}
-<div class="tb">${[['dash', 'Dashboard tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
-${TAB === 'dash' ? `<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải dashboard…</div><iframe class="dashf" title="Dashboard tương tác" src="${S.approved ? `/api/view/${S.id}/dashboard.html` : '/api/dash_preview?title=' + encodeURIComponent(title)}"></iframe></div><div class="hint">Dashboard tương tác: bấm vào cột / lát tròn / điểm để lọc chéo, dùng thanh bộ lọc phía trên, đổi chỉ số và cách tính ở đầu mỗi biểu đồ. Số liệu tính từ dữ liệu đã làm sạch.</div>`
+<div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
+${TAB === 'dash' ? `<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải bảng điều khiển…</div><iframe class="dashf" title="Bảng điều khiển tương tác" src="${S.approved ? `/api/view/${S.id}/dashboard.html` : '/api/dash_preview?title=' + encodeURIComponent(title)}"></iframe></div><div class="hint">Bấm vào biểu đồ để lọc chéo. Số liệu tính từ dữ liệu đã làm sạch.</div>`
       : TAB === 'rep' ? fnd(esc(S.d[4].summary), 'Câu trả lời') + kpo(sk) + `<div class="two">${sc.map(c => chart(c, T)).join('')}</div>` + fnd(esc(d.narrative).replace(/\n/g, '<br>'), 'Tóm tắt') + fnd(esc(S.question) + (S.ctx ? '<br>' + esc(S.ctx) : ''), 'Bối cảnh') + fnd('Dựa trên ' + S.d[3].tasks.length + ' phân tích đã chọn và dữ liệu đã làm sạch.', 'Phương pháp') + fnd(S.d[4].actions.map(a => esc(a.text)).join('<br>') || '—', 'Khuyến nghị')
       : `<div class="slides">${outline(S, sc).map((x, i) => `<div class="sl">${i + 1}. ${esc(i === 0 ? title : x[0])}<small>${esc(x[1])}</small></div>`).join('')}</div>`}` },
   () => { const S = S_(), d = S.d[6], ap = S.approved;
-    const dl = ap ? `<div class="dl"><a class="btn" href="/api/view/${S.id}/bao_cao.html" target="_blank" rel="noopener" title="Báo cáo đầy đủ: câu trả lời, insight, bằng chứng, khuyến nghị">${ico('file', 16)}Báo cáo</a><a class="btn" href="/api/view/${S.id}/dashboard.html" target="_blank" rel="noopener" title="Dashboard tương tác: bộ lọc, lọc chéo, biểu đồ">${ico('dash', 16)}Dashboard</a><a class="btn" href="/api/download/${S.id}/bao_cao.pptx" title="Tải file PowerPoint">${ico('slides', 16)}PPT</a><a class="btn" href="/api/download/${S.id}/share.zip" title="Gói chia sẻ: báo cáo, dashboard, PPT, dữ liệu sạch">${ico('archive', 16)}ZIP</a></div>` : '<div class="note">Xuất và chia sẻ bị khóa cho đến khi bạn duyệt.</div>';
-    return `<h2>Review và export</h2>${d.checks.map(x => fnd('✓ ' + esc(x), 'Đã xong')).join('')}${dl}` }];
+    const dl = ap ? `<div class="dl"><a class="btn" href="/api/view/${S.id}/bao_cao.html" target="_blank" rel="noopener" title="Báo cáo đầy đủ: câu trả lời, phát hiện, bằng chứng, khuyến nghị">${ico('file', 16)}Báo cáo</a><a class="btn" href="/api/view/${S.id}/dashboard.html" target="_blank" rel="noopener" title="Bảng điều khiển tương tác: bộ lọc, lọc chéo, biểu đồ">${ico('dash', 16)}Bảng điều khiển</a><a class="btn" href="/api/download/${S.id}/bao_cao.pptx" title="Tải file PowerPoint">${ico('slides', 16)}PPT</a><a class="btn" href="/api/download/${S.id}/share.zip" title="Gói chia sẻ: báo cáo, dashboard, PPT, dữ liệu sạch">${ico('archive', 16)}ZIP</a></div>` : '<div class="note">Xuất và chia sẻ bị khóa cho đến khi bạn duyệt.</div>';
+    return `<h2>Duyệt và xuất file</h2>${d.checks.map(x => fnd('✓ ' + esc(x), 'Đã xong')).join('')}${dl}` }];
 
 function payload(i) { const s = sel(i), S = S_();
-  if (i === 2) { const d = S.d[2]; return { sel: Object.fromEntries(d.ops.map(o => [o.id, s['c' + o.id] ?? o.recommended])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
+  if (i === 2) { const d = S.d[2]; return { manual: Object.entries(s.mm || {}).map(([k, m]) => { const [file, column] = k.split('\u0001'); return { file, column, mapping: m } }).filter(x => Object.keys(x.mapping).length), sel: Object.fromEntries(d.ops.map(o => [o.id, s['c' + o.id] ?? o.recommended])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
   if (i === 4) { const d = S.d[4]; return { ins: d.insights.map((x, k) => s['i' + k] ?? true), act: d.actions.map((x, k) => s['a' + k] ?? true) } }
   if (i === 5) { const r = S.d[3].result; return { title: s.rt ?? S.d[5].title, charts: selCharts(), kpis: r.kpis.map((k, j) => j).filter(j => s['p' + j] ?? true) } }
   return {} }
@@ -321,12 +339,14 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'a3re') { await post('/api/a3/reselect') }
   else if (a === 'viewh') { let r; try { r = await fetch('/api/history/' + v) } catch (e) { netErr(); return } if (!r.ok) { notify(await readError(r)); return }
     if (!R) SAVEV = V; R = await r.json(); R.job = { running: false, step: null, k: 99 }; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; all(); toTop() }
-  else if (a === 'delh') { if (!(await askConfirm('Xóa toàn bộ phân tích này, gồm bản lưu để xem lại, dashboard, báo cáo, slide và dữ liệu sạch? Không thể hoàn tác.', 'Xóa phân tích'))) return; if (await post('/api/history/' + v + '/delete')) notify('Đã xóa phân tích.', 'ok', 'Đã xóa') }
+  else if (a === 'delh') { if (!(await askConfirm('Xóa toàn bộ phân tích này, gồm bản lưu để xem lại, bảng điều khiển, báo cáo, slide và dữ liệu sạch? Không thể hoàn tác.', 'Xóa phân tích'))) return; if (await post('/api/history/' + v + '/delete')) notify('Đã xóa phân tích.', 'ok', 'Đã xóa') }
   else if (a === 'backh') { leaveRO(); NAV = 'history'; all(); toTop() }
   } finally { if (slow) setLd(b, false) } });
 document.addEventListener('change', async e => { const t = e.target;
   if (t.id === 'file') { const fl = [...t.files]; t.value = ''; if (fl.length) await upload(fl); return }
   if (RO()) return;
+  if (t.dataset.mm !== undefined) { const c = S_().d[2].vc.cols[+t.dataset.mm], s = sel(2), key = c.file + '\u0001' + c.col; s.mm = s.mm || {}; const m = s.mm[key] = s.mm[key] || {};
+    if (t.value) m[t.dataset.val] = t.value; else delete m[t.dataset.val]; if (!Object.keys(m).length) delete s.mm[key]; await pvClean(); stage(); return }
   if (t.dataset.k) { const s = sel(+t.dataset.s); s[t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value; if (t.dataset.s === '2' && /^[mv]o/.test(t.dataset.k)) s['c' + t.dataset.k.slice(1)] = true; if (t.dataset.s === '2') await pvClean(); stage() } });
 document.addEventListener('input', e => { const t = e.target; if (t.id === 'q') fitQ(); if (!t.dataset.i || RO()) return; if (t.dataset.s) sel(+t.dataset.s)[t.dataset.i] = t.value; else U[t.dataset.i] = t.value });
 document.addEventListener('dragover', e => { if (e.target.closest('#dz')) e.preventDefault() });

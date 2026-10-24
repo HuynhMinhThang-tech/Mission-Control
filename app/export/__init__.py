@@ -33,7 +33,7 @@ def make_final():
 def live_meta(title=None):
     """Thông tin chữ đi kèm dashboard tương tác. Dùng được cả khi chưa duyệt (xem trước ở bước Báo cáo)."""
     d4, d5 = A["d"].get(4) or {}, A["d"].get(5) or {}
-    return {"title": title or (d5.get("final") or {}).get("title") or d5.get("title") or "Dashboard phân tích", "question": A["question"], "ctx": A["ctx"],
+    return {"title": title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích", "question": A["question"], "ctx": A["ctx"],
             "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": d4.get("insights", []),
             "actions": d4.get("actions", []), "risks": d4.get("risks", [])}
 

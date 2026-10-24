@@ -33,8 +33,10 @@ PROMPT = (
     "KẾT QUẢ ĐẾM GIÁ TRỊ (value_counts) của từng cột văn bản đã được CHẠY THẬT ở trên: hãy đọc kỹ rồi tổng hợp trong value_counts.columns "
     "(chỉ nêu cột có điều đáng nói: cùng một giá trị nhưng viết khác nhau như 'Ban Giám đốc' và 'ban giam doc', giá trị lạ như 'N/A', '-', '?', "
     "giá trị chiếm áp đảo, ít giá trị bất thường). Với cột có các cách viết khác nhau của CÙNG một giá trị, đề xuất op standardize_text "
-    "kèm mapping từ từng cách viết sai/khác về MỘT giá trị chuẩn. Mỗi khóa của mapping phải là giá trị CÓ THẬT trong bảng đếm, không được bịa; "
-    "chỉ gộp khi chắc chắn cùng nghĩa (viết tắt rõ ràng như 'BGĐ' = 'Ban Giám đốc' chỉ gộp khi bảng đếm cho thấy đúng như vậy).")
+    "kèm mapping từ từng cách viết sai/khác về MỘT giá trị chuẩn. Mỗi khóa của mapping phải là giá trị CÓ THẬT trong bảng đếm, không được bịa. "
+    "BẮT BUỘC xét kỹ MỌI cột có ít giá trị khác nhau (danh mục như phòng ban, cấp bậc, khu vực, trạng thái, loại): nếu cùng một đối tượng xuất hiện dưới nhiều tên "
+    "(viết tắt như 'CV' và 'Chuyên viên', 'NV' và 'Nhân viên', 'BGĐ' và 'Ban Giám đốc'; thêm bớt chữ như 'P. Kinh doanh' và 'Kinh doanh'; gõ sai; khác dấu hay hoa thường) thì PHẢI đề xuất gộp về một tên chuẩn "
+    "đang có trong cột (ưu tiên tên đầy đủ, rõ nghĩa). Chỉ để nguyên khi thật sự là hai đối tượng khác nhau. Danh sách 'NGHI là một' ở trên là gợi ý, bạn là người quyết định.")
 
 
 def fold_standardize(ops, rep):
@@ -70,8 +72,16 @@ def fold_standardize(ops, rep):
                  "risk": "Có thể gộp nhầm hai giá trị thật sự khác nhau; xem danh sách gộp bên dưới trước khi chọn."}
             seen[k] = o
             out.append(o)
-    for o in seen.values():
-        o["mapping"] = dict(list(vcm.resolve(o["mapping"]).items())[:vcm.MAX_MAP])
+    for c in rep:                                      # nhóm NGHI trùng (viết tắt, thêm/bớt chữ, gõ sai): đề xuất riêng, mặc định chưa chọn, người dùng xem rồi quyết định
+        wm = {a: b for cl in c["weak"] for a, b in cl["map"].items()}
+        k = (c["file"], c["col"])
+        wm = {a: b for a, b in wm.items() if not (k in seen and seen[k]["mapping"].get(a) == b)}
+        if wm:
+            out.append({"file": c["file"], "op": "standardize_text", "column": c["col"], "mapping": wm, "recommended": False, "weak": True, "label": "Gộp giá trị nghi trùng",
+                        "reason": vcm.weak_text(c), "risk": "Có thể gộp nhầm hai đối tượng khác nhau (vd hai viết tắt giống nhau); xem danh sách bên dưới rồi mới chọn."})
+    for o in out:
+        if isinstance(o, dict) and o.get("op") == "standardize_text":
+            o["mapping"] = dict(list(vcm.resolve(o["mapping"]).items())[:vcm.MAX_MAP])
     return [o for o in out if not (isinstance(o, dict) and o.get("op") == "standardize_text" and not o["mapping"])]
 
 
@@ -102,7 +112,7 @@ def run(fb=""):
         hit = iss[(iss["file"] == f) & (iss["col"] == (c or "(toàn bảng)"))]
         o["found"] = "; ".join(f"{r['issue']}: {r['n']}" for r in hit.to_dict("records"))
         o["id"] = f"o{k}"
-        o["title"] = f"{OPL[o['op']]} · {f} · {c or '(toàn bảng)'}"
+        o["title"] = f"{o.get('label') or OPL[o['op']]} · {f} · {c or '(toàn bảng)'}"
         o["recommended"] = bool(o.get("recommended", True))
         ops.append(o)
     ops = merge_fill(ops)
@@ -178,6 +188,19 @@ def effect(o, o2):
     return ""
 
 
+def manual_ops(p):
+    """Các phép gộp do người dùng tự chọn trên bảng đếm giá trị (giá trị cũ -> giá trị chuẩn)."""
+    out = []
+    for k, m in enumerate(p.get("manual") or []):
+        f, c = (m or {}).get("file"), (m or {}).get("column")
+        if f in A["raw"] and c in A["raw"][f].columns:
+            mp = vcm.resolve(vcm.clean_mapping(m.get("mapping"), set(A["raw"][f][c].dropna().astype(str))))
+            if mp:
+                out.append(({"id": f"man{k}", "file": f, "op": "standardize_text", "column": c},
+                            {"file": f, "op": "standardize_text", "column": c, "mapping": mp}))
+    return out
+
+
 def pick_ops(p):
     out = []
     for o in A["d"][2]["ops"]:
@@ -188,7 +211,7 @@ def pick_ops(p):
                 if o2["method"] == "value":
                     o2["value"] = (p.get("val") or {}).get(o["id"], o.get("value", "Không rõ"))
             out.append((o, o2))
-    return out
+    return out + manual_ops(p)
 
 
 def preview(p):

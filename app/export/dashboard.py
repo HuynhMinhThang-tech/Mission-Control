@@ -47,7 +47,7 @@ def _insights(F):
     items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}</h3>'
                     f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p></div></div>'
                     for i, x in enumerate(F["insights"]))
-    return f'<section id="insights"><h2 class="hs ins">Insight chính</h2><div class="ins">{items}</div></section>'
+    return f'<section id="insights"><h2 class="hs ins">Phát hiện chính</h2><div class="ins">{items}</div></section>'
 
 
 def _actions(F):
@@ -92,9 +92,9 @@ def _tbl(t):
 
 
 def build_html(F):
-    chips = "".join(f'<span class="chip">{E(x)}</span>' for x in [F.get("period"), f"{len(F['files'])} tệp dữ liệu", f"{len(F['insights'])} insight"] if x)
+    chips = "".join(f'<span class="chip">{E(x)}</span>' for x in [F.get("period"), f"{len(F['files'])} tệp dữ liệu", f"{len(F['insights'])} phát hiện"] if x)
     narrative = "".join(f"<p>{E(p)}</p>" for p in str(F["narrative"]).split("\n") if p.strip())
-    nav = "".join(f'<a href="#{a}">{t}</a>' for a, t in [("answer", "Câu trả lời"), ("kpi", "Chỉ số"), ("charts", "Biểu đồ"), ("insights", "Insight"),
+    nav = "".join(f'<a href="#{a}">{t}</a>' for a, t in [("answer", "Câu trả lời"), ("kpi", "Chỉ số"), ("charts", "Biểu đồ"), ("insights", "Phát hiện"),
                                                          ("actions", "Hành động")] + ([("risks", "Rủi ro")] if F["risks"] else []) + [("method", "Phương pháp")])
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{E(F["title"])}</title><style>{CSS}</style></head><body>'

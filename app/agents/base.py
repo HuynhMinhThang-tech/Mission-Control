@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Phần dùng chung cho mọi AI Agent."""
+from ..lang import RULE
 from ..state import A
 
 
 def SYS(role):
     return (f"Bạn là {role} trong nhóm phân tích dữ liệu. Luôn trả lời bằng tiếng Việt, ngắn gọn, "
-            "dựa trên số liệu được cung cấp, không bịa số.")
+            "dựa trên số liệu được cung cấp, không bịa số. " + RULE)
 
 
 def ctx_txt(fb=""):

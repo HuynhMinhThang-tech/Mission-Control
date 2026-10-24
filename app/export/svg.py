@@ -13,7 +13,7 @@ def _ext(vals):
 
 def bars(rows):
     n = len(rows)
-    lw, bw, vw, rh = 170, 380, 120, 32
+    lw, bw, vw, rh = 150, 270, 100, 32
     W, H = lw + bw + vw, n * rh + 10
     vals = [v for _, v in rows]
     lo, hi, span = _ext(vals)
@@ -27,7 +27,7 @@ def bars(rows):
         x1 = lw + (v - lo) / span * bw
         x, w = min(zx, x1), max(abs(x1 - zx), 1.5)
         cls = "neg" if v < 0 else "hi" if i == imax else "bar"
-        o.append(f'<text class="lb" x="{lw - 10}" y="{y + rh / 2 + 3:.1f}" text-anchor="end">{E(trunc(l, 24))}<title>{E(l)}</title></text>')
+        o.append(f'<text class="lb" x="{lw - 10}" y="{y + rh / 2 + 3:.1f}" text-anchor="end">{E(trunc(l, 20))}<title>{E(l)}</title></text>')
         o.append(f'<rect class="{cls}" x="{x:.1f}" y="{y + 4}" width="{w:.1f}" height="{rh - 12}" rx="3"><title>{E(l)}: {vn(v)}</title></rect>')
         tx, anc = (x1 + 7, "start") if v >= 0 else (x1 - 7, "end")
         o.append(f'<text class="vl {"b" if i == imax else ""}" x="{tx:.1f}" y="{y + rh / 2 + 3:.1f}" text-anchor="{anc}">{E(compact(v))}</text>')
@@ -37,7 +37,7 @@ def bars(rows):
 def cols(rows):
     rows = rows[-16:]
     n = len(rows)
-    W, H, pl, pr, pt, pb = 680, 300, 10, 10, 28, 64
+    W, H, pl, pr, pt, pb = 520, 290, 10, 10, 28, 64
     pw, ph = W - pl - pr, H - pt - pb
     vals = [v for _, v in rows]
     lo, hi, span = _ext(vals)
@@ -54,7 +54,8 @@ def cols(rows):
         cls = "neg" if v < 0 else "hi" if i == imax else "bar"
         o.append(f'<rect class="{cls}" x="{cx - bwid / 2:.1f}" y="{y:.1f}" width="{bwid:.1f}" height="{h:.1f}" rx="3"><title>{E(l)}: {vn(v)}</title></rect>')
         vy = y - 6 if v >= 0 else y + h + 14
-        o.append(f'<text class="vl {"b" if i == imax else ""}" x="{cx:.1f}" y="{vy:.1f}" text-anchor="middle">{E(compact(v))}</text>')
+        if n <= 8 or i in (imax, vals.index(min(vals))):          # nhiều cột thì chỉ ghi số của cột cao nhất và thấp nhất để khỏi chồng chữ
+            o.append(f'<text class="vl {"b" if i == imax else ""}" x="{cx:.1f}" y="{vy:.1f}" text-anchor="middle">{E(compact(v))}</text>')
         lx, ly = cx, H - pb + 18
         rot = f' transform="rotate(-35 {lx:.1f} {ly})"' if n > 7 else ""
         o.append(f'<text class="lb" x="{lx:.1f}" y="{ly}" text-anchor="{"end" if n > 7 else "middle"}"{rot}>{E(trunc(l, 12))}</text>')
@@ -64,7 +65,7 @@ def cols(rows):
 def line(rows):
     rows = rows[-36:]
     n = len(rows)
-    W, H, pl, pr, pt, pb = 680, 300, 24, 24, 30, 56
+    W, H, pl, pr, pt, pb = 520, 290, 24, 24, 30, 56
     pw, ph = W - pl - pr, H - pt - pb
     vals = [v for _, v in rows]
     lo, hi = min(vals), max(vals)
@@ -97,24 +98,24 @@ def donut(rows):
     if len(rows) > 7:
         rows = rows[:6] + [("Khác", sum(v for _, v in rows[6:]))]
     tot = sum(v for _, v in rows) or 1
-    H = max(250, 30 * len(rows) + 40)
-    cx, cy, r, sw = 130, H / 2, 82, 34
+    H = max(220, 30 * len(rows) + 40)
+    cx, cy, r, sw = 92, H / 2, 64, 26
     C = 2 * math.pi * r
-    o = [f'<svg class="chart" viewBox="0 0 680 {H}" role="img" preserveAspectRatio="xMinYMin meet">']
+    o = [f'<svg class="chart" viewBox="0 0 520 {H}" role="img" preserveAspectRatio="xMinYMin meet">']
     off = 0
     for i, (l, v) in enumerate(rows):
         seg = v / tot * C
         o.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{PAL[i % 7]}" stroke-width="{sw}" stroke-dasharray="{seg:.2f} {C - seg:.2f}" '
                  f'stroke-dashoffset="{-off:.2f}" transform="rotate(-90 {cx} {cy})"><title>{E(l)}: {vn(v)}</title></circle>')
         off += seg
-    o.append(f'<text class="vl b" x="{cx}" y="{cy - 2}" text-anchor="middle" style="font-size:18px">{E(compact(tot))}</text>'
+    o.append(f'<text class="vl b" x="{cx}" y="{cy - 2}" text-anchor="middle" style="font-size:15px">{E(compact(tot))}</text>'
              f'<text class="lb" x="{cx}" y="{cy + 16}" text-anchor="middle">Tổng</text>')
     top = (H - 30 * len(rows)) / 2 + 8
     for i, (l, v) in enumerate(rows):
         y = top + i * 30
-        o.append(f'<rect x="270" y="{y - 11}" width="14" height="14" rx="3" fill="{PAL[i % 7]}"/>'
-                 f'<text class="lb" x="292" y="{y}" style="fill:var(--ink)">{E(trunc(l, 30))}</text>'
-                 f'<text class="vl" x="660" y="{y}" text-anchor="end">{E(compact(v))} · {vn(v / tot * 100, 1)}%</text>')
+        o.append(f'<rect x="190" y="{y - 11}" width="14" height="14" rx="3" fill="{PAL[i % 7]}"/>'
+                 f'<text class="lb" x="212" y="{y}" style="fill:var(--ink)">{E(trunc(l, 20))}</text>'
+                 f'<text class="vl" x="512" y="{y}" text-anchor="end">{vn(v / tot * 100, 1)}%</text>')
     return "".join(o) + "</svg>"
 
 
@@ -125,6 +126,8 @@ def chart_svg(kind, rows):
         return line(rows)
     if kind == "donut" and all(v >= 0 for _, v in rows) and len(rows) >= 2:
         return donut(rows)
+    if kind == "cols" and len(rows) > 5 and not is_time_like(rows):
+        return bars(rows)                      # nhiều nhóm có tên dài: thanh ngang dễ đọc hơn cột đứng
     if kind == "cols" or kind == "line":
         return cols(rows)
     return bars(rows)

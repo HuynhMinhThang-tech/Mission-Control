@@ -13,7 +13,7 @@ def build_md(F):
         rows = chart_rows(F["dfs"][c["task"]], c["x"], c["y"])
         L += ["", f"### {c.get('insight') or c['title']}", f"*{c['title']}* — nguồn: {F['table_titles'][c['task']]}"]
         L += [f"- {x}" for x in facts(rows, c["kind"])]
-    L += ["", "## Insight chính"]
+    L += ["", "## Phát hiện chính"]
     L += [f"{i + 1}. **{x['title']}** (độ tin cậy: {x.get('confidence', '')}) — bằng chứng: {x.get('evidence', '')}" for i, x in enumerate(F["insights"])]
     L += ["", "## Khuyến nghị hành động", "", "| Ưu tiên | Hành động | Tác động |", "|---|---|---|"]
     L += [f"| {a.get('priority', '')} | {a['text']} | {a.get('impact', '')} |" for a in sorted(F["actions"], key=lambda a: PRI_ORDER.get(a.get("priority"), 9))]

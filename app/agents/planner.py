@@ -3,6 +3,7 @@
 from ..data.quality import schema
 from ..data.sandbox import describe_error, df_table, prepare, run_code
 from ..errors import UserError
+from ..lang import COLNAME_RULE, localize
 from ..llm import llm, llm_json, strip_code
 from ..state import A, LOCK, bump, next_gen, put, tick
 from ..utils import J
@@ -13,6 +14,7 @@ ROLE_PLAN = "Agent Hoạch định phân tích"
 ROLE_CODE = "Agent Phân tích dữ liệu (pandas)"
 ROLE_FIX = "lập trình viên pandas"
 ROLE_SUM = "Agent Tổng hợp kết quả phân tích"
+ROLE_LOC = "Biên tập viên tiếng Việt"
 
 PROMPT_MENU = (
     "Hãy ĐỀ XUẤT 6-10 phân tích / chỉ số ứng viên để NGƯỜI DÙNG TỰ CHỌN (chưa viết code). Gồm mô tả (điều gì đã xảy ra), "
@@ -24,7 +26,7 @@ PROMPT_MENU = (
 PROMPT_CODE = (
     'Viết code cho TỪNG mục (đúng thứ tự, thêm 1 mục riêng cho yêu cầu bổ sung nếu có). Trả về DUY NHẤT JSON: {"tasks":[{"title":"...","goal":"...","code":"..."}]}\n'
     "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file, KHÔNG dùng .query()/.eval()/thuộc tính bắt đầu bằng gạch dưới (dùng lọc bool df[df['x']>0]); kết quả gán vào biến `result` là DataFrame đã tổng hợp "
-    "(<=50 dòng, tên cột rõ ràng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file'].")
+    "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE)
 
 PROMPT_SUM = (
     'Trả về DUY NHẤT JSON: {"kpis":[{"label":"","value":"","delta":""}],"charts":[{"task":<số thứ tự bảng>,"x":"cột nhãn","y":"cột số","kind":"bars|cols|line|donut","title":"","unit":""}],'
@@ -85,10 +87,22 @@ def labels_for(fb):
     return base + (["Chạy lại code", "Tự sửa lỗi nếu có", "Tổng hợp KPI và phát hiện"] if ph == "result" else [])
 
 
+def localize_results(dfs, titles):
+    """Đổi tên cột kết quả sang tiếng Việt: AI dịch theo ngữ cảnh (có từ điển dự phòng nếu AI lỗi)."""
+    known = {str(c) for df in A["clean"].values() for c in df.columns}
+
+    def ask(ctx, cand):
+        return llm_json(SYS(ROLE_LOC), f"Các bảng kết quả và cột của chúng: {J(ctx, 3000)}\nCác tên cột chưa phải tiếng Việt: {J(cand, 1500)}\n"
+                        'Hãy đặt lại từng tên thành tiếng Việt có dấu, tự nhiên, ngắn gọn, đúng nghĩa theo bảng chứa nó (vd COUNT_PER_LEVEL -> "Số lượng theo cấp bậc", '
+                        'AVG_LEVEL_SALARY -> "Lương trung bình theo cấp bậc", PERC_PER_LEVEL -> "Tỷ trọng theo cấp bậc (%)"). Trả về DUY NHẤT JSON {"map":{"tên cũ":"tên mới"}}.', 1500)
+    out, _ = localize(dfs, titles, known, ask)
+    return out
+
+
 def execute(codes, t0=0):
     d = A["d"][3]
     tick(t0)
-    dfs, tabs = [], []
+    dfs, errs = [], []
     with prepare(A["clean"]):                          # ghi dữ liệu cho sandbox một lần, dùng cho mọi tác vụ bên dưới
         for t, task in enumerate(d["tasks"]):
             code = codes[t] if t < len(codes) and codes[t].strip() else task["code"]
@@ -108,10 +122,12 @@ def execute(codes, t0=0):
                                               f"Sửa code lỗi, chỉ trả code (không import, không .query()/.eval()).\nLỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}"))
             task["code"] = code
             dfs.append(df)
-            tabs.append(df_table(df, task["title"], err))
+            errs.append(err)
+    tick(t0 + 2)
+    dfs = localize_results(dfs, [t["title"] for t in d["tasks"]])       # tên cột kết quả: một thứ tiếng (tiếng Việt), không xen tiếng Anh
+    tabs = [df_table(df, t["title"], e) for df, t, e in zip(dfs, d["tasks"], errs)]
     if all(x is None for x in dfs):
         raise RuntimeError("Không có phân tích nào chạy thành công: " + "; ".join(t["err"] or "" for t in tabs)[:300])
-    tick(t0 + 2)
     A["x"][3] = dfs
     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)

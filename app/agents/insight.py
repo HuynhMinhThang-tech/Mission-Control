@@ -5,13 +5,13 @@ from ..llm import llm_json
 from ..utils import J
 from .base import SYS, ctx_txt, prev
 
-ROLE = "Agent Insight và tư vấn kinh doanh"
+ROLE = "Agent Phát hiện và tư vấn kinh doanh"
 
 PROMPT = (
     'Trả về DUY NHẤT JSON: {"summary":"tóm tắt điều hành 2-3 câu, câu đầu TRẢ LỜI THẲNG câu hỏi kinh doanh",'
     '"insights":[{"title":"câu khẳng định đầy đủ, có số","confidence":"Cao|Trung bình|Thấp","evidence":"phép tính cụ thể bằng số có trong bảng","source":"bảng/biểu đồ nguồn"}],'
     '"actions":[{"text":"hành động cụ thể, bắt đầu bằng động từ","priority":"Cao|Trung bình|Thấp","impact":"tác động kỳ vọng, nêu theo số liệu nếu có"}],"risks":["..."]}\n'
-    "3-5 insight; mỗi insight PHẢI có bằng chứng truy ngược được về bảng kết quả.")
+    "3-5 phát hiện; mỗi phát hiện PHẢI có bằng chứng truy ngược được về bảng kết quả.")
 
 
 def run(fb=""):

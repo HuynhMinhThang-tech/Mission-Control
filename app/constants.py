@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 STEP_T = ["Dữ liệu và bối cảnh", "Kiểm tra và mô tả dữ liệu", "Làm sạch dữ liệu", "Phân tích",
-          "Insight và hành động", "Báo cáo", "Review và export"]
+          "Phát hiện và hành động", "Báo cáo", "Duyệt và xuất file"]
 
 # Nhãn tác vụ hiển thị ở bảng AI Agent cho từng bước
 AG = {1: ["Đọc tệp và nhận diện kiểu cột", "Quét thiếu, trùng, sai định dạng", "Viết nhận định sơ bộ"],

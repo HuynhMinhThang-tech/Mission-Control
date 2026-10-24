@@ -21,7 +21,7 @@ opacity:0;visibility:hidden;transition:opacity .15s,visibility 0s .15s}
 
   const MSG = [
     [/^\/api\/inspect/, 'Đang đọc danh sách sheet…'], [/^\/api\/upload/, 'Đang tải và đọc tệp…'], [/^\/api\/sample/, 'Đang tạo dữ liệu mẫu…'],
-    [/^\/api\/start/, 'Đang bắt đầu phân tích…'], [/^\/api\/run\//, 'Đang gửi yêu cầu…'], [/^\/api\/accept\/6/, 'Đang tạo báo cáo, dashboard và slide…'],
+    [/^\/api\/start/, 'Đang bắt đầu phân tích…'], [/^\/api\/run\//, 'Đang gửi yêu cầu…'], [/^\/api\/accept\/6/, 'Đang tạo báo cáo, bảng điều khiển và slide…'],
     [/^\/api\/accept\//, 'Đang lưu lựa chọn…'], [/^\/api\/a3\//, 'Đang gửi yêu cầu…'], [/^\/api\/preview_clean/, 'Đang tính kết quả làm sạch…'],
     [/^\/api\/preview/, 'Đang tải dữ liệu xem trước…'], [/^\/api\/history\/[^/]+\/delete/, 'Đang xóa phân tích…'], [/^\/api\/history\//, 'Đang mở bản lưu…'],
     [/^\/api\/struct\//, 'Đang cập nhật tệp…'], [/^\/api\/remove_file/, 'Đang xóa tệp…'], [/^\/api\/redo\//, 'Đang quay lại bước trước…'], [/^\/api\/new/, 'Đang tạo phân tích mới…'],

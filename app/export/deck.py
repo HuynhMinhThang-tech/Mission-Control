@@ -297,7 +297,7 @@ def insight_slides(d):
     ins = d.F["insights"]
     for k in range(0, len(ins), 3):
         part = ins[k:k + 3]
-        s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Insight")
+        s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Phát hiện")
         rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
         conf = {"Cao": OK, "Trung bình": WARN, "Thấp": BAD}
 
@@ -308,7 +308,7 @@ def insight_slides(d):
                 return dict(bold=True, color=NAVY)
             if j == 3:
                 return dict(bold=True, color=conf.get(v, SUB), align=PP_ALIGN.CENTER)
-        table(s, MX, 1.85, [.5, 5.0, 5.4, 1.23], ["#", "Insight", "Bằng chứng", "Độ tin cậy"], rows, size=SZ_SMALL, rowh=1.3, styles=st)
+        table(s, MX, 1.85, [.5, 5.0, 5.4, 1.23], ["#", "Phát hiện", "Bằng chứng", "Độ tin cậy"], rows, size=SZ_SMALL, rowh=1.3, styles=st)
         d.source(s, "bảng kết quả phân tích; chi tiết ở phụ lục")
 
 
@@ -329,7 +329,7 @@ def action_slides(d):
             if j == 1:
                 return dict(bold=True, color=NAVY)
         table(s, MX, 1.85, [1.4, 5.8, 4.93], ["Ưu tiên", "Hành động", "Tác động kỳ vọng"], rows, size=SZ_BODY - 1, rowh=.9, styles=st)
-        d.source(s, "insight đã được xác nhận ở bước trước")
+        d.source(s, "phát hiện đã được xác nhận ở bước trước")
 
 
 def decision_slide(d):
@@ -344,7 +344,7 @@ def decision_slide(d):
     rect(s, x2, 1.85, hw, 3.9, fill=WHITE, line=LINE)
     text(s, x2 + .2, 1.95, hw - .4, .35, "RỦI RO CẦN THEO DÕI", size=11, bold=True, color=BAD)
     text(s, x2 + .2, 2.35, hw - .4, 4.0, [f"▸ {trunc(r, 150)}" for r in F["risks"][:5]] or ["Chưa ghi nhận rủi ro đáng kể."], size=13, color=INK, after=8)
-    d.source(s, "tổng hợp từ insight và hành động")
+    d.source(s, "tổng hợp từ các phát hiện và hành động")
 
 
 def appendix(d):
