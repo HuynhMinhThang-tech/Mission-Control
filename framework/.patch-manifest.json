@@ -1,0 +1,35 @@
+{
+  "appliedAt": "2026-10-24T06:42:55.309Z",
+  "files": [
+    {
+      "name": "providers.js",
+      "created": true,
+      "backup": null
+    },
+    {
+      "name": "chart-advisor.js",
+      "created": true,
+      "backup": null
+    },
+    {
+      "name": "pipeline-core.js",
+      "created": true,
+      "backup": null
+    },
+    {
+      "name": "deck-builder.js",
+      "created": true,
+      "backup": null
+    },
+    {
+      "name": "agent-playbooks.md",
+      "created": true,
+      "backup": null
+    },
+    {
+      "name": "package.json",
+      "created": true,
+      "backup": null
+    }
+  ]
+}
