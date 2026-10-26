@@ -202,3 +202,36 @@ a.nv{text-decoration:none}.nv .bdg{margin-left:auto;background:var(--pri);color:
 .mb{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--p2);margin-right:10px;vertical-align:middle;overflow:hidden}.mb i{display:block;height:100%;background:var(--pri);border-radius:3px}
 .mmsel{width:190px;max-width:100%;padding:4px 6px;font-size:12.5px}
 .vrest{margin-top:10px}.vrest>summary{cursor:pointer;font-weight:600;color:var(--sub)}
+
+
+/* ---- Tab đổi góc nhìn: nhiều bảng (sheet) của cùng một tệp ---- */
+.fgrp{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.fgh{display:flex;align-items:baseline;gap:10px;padding:10px 14px 0}.fgh b{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fgh small{color:var(--sub)}.fgh .lnk{margin-left:auto}
+.ftabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
+.ftab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 14px 9px;border:0;background:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;white-space:nowrap}
+.ftab span{font-weight:600;color:var(--ink);font-size:13.5px}.ftab small{font-size:11px;color:var(--sub)}
+.ftab:hover{background:var(--p2)}.ftab.on{border-bottom-color:var(--pri)}.ftab.on span{color:var(--pri)}
+.ftab:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+.ftp{padding:4px 10px 12px}.ftp .fl:first-child{margin-top:8px}
+.errpre{white-space:pre-wrap;font-size:12px;max-height:200px;overflow:auto;background:var(--p2);padding:8px;border-radius:8px;margin:8px 0}
+
+/* ---- Hộp chọn nhiều sheet ---- */
+.dlg:has(.spf){width:min(560px,100%)}
+.spf{border:1px solid var(--line);border-radius:10px;margin:12px 0 0;padding:6px 12px 10px}
+.spf legend{display:flex;align-items:baseline;gap:8px;padding:0 6px;font-weight:600;max-width:100%}.spf legend span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}.spf legend small{color:var(--sub);font-weight:400}.spf legend .lnk{margin-left:6px;font-weight:600}
+.spc{display:flex;align-items:center;gap:10px;padding:7px 4px;border-radius:8px;cursor:pointer}.spc:hover{background:var(--p2)}.spc input{width:16px;height:16px;accent-color:var(--pri)}.spc small{margin-left:auto;color:var(--sub);font-size:12px}
+
+/* ---- Bộ chọn biểu đồ: thẻ có xem trước, chỉ loại phù hợp ---- */
+.cpg{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:8px}
+.cpc{border:1.5px solid var(--line);border-radius:12px;padding:12px;background:var(--panel);display:flex;flex-direction:column;gap:8px;transition:.15s}
+.cpc.on{border-color:var(--pri);background:var(--soft)}
+.cph{display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0!important}.cph input{margin-top:3px;width:16px;height:16px;accent-color:var(--pri)}
+.cph span{display:flex;flex-direction:column;gap:2px}.cph small{color:var(--sub);font-weight:400;line-height:1.35}
+.cpv{min-height:96px;background:var(--panel);border-radius:8px;padding:8px;overflow:hidden}
+.cpk{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.cpk small.warn{color:var(--warn)}
+.cpa summary{cursor:pointer;color:var(--sub);font-size:12.5px}
+
+/* ---- Tab API & Model: gợi ý theo nhà cung cấp ---- */
+.sh{display:block;margin-top:4px;color:var(--sub);font-size:12.5px;line-height:1.45;min-height:0}.sh:empty{display:none}
+.sh.warn{color:var(--warn);font-weight:600}.sh .lnk{font-weight:700}
+#sBase.ro{background:var(--p2);color:var(--sub);cursor:not-allowed}

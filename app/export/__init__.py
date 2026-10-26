@@ -7,11 +7,12 @@ from datetime import datetime
 
 from .. import db
 from ..state import A, current_user_id, now_iso
+from .. import numfmt
 from ..utils import clean_json
 from .dashboard import build_html
 from .interactive import build_dashboard
 from .deck import build_pptx
-from .common import dedupe_charts
+from .common import dedupe_charts, refine_charts
 from .markdown import build_md
 
 
@@ -22,19 +23,27 @@ def make_final():
     period = next((k["value"] for k in A["d"][1]["kpis"] if k["label"] == "Khoảng ngày"), None)
     tasks = [{"title": t["title"], "goal": t.get("goal", "")} for t in A["d"][3]["tasks"]]
     method = f"Làm sạch: {', '.join(A.get('applied', [])) or 'không áp dụng'}. Phân tích: {', '.join(t['title'] for t in tasks)}."
-    return {"title": fin["title"], "question": A["question"], "ctx": A["ctx"], "date": datetime.now().strftime("%d/%m/%Y"),
-            "kpis": [kpi_all[i] for i in fin["kpis"] if i < len(kpi_all)], "charts": dedupe_charts(fin["charts"], A["x"][3]), "dfs": A["x"][3],
+    known = numfmt.Known.from_dfs(A["x"][3])
+    kpis = [k for k in numfmt.fix_kpis([kpi_all[i] for i in fin["kpis"] if i < len(kpi_all)], known) if numfmt.has_value(k)]     # KPI rỗng không lên báo cáo
+    charts = refine_charts(dedupe_charts(numfmt.fix_payload(fin["charts"], known), A["x"][3]), A["x"][3])
+    d4 = numfmt.fix_payload(d4, known)
+    d4["insights"] = numfmt.audit_insights(d4.get("insights"), known)
+    return {"title": numfmt.fix_text(fin["title"], known), "question": A["question"], "ctx": A["ctx"], "date": datetime.now().strftime("%d/%m/%Y"),
+            "kpis": kpis, "charts": charts, "dfs": A["x"][3],
             "tables": d3["tables"], "table_titles": [t["title"] for t in d3["tables"]], "tasks": tasks,
             "summary": d4["summary"], "insights": d4["insights"], "actions": d4["actions"], "risks": d4.get("risks", []),
-            "narrative": d5["narrative"], "method": method, "applied": A.get("applied", []), "files": A["files"],
+            "narrative": numfmt.fix_text(d5["narrative"], known), "method": method, "applied": A.get("applied", []), "files": A["files"],
             "period": period, "quality": A["d"].get(2, {}).get("pv")}
 
 
 def live_meta(title=None):
     """Thông tin chữ đi kèm dashboard tương tác. Dùng được cả khi chưa duyệt (xem trước ở bước Báo cáo)."""
-    d4, d5 = A["d"].get(4) or {}, A["d"].get(5) or {}
-    return {"title": title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích", "question": A["question"], "ctx": A["ctx"],
-            "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": d4.get("insights", []),
+    d5 = A["d"].get(5) or {}
+    known = numfmt.Known.from_dfs(A["x"].get(3) or [])
+    d4 = numfmt.fix_payload(A["d"].get(4) or {}, known)               # cùng một lớp chuẩn hóa số/đơn vị như báo cáo HTML, Markdown, PPTX
+    ttl = title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích"
+    return {"title": numfmt.fix_text(ttl, known), "question": A["question"], "ctx": A["ctx"],
+            "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": numfmt.audit_insights(d4.get("insights", []), known),
             "actions": d4.get("actions", []), "risks": d4.get("risks", [])}
 
 

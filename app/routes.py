@@ -44,7 +44,7 @@ def api_state():
 
 @bp.post("/api/inspect")
 def inspect_files():
-    """Bước 1 của tải lên: liệt kê sheet của các tệp Excel để người dùng chọn sheet cần tải (không lưu gì vào phiên)."""
+    """Bước 1 của tải lên: liệt kê sheet (kèm số dòng x cột) của các tệp Excel để người dùng chọn các sheet cần tải (không lưu gì vào phiên)."""
     fs = request.files.getlist("files")
     if not fs:
         return bad("Chưa chọn tệp")
@@ -58,7 +58,7 @@ def upload():
         return bad("Chưa chọn tệp")
     try:
         sheets = json.loads(request.form.get("sheets") or "{}")
-        sheets = {str(k): str(v) for k, v in sheets.items()} if isinstance(sheets, dict) else {}
+        sheets = {str(k): ([str(x) for x in v] if isinstance(v, list) else str(v)) for k, v in sheets.items()} if isinstance(sheets, dict) else {}
     except (ValueError, AttributeError):
         sheets = {}
     try:

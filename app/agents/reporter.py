@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """AGENT 5 · Thiết kế dashboard và báo cáo (bước 6)."""
+from .. import numfmt
 from ..llm import llm_json
 from ..state import A, put, tick
 from ..utils import J
 from .base import SYS, ctx_txt, prev
+from ..export.common import refine_charts
 from .charts import valid_charts
 
 ROLE = "Agent Thiết kế bảng điều khiển và báo cáo"
@@ -23,4 +25,7 @@ def run(fb=""):
     r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\n\n" + PROMPT)
     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
     tick(1)
+    known = numfmt.Known.from_dfs(A["x"][3])
+    r = numfmt.fix_payload(r, known)
+    charts = refine_charts(numfmt.fix_payload(charts, known), A["x"][3])        # tiêu đề biểu đồ không khớp số liệu -> thay bằng câu tính từ dữ liệu
     put(5, {"title": r.get("title") or "Báo cáo phân tích", "narrative": r.get("narrative", A["d"][4]["summary"]), "charts": charts})

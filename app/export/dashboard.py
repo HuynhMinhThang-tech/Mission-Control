@@ -45,7 +45,8 @@ def _insights(F):
     if not F["insights"]:
         return ""
     items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}</h3>'
-                    f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p></div></div>'
+                    f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p>'
+                    + (f'<p class="ev"><b>Cần kiểm tra số liệu:</b> số {E(", ".join(x["check"]))} chưa khớp bảng kết quả nào.</p>' if x.get("check") else "") + '</div></div>'
                     for i, x in enumerate(F["insights"]))
     return f'<section id="insights"><h2 class="hs ins">Phát hiện chính</h2><div class="ins">{items}</div></section>'
 
@@ -71,7 +72,7 @@ def _method(F):
     q = F.get("quality") or {}
     qb = ", ".join(f"{k}: {vn(v, 0)}" for k, v in (q.get("before") or {}).items() if v) or "không có"
     qa = ", ".join(f"{k}: {vn(v, 0)}" for k, v in (q.get("after") or {}).items() if v) or "không còn"
-    files = "".join(f"<li>{E(f['name'])} · {vn(f['rows'], 0)} dòng</li>" for f in F["files"])
+    files = "".join(f"<li>{E(str(f['name']).replace('::', ' · '))} · {vn(f['rows'], 0)} dòng</li>" for f in F["files"])
     cl = "".join(f"<li>{E(x)}</li>" for x in F["applied"]) or "<li>Không áp dụng thao tác nào</li>"
     an = "".join(f"<li><b>{E(t['title'])}</b> — {E(t.get('goal', ''))}</li>" for t in F["tasks"])
     tabs = "".join(f"<details><summary>{E(t['title'])}</summary><div class='tw'>{_tbl(t)}</div></details>" for t in F["tables"])

@@ -95,6 +95,20 @@ def _table_meta(t, n_tables, res):
 EXCEL_EXT = (".xlsx", ".xls", ".xlsm")
 
 
+def _sheet_dims(b, name):
+    """Số dòng x cột của từng sheet (đọc nhanh, không nạp dữ liệu) để người dùng chọn sheet có cơ sở. Không đọc được thì bỏ qua."""
+    if not name.lower().endswith((".xlsx", ".xlsm")):
+        return {}
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(b), read_only=True, data_only=True)
+        out = {ws.title: {"rows": int(ws.max_row or 0), "cols": int(ws.max_column or 0)} for ws in wb.worksheets}
+        wb.close()
+        return out
+    except Exception:
+        return {}
+
+
 def list_sheets(fs):
     """Trả về tên các sheet của từng tệp Excel (CSV bỏ qua) để giao diện cho người dùng chọn đúng một sheet."""
     out = []
@@ -103,8 +117,9 @@ def list_sheets(fs):
         if not name.lower().endswith(EXCEL_EXT):
             continue
         try:
-            names = [str(x) for x in pd.ExcelFile(io.BytesIO(f.read())).sheet_names]
-            out.append({"name": name, "sheets": names})
+            b = f.read()
+            names = [str(x) for x in pd.ExcelFile(io.BytesIO(b)).sheet_names]
+            out.append({"name": name, "sheets": names, "info": _sheet_dims(b, name)})
         except Exception as e:
             out.append({"name": name, "error": f"không đọc được tệp Excel ({type(e).__name__})"})
     return out
@@ -112,7 +127,8 @@ def list_sheets(fs):
 
 def load_files(fs, sheets=None):
     """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa).
-    Tệp Excel nhiều sheet: chỉ đọc đúng sheet người dùng đã chọn (sheets = {tên tệp: tên sheet}); tệp 1 sheet tự dùng sheet đó.
+    Tệp Excel nhiều sheet: đọc các sheet người dùng đã chọn (sheets = {tên tệp: tên sheet | [các sheet]}); mỗi sheet thành một bảng riêng
+    có khóa "tệp::sheet" để giao diện chuyển qua lại bằng tab. Tệp 1 sheet tự dùng sheet đó.
     Sheet không chuẩn nhưng có bảng bên trong -> tách bảng ra dùng (xem tables.py); ngược lại giữ luồng cũ."""
     sheets = sheets or {}
     dfs, reports, alts = {}, {}, {}
@@ -123,17 +139,20 @@ def load_files(fs, sheets=None):
         if name.lower().endswith(EXCEL_EXT):
             xl = pd.ExcelFile(io.BytesIO(b))
             names = list(xl.sheet_names)
-            sh = sheets.get(name)
-            if sh is None:
+            pick = sheets.get(name)
+            pick = [pick] if isinstance(pick, str) else [str(x) for x in pick] if pick else []
+            if not pick:
                 if len(names) != 1:
-                    raise ValueError(f"Tệp '{name}' có {len(names)} sheet, hãy chọn một sheet để tải lên.")
-                sh = names[0]
-            if sh not in names:
-                raise ValueError(f"Tệp '{name}' không có sheet '{sh}'.")
+                    raise ValueError(f"Tệp '{name}' có {len(names)} sheet, hãy chọn ít nhất một sheet để tải lên.")
+                pick = [names[0]]
+            miss = [s for s in pick if s not in names]
+            if miss:
+                raise ValueError(f"Tệp '{name}' không có sheet '{miss[0]}'.")
             wb = _open_wb(b) if name.lower().endswith((".xlsx", ".xlsm")) else None
-            key = f"{name}::{sh}" if len(names) > 1 else name
-            merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
-            items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
+            for sh in dict.fromkeys(pick):                                  # giữ thứ tự chọn, bỏ trùng
+                key = f"{name}::{sh}" if len(names) > 1 else name
+                merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
+                items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
         else:
             kw = dict(sep=None, engine="python", encoding="utf-8-sig", encoding_errors="replace")
             try:

@@ -12,7 +12,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..data.quality import norm_key, to_dt
+from .. import labels as lb
+from ..data.quality import to_dt
 from ..utils import E, is_text
 
 ASSETS = Path(__file__).parent / "assets"
@@ -21,21 +22,18 @@ MAX_ROWS = 30000       # vượt ngưỡng này thì gộp thành "khối" (nhó
 MAX_CUBE = 60000
 WEEK = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
 ID_NAME = re.compile(r"(^|_)(id|ma|code|stt|sdt|phone|email)(_|$)", re.I)
-PRICE = re.compile(r"(^|_)(don_gia|gia|price|ti_le|tl|rate|pct|percent|diem|score)($|_)", re.I)
-TIER0 = re.compile(r"tien|doanh|revenue|amount|sales|chi|thu|profit|loi_nhuan|cost|gia_tri|(?<!so_)(?<!san_)luong|thu_nhap|salary|income", re.I)
+TIER0 = re.compile(r"tien|doanh|revenue|amount|sales|chi|thu|profit|loi_nhuan|cost|gia_tri|(?<!so_)(?<!san_)(?<!trong_)luong|thu_nhap|salary|income", re.I)
 TIER1 = re.compile(r"so_luong|qty|quantity|sl$", re.I)
 HINT = re.compile(r"tien|doanh|revenue|amount|sales|gia_tri|chi|thu|profit|loi_nhuan|cost|price|don_gia|so_luong|qty|quantity", re.I)
-MONEY = re.compile(r"tien|doanh|revenue|amount|sales|gia|chi|thu|profit|loi_nhuan|cost|price|vnd|(?<!so_)(?<!san_)luong|phu_cap|thuong|ngan_sach|von|salary|income|wage|bonus", re.I)
 
 
 def _k(c):
-    """Tên cột dạng không dấu, nối bằng gạch dưới (Lương cơ bản -> luong_co_ban) để nhận diện bằng từ khóa dù tên có dấu hay không."""
-    return norm_key(c).replace(" ", "_")
+    """Tên cột tách THEO TỪ, không dấu, nối bằng gạch dưới: 'TrongLuongKg' / 'Trọng lượng (kg)' -> 'trong_luong_kg'."""
+    return "_".join(lb.tokens(c))
 
 
 def _pretty(c):
-    t = str(c).replace("_", " ").strip()
-    return t[:1].upper() + t[1:]
+    return lb.label(c)                        # 'DanhMuc' -> 'Danh mục' (đơn vị hiển thị riêng ở chỉ số)
 
 
 def _nums(s):
@@ -66,17 +64,17 @@ def _spec(name, df):
         if c == tcol or str(c).endswith("_nghi_van") or pd.api.types.is_bool_dtype(df[c]) or pd.api.types.is_datetime64_any_dtype(df[c]):
             continue
         s = _nums(df[c]) if is_text(df[c]) and df[c].notna().any() and _nums(df[c]).notna().mean() >= .95 else df[c]
-        if not pd.api.types.is_numeric_dtype(s) or s.nunique() < 2 or ID_NAME.search(_k(c)):
+        if not pd.api.types.is_numeric_dtype(s) or s.nunique() < 2 or lb.is_id(c) or ID_NAME.search(_k(c)):
             continue
-        if pd.api.types.is_integer_dtype(s) and s.nunique() / max(1, s.notna().sum()) > .95 and not HINT.search(_k(c)):
+        if pd.api.types.is_integer_dtype(s) and s.nunique() / max(1, s.notna().sum()) > .95 and not HINT.search(_k(c)) and not lb.unit(c) and not lb.is_rate(c):
             continue                                   # số nguyên gần như duy nhất = mã định danh
         meas.append((c, s))
-    meas.sort(key=lambda x: (3 if PRICE.search(_k(x[0])) else 0 if TIER0.search(_k(x[0])) else 1 if TIER1.search(_k(x[0])) else 2, 0 if _k(x[0]).startswith("tong") else 1))   # cột "Tổng ..." lên trước
+    meas.sort(key=lambda x: (3 if lb.is_rate(x[0]) else 0 if TIER0.search(_k(x[0])) else 1 if TIER1.search(_k(x[0])) else 2, 0 if _k(x[0]).startswith("tong") else 1))   # cột "Tổng ..." lên trước
     meas = meas[:6]
     # ---- chiều phân tích
     dims = []
     for c in df.columns:
-        if c == tcol or c in [m[0] for m in meas] or ID_NAME.search(_k(c)):
+        if c == tcol or c in [m[0] for m in meas] or lb.is_id(c) or ID_NAME.search(_k(c)):
             continue
         s = df[c]
         if pd.api.types.is_datetime64_any_dtype(s) or pd.api.types.is_float_dtype(s):
@@ -109,8 +107,8 @@ def _spec(name, df):
     if not out_dims and time is None:
         return None
     mvals = {f"m{j}": s.astype(float) for j, (c, s) in enumerate(meas)}
-    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": "đ" if MONEY.search(_k(c)) else "", "avg": bool(PRICE.search(_k(c))),
-                 "dec": 0 if (MONEY.search(_k(c)) or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
+    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": lb.is_rate(c),
+                 "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
 
     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều
     cube, dropped = False, []
@@ -143,7 +141,8 @@ def _spec(name, df):
     else:
         w, mc, n = None, None, n_src
 
-    return {"name": str(name), "n_src": int(n_src), "n": int(n), "cube": cube, "dropped": dropped, "w": w, "mc": mc,
+    return {"name": str(name), "title": " · ".join(lb.label(p) for p in str(name).split("::")[1:]) or lb.label(str(name).rsplit(".", 1)[0]),
+            "n_src": int(n_src), "n": int(n), "cube": cube, "dropped": dropped, "w": w, "mc": mc,
             "dims": [dict(d, codes=[int(x) for x in cols[d["k"]]]) for d in out_dims],
             "time": dict(time, codes=[int(x) for x in cols["t"]]) if time else None,
             "meas": [dict(m, vals=_clean_list(mvals[m["k"]].reset_index(drop=True))) for m in out_meas]}

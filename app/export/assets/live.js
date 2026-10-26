@@ -184,16 +184,18 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
   }
   function narrative() {
     const first = c => String(c || '').split(' ')[0], order = { Cao: 0, 'Trung bình': 1, 'Thấp': 2 };
-    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
+    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(x.check || []).length ? `<span class="tag Thấp" title="Số ${esc(x.check.join(', '))} chưa khớp bảng kết quả nào">Cần kiểm tra số liệu</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
     const acts = [...D.actions].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9)).map(a => `<div class="act"><span class="pr ${esc(first(a.priority))}">${esc(a.priority || '')}</span><b>${esc(a.text)}</b><span class="im">${esc(a.impact || '')}</span></div>`).join('');
     return (ins ? `<h2 class="sec">Phát hiện chính</h2><div class="ins">${ins}</div>` : '') + (acts ? `<h2 class="sec">Khuyến nghị hành động</h2><div class="acts">${acts}</div>` : '') +
       (D.risks.length ? `<h2 class="sec">Rủi ro cần lưu ý</h2><div class="card"><ul class="risks">${D.risks.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>` : '');
   }
   function shell() {
-    const sw = D.datasets.length > 1 ? `<select id="dsw" aria-label="Bảng dữ liệu">${D.datasets.map((d, i) => `<option value="${i}" ${d === ds ? 'selected' : ''}>${esc(d.name)} (${f0.format(d.n_src)} dòng)</option>`).join('')}</select>` : '';
+    const parts = d => String(d.name).split('::'), files = new Set(D.datasets.map(d => parts(d)[0]));
+    const tabLabel = d => { const p = parts(d), sh = d.title && p.length > 1 ? d.title : p.slice(1).join(' · '); return files.size > 1 ? (sh ? `${p[0].replace(/\.[^.]+$/, '')} · ${sh}` : p[0].replace(/\.[^.]+$/, '')) : (sh || p[0]) };
+    const sw = D.datasets.length > 1 ? `<nav class="dtabs" role="tablist" aria-label="Bảng dữ liệu (đổi góc nhìn)">${D.datasets.map((d, i) => `<button role="tab" class="dtab ${d === ds ? 'on' : ''}" aria-selected="${d === ds}" data-ds="${i}" title="${esc(d.name)}"><span>${esc(tabLabel(d))}</span><small>${f0.format(d.n_src)} dòng</small></button>`).join('')}</nav>` : '';
     $('#app').innerHTML = `<header class="top"><div class="wrap"><div><span class="eyebrow">Bảng điều khiển · ${esc(D.date)}</span><h1>${esc(D.title)}</h1>${D.question ? `<p class="q">${esc(D.question)}</p>` : ''}</div>
-<div class="tools">${sw}<button class="ibtn" id="th" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng hoặc tối">${I.moon}</button><button class="ibtn" id="pr" title="In" aria-label="In">${I.print}</button></div></div></header>
-<div class="wrap">${D.summary ? `<div class="ans"><span class="ic">${I.check}</span><div><b>Câu trả lời ngắn</b><p>${esc(D.summary)}</p></div></div>` : ''}
+<div class="tools"><button class="ibtn" id="th" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng hoặc tối">${I.moon}</button><button class="ibtn" id="pr" title="In" aria-label="In">${I.print}</button></div></div></header>
+<div class="wrap">${sw}${D.summary ? `<div class="ans"><span class="ic">${I.check}</span><div><b>Câu trả lời ngắn</b><p>${esc(D.summary)}</p></div></div>` : ''}
 <div class="filters"><div class="fbar" id="fb"></div></div><div id="kp"></div><div class="grid" id="gr"></div>
 ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) nên được gộp theo các chiều trước khi nhúng${ds.dropped.length ? ` (bỏ chiều: ${esc(ds.dropped.join(', '))})` : ''}. Tổng, trung bình và số bản ghi vẫn chính xác; không xem được từng dòng gốc.</div>` : ''}
 <div id="nar">${narrative()}</div><div class="foot">Số liệu tính từ dữ liệu đã làm sạch (${esc(ds.name)}). Lọc và tính toán ngay trong trình duyệt, không cần kết nối mạng.</div></div><div id="tt"></div>`;
@@ -208,6 +210,7 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) 
     else if (mm) { st.m = mm.dataset.m; render() }
     else if (so) { const k = so.dataset.sort; st.tb.dir = st.tb.sort === k ? -st.tb.dir : (k === 'l' ? 1 : -1); st.tb.sort = k; render() }
     else if (q && !t.closest('input')) { const k = q.dataset.k, v = +q.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); s.has(v) ? s.delete(v) : s.add(v); render() }
+    else if (t.closest('[data-ds]')) { openK.clear(); init(+t.closest('[data-ds]').dataset.ds) }
     else if (t.closest('#th')) { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; render() }
     else if (t.closest('#pr')) print();
   });
@@ -215,7 +218,7 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) 
     if (t.dataset.sc) { const k = t.dataset.sc, v = +t.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); t.checked ? s.add(v) : s.delete(v); render() }
     else if (t.dataset.r) { st[t.dataset.r] = +t.value; if (st.from > st.to) { if (t.dataset.r === 'from') st.to = st.from; else st.from = st.to } render() }
     else if (t.dataset.tb) { st.tb.by = t.value; resetSort(); render() }
-    else if (t.id === 'dsw') { openK.clear(); init(+t.value) } });
+  });
   document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.sl) d.open ? openK.add(d.dataset.sl) : openK.delete(d.dataset.sl) }, true);
   document.addEventListener('mousemove', e => { const el = e.target.closest ? e.target.closest('[data-tt]') : null, b = $('#tt'); if (!b) return;
     if (!el) { b.style.display = 'none'; return } b.textContent = el.dataset.tt; b.style.display = 'block'; b.style.left = Math.min(e.clientX + 14, innerWidth - 300) + 'px'; b.style.top = (e.clientY + 16) + 'px' });

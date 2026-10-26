@@ -4,7 +4,10 @@ import re
 
 import pandas as pd
 
+from .. import labels, numfmt
 from ..utils import compact, vn
+
+pp = numfmt.pretty_period          # 2026-03-01 -> T3/2026 (nhãn kỳ gọn, không bị chồng chữ trên trục)
 
 PRI_ORDER = {"Cao": 0, "Trung bình": 1, "Thấp": 2}
 
@@ -29,6 +32,24 @@ def chart_rows(df, x, y, limit=24):
             agg[l] = agg.get(l, 0) + v
         rows = list(agg.items())
     return [(l, float(v)) for l, v in rows[:limit]]
+
+
+def refine_charts(charts, dfs):
+    """Tiêu đề (insight) do AI viết phải KHỚP số liệu của chính biểu đồ; sai hướng tăng/giảm hay sai tỷ lệ % thì thay bằng câu tính từ dữ liệu."""
+    out = []
+    for c in charts or []:
+        c = dict(c)
+        try:
+            rows = chart_rows(dfs[c["task"]], c["x"], c["y"])
+        except Exception:
+            rows = []
+        if rows:
+            tl = is_time_like(rows)
+            if not numfmt.consistent(c.get("insight"), rows, tl):
+                c["insight"] = numfmt.headline(rows, c.get("kind"), c["y"], tl)
+                c["insight_src"] = "tính từ dữ liệu"
+        out.append(c)
+    return out
 
 
 def dedupe_charts(charts, dfs):
@@ -73,14 +94,14 @@ def facts(rows, kind="bars"):
     out = []
     if is_time_like(rows) and kind in ("cols", "line"):
         a, b = rows[0], rows[-1]
-        s = f"{a[0]} → {b[0]}: {compact(a[1])} → {compact(b[1])}"
+        s = f"{pp(a[0])} → {pp(b[0])}: {compact(a[1])} → {compact(b[1])}"
         if a[1]:
             s += f" ({(b[1] / a[1] - 1) * 100:+.1f}%)".replace(".", ",")
         out.append(s)
         hi = max(rows, key=lambda r: r[1])
         lo = min(rows, key=lambda r: r[1])
-        out.append(f"Cao nhất: {hi[0]} ({compact(hi[1])})")
-        out.append(f"Thấp nhất: {lo[0]} ({compact(lo[1])})")
+        out.append(f"Cao nhất: {pp(hi[0])} ({compact(hi[1])})")
+        out.append(f"Thấp nhất: {pp(lo[0])} ({compact(lo[1])})")
         return out
     hi = max(rows, key=lambda r: r[1])
     lo = min(rows, key=lambda r: r[1])

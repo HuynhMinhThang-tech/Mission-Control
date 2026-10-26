@@ -18,11 +18,14 @@ const bar = (rows, u = '') => { if (!rows.length) return ''; const m = Math.max(
   return rows.map(([l, v]) => `<div class="br"><span class="l" title="${esc(l)}">${esc(l)}</span><span class="tr"><span class="bf ${v < 0 ? 'neg' : ''}" style="width:${Math.abs(v) / m * 100}%"></span></span><span class="v">${sg ? (v > 0 ? '+' : v < 0 ? '−' : '') : ''}${N(Math.abs(v))}${esc(u)}</span></div>`).join('') };
 const cols = rows => { rows = rows.slice(-14); const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, hi = rows.findIndex(r => Math.abs(r[1]) === m);
   return `<div class="cols">${rows.map(([l, v], i) => `<div><i class="${i === hi ? 'hi' : ''}" style="height:${Math.abs(v) / m * 80}px"></i>${esc(String(l).slice(0, 8))}<br>${NC(v)}</div>`).join('')}</div>` };
-const kp = a => `<div class="kpis">${a.map(([l, v, d]) => `<div class="kpi"><b>${esc(v)}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
+const fv = v => { const s = String(v ?? '').trim(); return /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô -> 11.773.398.767,5
+const kp = a => `<div class="kpis">${a.filter(x => String(x[1] ?? '').trim()).map(([l, v, d]) => `<div class="kpi"><b>${esc(fv(v))}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
 const kpo = a => kp(a.map(k => [k.label, k.value, k.delta]));
 const tbl = (h, r) => `<div class="tw"><table><thead><tr>${h.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${r.map(x => `<tr>${x.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 const fnd = (t, s, c = '') => `<div class="f ${c}"><span class="tg">${esc(s || 'Phát hiện')}</span>${t}</div>`;
-const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : c);
+const ISOD = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$/;
+const fdt = s => { const m = ISOD.exec(s); return m ? (m[4] + m[5] + m[6] === '000000' ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`) : s };   // 2026-01-01T00:00:00.000 -> 01/01/2026
+const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : fdt(String(c)));
 const tableOf = t => t.err && !t.cols.length ? `<div class="note">${esc(t.title)}: ${esc(t.err)}</div>` : tbl(t.cols, t.rows.slice(0, 30).map(r => r.map(cell)));
 const numCols = t => t.cols.filter((c, i) => t.rows.some(r => typeof r[i] === 'number'));
 const PAL = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
@@ -30,17 +33,32 @@ const TIME = /^(\d{4}[-\/]\d{1,2}|\d{1,2}[-\/]\d{4}|Q[1-4]|T\d{1,2}|Tháng|W\d|\
 function uniq(rows, kind) { const seen = new Set(), o = []; rows.forEach(r => { const k = r[0] + '|' + r[1]; if (!seen.has(k)) { seen.add(k); o.push(r) } });
   if (kind === 'line' || (rows.length >= 4 && rows.filter(r => TIME.test(r[0])).length / rows.length >= .6)) return o;
   const m = new Map(); o.forEach(([l, v]) => m.set(l, (m.get(l) || 0) + v)); return [...m] }
+const pp = s => { const m = /^(\d{4})-(\d{1,2})(?:-\d{1,2})?(?:[ T].*)?$/.exec(String(s)); return m ? `T${+m[2]}/${m[1]}` : String(s) };      // 2026-03-01 -> T3/2026
 const line = rows => { rows = rows.slice(-24); if (rows.length < 2) return bar(rows); const W = 300, H = 110, mx = Math.max(...rows.map(r => r[1])), mn = Math.min(...rows.map(r => r[1])), sp = (mx - mn) || 1;
   const pts = rows.map((r, i) => [6 + i * (W - 12) / Math.max(rows.length - 1, 1), 8 + (mx - r[1]) / sp * (H - 30)]);
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(rows[0][0])}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(rows[rows.length - 1][0])}</text></svg>` };
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(pp(rows[0][0]))}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(pp(rows[rows.length - 1][0]))}</text></svg>` };
 const donut = rows => { rows = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]); if (rows.length < 2) return bar(rows); if (rows.length > 7) { const rest = rows.slice(6).reduce((s, r) => s + r[1], 0); rows = [...rows.slice(0, 6), ['Khác', rest]] }
   const tot = rows.reduce((s, r) => s + r[1], 0) || 1; let acc = 0; const g = rows.map((r, i) => { const a = acc / tot * 100; acc += r[1]; return `${PAL[i % 7]} ${a}% ${acc / tot * 100}%` }).join(',');
   return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative"><div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div></div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${N(r[1] / tot * 100)}%</b></div>`).join('')}</div></div>` };
 const KIND = { bars: 'Cột ngang', cols: 'Cột dọc', line: 'Đường', donut: 'Tròn' };
 const kindSel = (s, k, cur) => `<select data-s="${s}" data-k="${k}">${Object.entries(KIND).map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-function chart(c, T) { const t = T[c.task]; if (!t) return ''; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return '';
-  const rows = uniq(t.rows.map(r => [String(r[xi]), Number(r[yi]) || 0]), c.kind).slice(0, 24);
-  return `<div class="box"><h4>${esc(c.title)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</h4>${c.kind === 'cols' ? cols(rows) : c.kind === 'line' ? line(rows) : c.kind === 'donut' ? donut(rows) : bar(rows, '')}${c.insight ? `<div class="hint">${esc(c.insight)}</div>` : ''}</div>` }
+function chartRows(c, T) { const t = T[c.task]; if (!t) return null; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return null;
+  return uniq(t.rows.map(r => [String(r[xi]), Number(r[yi]) || 0]), c.kind).slice(0, 24) }
+function chartBody(c, T) { const rows = chartRows(c, T); if (!rows) return ''; return c.kind === 'cols' ? cols(rows) : c.kind === 'line' ? line(rows) : c.kind === 'donut' ? donut(rows) : bar(rows, '') }
+function chart(c, T) { if (!chartRows(c, T)) return '';
+  return `<div class="box"><h4>${esc(c.title)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</h4>${chartBody(c, T)}${c.insight ? `<div class="hint">${esc(c.insight)}</div>` : ''}</div>` }
+/* Bộ chọn biểu đồ: chỉ đưa ra các loại PHÙ HỢP với hình dạng dữ liệu (thay vì mọi loại + ba ô chọn rời rạc) */
+const KWHY = { line: 'thấy xu hướng theo thời gian', cols: 'so sánh từng kỳ hoặc ít nhóm', bars: 'xếp hạng; nhãn dài vẫn dễ đọc', donut: 'tỷ trọng các phần trong tổng (tối đa 7 phần)' };
+function kindsFor(rows) { const n = rows.length, tl = n >= 3 && rows.filter(r => TIME.test(String(r[0]))).length / n >= .6, neg = rows.some(r => r[1] < 0);
+  if (n < 2) return ['bars']; if (tl) return n >= 4 ? ['line', 'cols'] : ['cols', 'line']; if (n <= 7 && !neg) return ['bars', 'cols', 'donut']; return n <= 12 ? ['bars', 'cols'] : ['bars'] }
+function chartCard(c, i, s, T) { const t = T[c.task]; if (!t) return '';
+  const on = s['c' + i] ?? c.recommended, kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [];
+  const ks = kindsFor(rows), all = [...new Set([...ks, kd])], fit = ks.includes(kd);
+  return `<div class="cpc ${on ? 'on' : ''}"><label class="cph"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')}</small></span></label>
+<div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
+<div class="cpk"><div class="seg" role="group" aria-label="Loại biểu đồ">${all.map(k => `<button type="button" class="${k === kd ? 'on' : ''}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k])}">${KIND[k]}</button>`).join('')}</div>
+<small class="${fit ? 'sub' : 'sub warn'}">${fit ? (kd === ks[0] ? 'Phù hợp nhất: ' : 'Phù hợp: ') + KWHY[kd] : 'Loại này ít phù hợp với dữ liệu hiện tại'} · từ: ${esc(t.title)}</small></div>
+<details class="cpa"><summary>Tùy chỉnh trục</summary><div class="hint">Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div></details></div>` }
 const sel$ = (s, k, opts, cur) => `<select data-s="${s}" data-k="${k}">${opts.map(o => `<option ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
 const ico = (n, s) => ic(n, s);
 
@@ -66,22 +84,35 @@ async function pvLoad(name, src) { const k = name + '\u0001' + src; if (PVC[k]) 
 function pvPanel(name) { const p = PV[name], d = PVC[name + '\u0001' + p.src];
   if (!d) return '<div class="pvp"><small><span class="spin sm"></span> Đang tải dữ liệu…</small></div>'; if (d.err) return `<div class="pvp"><div class="note" style="margin:0">${esc(d.err)}</div></div>`;
   const tabs = d.variants.length > 1 ? `<div class="seg">${d.variants.map(v => `<button class="${v === p.src ? 'on' : ''}" data-a="pvsrc" data-v="${esc(name)}" data-x="${v}">${PVL[v]}</button>`).join('')}</div>` : '';
-  const cell2 = v => v === null ? '<span class="nul">∅</span>' : typeof v === 'number' ? N(v) : esc(String(v).length > 60 ? String(v).slice(0, 59) + '…' : v);
+  const cell2 = v => v === null ? '<span class="nul">∅</span>' : typeof v === 'number' ? N(v) : esc((s => s.length > 60 ? s.slice(0, 59) + '…' : s)(fdt(String(v))));
   return `<div class="pvp"><div class="pvh"><b>${N(d.shape[0])} dòng × ${N(d.shape[1])} cột</b>${tabs}</div>
 <div class="cs">${d.cols.map(c => `<span class="cc ${c.missing ? 'w' : ''}" title="${N(c.unique)} giá trị khác nhau"><b>${esc(c.name)}</b> ${esc(c.dtype)}${c.missing ? ' · thiếu ' + N(c.missing) : ''}</span>`).join('')}${d.extra_cols ? `<span class="cc">+${d.extra_cols} cột nữa</span>` : ''}</div>
 <div class="tw"><table><thead><tr><th>#</th>${d.cols.map(c => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>${d.rows.map((r, i) => `<tr><td class="rn">${i + 1}</td>${r.map(v => `<td>${cell2(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
 <small class="hint">Hiển thị ${d.rows.length}/${N(d.shape[0])} dòng đầu${d.src === 'original' || (d.src === 'current' && d.mode === 'original' && d.verdict && d.verdict !== 'tidy') ? '. Đây là dữ liệu thô nên có thể có ô trống, tiêu đề lệch hoặc dòng tổng.' : '.'}</small></div>` }
 
+const GT = {}, PVP = new Set();                            // GT: tab đang chọn của từng tệp nhiều bảng
+const grpOf = n => String(n).split('::')[0], tabName = n => { const p = String(n).split('::'); return p.slice(1).join(' · ') || p[0] };
+function pvEnsure(name) { const o = PV[name] = PV[name] || { src: 'current', open: true }, k = name + '\u0001' + o.src;
+  if (!PVC[k] && !PVP.has(k)) { PVP.add(k); pvLoad(name, o.src).then(() => { PVP.delete(k); stage() }) } }
+function fileRow(S, f, edit, ok, grouped) {
+  if (grouped && !RO()) pvEnsure(f.name);
+  return `<div class="fl"><span class="dot ${(S.dirty || []).includes(f.name) && !ok ? 'w' : ''}"></span>${esc(grouped ? tabName(f.name) : f.name)}${f.demo ? ' <span class="tag">mẫu</span>' : ''}<small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small>${RO() ? '' : `<button class="pvb ${PV[f.name] && PV[f.name].open ? 'on' : ''}" data-a="pv" data-v="${esc(f.name)}" aria-expanded="${!!(PV[f.name] && PV[f.name].open)}">${ic('eye', 15)}Xem trước</button>`}${edit ? `<button class="rm" data-a="rmfile" data-v="${esc(f.name)}" title="Xóa bảng này" aria-label="Xóa ${esc(f.name)}">${ic('trash', 16)}</button>` : ''}</div>` + (PV[f.name] && PV[f.name].open && !RO() ? pvPanel(f.name) : '') + structCard(S, f) }
 function fileList(S) {
-  const ok = S.st[2] === 'done', edit = S.st[0] !== 'done' && !RO();
-  return `<div class="filebar"><label>Danh sách dữ liệu (${S.files.length} tệp)</label>${edit ? '<button class="lnk" data-a="clearfiles">Xóa tất cả</button>' : ''}</div>` + S.files.map(f => `<div class="fl"><span class="dot ${(S.dirty || []).includes(f.name) && !ok ? 'w' : ''}"></span>${esc(f.name)}${f.demo ? ' <span class="tag">mẫu</span>' : ''}<small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small>${RO() ? '' : `<button class="pvb ${PV[f.name] && PV[f.name].open ? 'on' : ''}" data-a="pv" data-v="${esc(f.name)}" aria-expanded="${!!(PV[f.name] && PV[f.name].open)}">${ic('eye', 15)}Xem trước</button>`}${edit ? `<button class="rm" data-a="rmfile" data-v="${esc(f.name)}" title="Xóa tệp này" aria-label="Xóa tệp ${esc(f.name)}">${ic('trash', 16)}</button>` : ''}</div>` + (PV[f.name] && PV[f.name].open && !RO() ? pvPanel(f.name) : '') + structCard(S, f)).join('')
+  const ok = S.st[2] === 'done', edit = S.st[0] !== 'done' && !RO(), groups = [];
+  S.files.forEach(f => { const g = groups.find(x => x.base === grpOf(f.name)); g ? g.items.push(f) : groups.push({ base: grpOf(f.name), items: [f] }) });
+  return `<div class="filebar"><label>Danh sách dữ liệu (${S.files.length} bảng, ${groups.length} tệp)</label>${edit ? '<button class="lnk" data-a="clearfiles">Xóa tất cả</button>' : ''}</div>` + groups.map(g => {
+    if (g.items.length === 1) return fileRow(S, g.items[0], edit, ok, false);
+    const act = g.items.find(f => f.name === GT[g.base]) || g.items[0];
+    return `<div class="fgrp"><div class="fgh"><b title="${esc(g.base)}">${esc(g.base)}</b><small>${g.items.length} bảng · bấm tab để đổi góc nhìn</small>${edit ? `<button class="lnk" data-a="rmgroup" data-v="${esc(g.base)}">Xóa cả tệp</button>` : ''}</div>
+<div class="ftabs" role="tablist" aria-label="Các bảng trong ${esc(g.base)}">${g.items.map(f => `<button type="button" role="tab" class="ftab ${f === act ? 'on' : ''}" aria-selected="${f === act}" data-a="ftab" data-v="${esc(f.name)}"><span>${esc(tabName(f.name))}</span><small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small></button>`).join('')}</div>
+<div class="ftp" role="tabpanel">${fileRow(S, act, edit, ok, true)}</div></div>` }).join('')
 }
 
 /* chọn lựa cuối cùng của bước Báo cáo (live: theo lựa chọn đang chỉnh; sau khi chấp nhận / xem lại: theo bản chốt) */
 function selCharts() { const S = S_(), d = S.d[5], s = sel(5); if (d.final && S.st[5] !== 'await') return d.final.charts;
   return d.charts.map((c, i) => ({ ...c, kind: s['k' + i] ?? c.kind, x: s['x' + i] ?? c.x, y: s['y' + i] ?? c.y, on: s['c' + i] ?? c.recommended })).filter(c => c.on) }
 function selKpis() { const S = S_(), r = S.d[3].result, s = sel(5), d = S.d[5]; if (d.final && S.st[5] !== 'await') return d.final.kpis.map(i => r.kpis[i]).filter(Boolean);
-  return r.kpis.filter((k, i) => s['p' + i] ?? true) }
+  return r.kpis.filter((k, i) => (s['p' + i] ?? true) && String(k.value ?? '').trim()) }
 const outline = (S, ch) => [['Trang bìa', (S.d[5].final || S.d[5]).title], ['Tóm tắt điều hành', 'Câu trả lời trước, bằng chứng sau'], ['Chỉ số then chốt', 'Bức tranh số liệu'],
   ...ch.map(c => [c.insight || c.title, 'Biểu đồ + "điều này có nghĩa là"']), ['Phát hiện chính', 'Kèm bằng chứng và độ tin cậy'], ['Khuyến nghị', 'Sắp theo mức ưu tiên'],
   ['Quyết định và rủi ro', 'Cần lãnh đạo phê duyệt'], ['Phụ lục', 'Dữ liệu, làm sạch, phân tích']];
@@ -128,7 +159,7 @@ function opCard(o, d, aw, s, fx) {
   const alt = fill ? (o.alts || []).find(a => a.method === m) : null, MI = d.meth || {};
   const note = fill ? ((alt && alt.reason) || (MI[m] && MI[m][1]) || '') : '', risk = fill ? ((alt && alt.risk) || '') : (o.risk || '');
   const opts = (o.numeric ? ['median', 'mean', 'mode', 'drop_rows', 'value'] : ['mode', 'drop_rows', 'value']);
-  const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${MLAB[x]}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
+  const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${esc((MI[x] || [x])[0])}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
   return `<div class="op ${on ? 'on' : ''}"><label class="oph"><input type="checkbox" data-s="2" data-k="c${o.id}" ${on ? 'checked' : ''} ${aw ? '' : 'disabled'}><b>${esc(o.label || o.title)}</b></label>
 ${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${mapView(o)}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
 ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ? 'Kết quả' : 'Nếu áp dụng'}: <b>${esc(fx[o.id])}</b></span></div>` : ''}</div>` }
@@ -171,9 +202,8 @@ ${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Ph�
 ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
     const panel = aw ? `<details open><summary>Chọn biểu đồ và chỉ số đưa lên báo cáo và slide</summary><div class="ask" style="padding-top:10px"><label>Tiêu đề báo cáo</label><input data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
- <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(k.value)}</b><small>${esc(k.label)}</small></span></label>`).join('')}
- <p class="hint">Biểu đồ</p>${d.charts.map((c, i) => { const t = T[c.task], on = s['c' + i] ?? c.recommended, kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y;
-      return `<label class="opt ${on ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')} (từ: ${esc(t.title)})</small></span></label><div class="hint" style="margin:-4px 0 8px 34px">Loại ${kindSel(5, 'k' + i, kd)} Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div>` }).join('')}</details>` : '';
+ <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => !String(k.value ?? '').trim() ? '' : `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(fv(k.value))}</b><small>${esc(k.label)}</small></span></label>`).join('')}
+ <p class="hint">Biểu đồ (chọn loại phù hợp, xem trước ngay)</p><div class="cpg">${d.charts.map((c, i) => chartCard(c, i, s, T)).join('')}</div></details>` : '';
     const title = (d.final && !aw) ? d.final.title : (aw ? (s.rt ?? d.title) : d.title);
     return `<h2>Báo cáo</h2>${panel}
 <div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
@@ -205,7 +235,7 @@ function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card
   if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div>`;
   else if (s === 'error') h += `<h2>${STEPS[i].t}</h2><div class="note">Lỗi: ${esc(S.err && S.err.msg)}</div><div class="act"><button class="btn" data-a="retry">Thử lại</button></div>`;
   else if (s === 'pending' && i > 0) h += `<p class="lead">Bước này chưa chạy.</p>`;
-  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}</div>`; console.error(e) } h += actions(i, s) }
+  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
   $('stage').innerHTML = h + '</div>'; applyRO() }
 function applyRO() { $('vFlow').classList.toggle('ro', RO()); if (!RO()) return;
   document.querySelectorAll('#stage input,#stage select').forEach(e => e.disabled = true);
@@ -269,17 +299,22 @@ async function post(u, b) { BUSY = true; PVC = {}; try { const r = await fetch(u
   if (!r.ok) notify(await readError(r)); await refresh(); return r.ok } catch (e) { netErr(); return false } finally { BUSY = false } }
 async function pvClean() { try { const r = await fetch('/api/preview_clean', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload(2)) }); if (r.ok) sel(2).pv = await r.json() } catch (e) { netErr() } }
 const setUpl = v => { UPL = v; if (V === 0 && !R && NAV === 'flow' && ST) stage() };
-/* Hộp chọn sheet: chỉ hiện khi tệp Excel có từ 2 sheet trở lên. Trả về {tên tệp: tên sheet} hoặc null nếu hủy. */
+/* Hộp chọn sheet: hiện khi tệp Excel có từ 2 sheet. Chọn một hoặc nhiều sheet, mỗi sheet thành một tab. Trả về {tên tệp: [sheet...]} hoặc null nếu hủy. */
 function askSheets(list) { return new Promise(res => {
-  const ov = document.createElement('div'); ov.className = 'ov';
+  const ov = document.createElement('div'), dim = (f, s) => { const d = (f.info || {})[s]; return d ? `${N(Math.max(0, d.rows - 1))} dòng · ${d.cols} cột` : '' }; ov.className = 'ov';
   ov.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="sdT"><div class="dh2">${ic('database', 22)}<b id="sdT">Chọn sheet để tải lên</b></div>
-${list.map((f, i) => `<div class="sp"><label for="sp${i}" title="${esc(f.name)}"><span>${esc(f.name)}</span><small>${f.sheets.length} sheet</small></label><select id="sp${i}">${f.sheets.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>`).join('')}
+<p class="sub" style="margin:6px 0 0">Mỗi sheet được chọn sẽ thành một tab riêng để bạn chuyển đổi góc nhìn. Chọn một hoặc nhiều sheet.</p>
+${list.map((f, i) => `<fieldset class="spf" data-f="${i}"><legend title="${esc(f.name)}"><span>${esc(f.name)}</span><small>${f.sheets.length} sheet</small><button type="button" class="lnk" data-all="${i}">Chọn tất cả</button></legend>${f.sheets.map((x, j) => `<label class="spc"><input type="checkbox" value="${esc(x)}" ${(f.sheets.length <= 3 || j === 0) ? 'checked' : ''}><span>${esc(x)}</span><small>${dim(f, x)}</small></label>`).join('')}</fieldset>`).join('')}
 <div class="act"><button class="btn g" data-r="0">Hủy</button><button class="btn" data-r="1">Tải lên</button></div></div>`;
   const done = v => { document.removeEventListener('keydown', key); ov.remove(); res(v) };
   const key = e => { if (e.key === 'Escape') done(null) };
-  ov.onclick = e => { if (e.target === ov) return done(null); const b = e.target.closest('[data-r]'); if (!b) return;
-    if (b.dataset.r === '0') return done(null); const o = {}; list.forEach((f, i) => o[f.name] = ov.querySelector('#sp' + i).value); done(o) };
-  document.addEventListener('keydown', key); document.body.appendChild(ov); ov.querySelector('select').focus() }) }
+  const chk = () => { ov.querySelectorAll('[data-all]').forEach(a => { const bs = [...ov.querySelectorAll(`.spf[data-f="${a.dataset.all}"] input`)]; a.textContent = bs.every(x => x.checked) ? 'Bỏ chọn tất cả' : 'Chọn tất cả' }); const bad = [...ov.querySelectorAll('.spf')].some(fs => !fs.querySelector('input:checked')); const b = ov.querySelector('[data-r="1"]'); b.disabled = bad; b.title = bad ? 'Mỗi tệp cần chọn ít nhất một sheet' : '' };
+  ov.addEventListener('change', chk); chk();
+  ov.onclick = e => { if (e.target === ov) return done(null); const all = e.target.closest('[data-all]');
+    if (all) { const bs = [...ov.querySelectorAll(`.spf[data-f="${all.dataset.all}"] input`)], on = bs.some(x => !x.checked); bs.forEach(x => x.checked = on); return chk() }
+    const b = e.target.closest('[data-r]'); if (!b || b.disabled) return;
+    if (b.dataset.r === '0') return done(null); const o = {}; list.forEach((f, i) => o[f.name] = [...ov.querySelectorAll(`.spf[data-f="${i}"] input:checked`)].map(x => x.value)); done(o) };
+  document.addEventListener('keydown', key); document.body.appendChild(ov); ov.querySelector('input').focus() }) }
 async function upload(files) { files = [...files]; if (UPL || !files.length) return;
   const xl = files.filter(f => /\.(xlsx|xlsm|xls)$/i.test(f.name)); let sheets = {};
   setUpl(true);
@@ -329,6 +364,10 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'start') { const q = $('q').value.trim(); if (!q) { $('q').focus(); return } if (await post('/api/start', { question: q, ctx: U.ctx })) { V = 1; all() } }
   else if (a === 'go') { V = +v; FB = false; all() }
   else if (a === 'tab') { TAB = v; stage() }
+  else if (a === 'rerender') { stage() }
+  else if (a === 'ckind') { sel(5)['k' + b.dataset.i] = v; stage() }
+  else if (a === 'ftab') { GT[grpOf(v)] = v; stage() }
+  else if (a === 'rmgroup') { for (const f of S_().files.filter(f => grpOf(f.name) === v)) { delete PV[f.name]; await post('/api/remove_file', { name: f.name }) } delete GT[v] }
   else if (a === 'adj') { FB = !FB; stage() }
   else if (a === 'fbs') { const t = U.fbt.trim(); if (!t) return; U.fbt = ''; FB = false; await post('/api/run/' + V, { feedback: t }) }
   else if (a === 'retry') { await post('/api/run/' + V, {}) }

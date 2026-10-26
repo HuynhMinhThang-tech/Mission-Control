@@ -3,6 +3,9 @@
 from ..data.quality import schema
 from ..data.sandbox import describe_error, df_table, prepare, run_code
 from ..errors import UserError
+from .. import numfmt
+from ..data.scope import scope_block
+from .playbook import CODE_RULES, SUM_RULES
 from ..lang import COLNAME_RULE, localize
 from ..llm import llm, llm_json, strip_code
 from ..state import A, LOCK, bump, next_gen, put, tick
@@ -26,17 +29,17 @@ PROMPT_MENU = (
 PROMPT_CODE = (
     'Viết code cho TỪNG mục (đúng thứ tự, thêm 1 mục riêng cho yêu cầu bổ sung nếu có). Trả về DUY NHẤT JSON: {"tasks":[{"title":"...","goal":"...","code":"..."}]}\n'
     "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file, KHÔNG dùng .query()/.eval()/thuộc tính bắt đầu bằng gạch dưới (dùng lọc bool df[df['x']>0]); kết quả gán vào biến `result` là DataFrame đã tổng hợp "
-    "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE)
+    "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE + CODE_RULES)
 
 PROMPT_SUM = (
     'Trả về DUY NHẤT JSON: {"kpis":[{"label":"","value":"","delta":""}],"charts":[{"task":<số thứ tự bảng>,"x":"cột nhãn","y":"cột số","kind":"bars|cols|line|donut","title":"","unit":""}],'
     '"findings":[{"tag":"Mô tả|Chẩn đoán|Dự báo|Lưu ý","text":"có số liệu"}]}\n'
-    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, giá trị không âm). x,y phải là tên cột có thật.")
+    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, giá trị không âm). x,y phải là tên cột có thật." + SUM_RULES)
 
 
 def menu(fb=""):
     tick(0)
-    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + PROMPT_MENU
+    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + scope_block(A["clean"]) + PROMPT_MENU
                  + ("\nNgười dùng đã góp ý: hãy ĐIỀU CHỈNH danh sách theo đúng góp ý (thêm/bớt/đổi mục), giữ các mục không liên quan." if fb else ""))
     items = r["menu"]
     for k, m in enumerate(items):
@@ -54,7 +57,7 @@ def write_code(ids, custom, fb="", t0=0):
                f"NGƯỜI DÙNG GÓP Ý: {fb}\nHãy SỬA code/cách tính theo đúng góp ý (đổi chỉ số, nhóm theo cột khác, lọc, thêm/bớt mục...), giữ phần không bị góp ý.\n")
     r = llm_json(SYS(ROLE_CODE),
                  ctx_txt(fb) + f"Dữ liệu đã làm sạch (biến `dfs` là dict tên file→DataFrame):\n{J(schema(A['clean'], 3), 6000)}\n"
-                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n{old}\n" + PROMPT_CODE, 12000)
+                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n{old}\n" + scope_block(A["clean"]) + PROMPT_CODE, 12000)
     tasks = [t for t in r.get("tasks", []) if isinstance(t, dict) and t.get("code")]
     if not tasks:
         raise RuntimeError("AI không trả về code nào. Hãy bấm Thử lại hoặc mô tả góp ý rõ hơn.")
@@ -131,6 +134,9 @@ def execute(codes, t0=0):
     A["x"][3] = dfs
     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)
+    known = numfmt.Known.from_dfs(dfs)                                   # mọi số có thật trong bảng kết quả: dùng để đoán đúng độ lớn và đối chiếu
+    kpis = numfmt.fix_kpis(r.get("kpis"), known)                          # KPI: 11773398767.5 -> "11,77 tỷ đồng"
+    r = {**numfmt.fix_payload({k: v for k, v in r.items() if k != "kpis"}, known), "kpis": kpis}
     charts = valid_charts(r.get("charts", []), tabs)
     if not charts:
         for i, t in enumerate(tabs):

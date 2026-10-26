@@ -4,7 +4,7 @@ import re
 
 from flask import Blueprint, g, jsonify, request
 
-from . import config, db, llm, state
+from . import config, db, llm, providers, state
 from .auth import bad, over_limit
 from .errors import UserError
 
@@ -23,15 +23,24 @@ def _read(require_model):
     new_key = (p.get("api_key") or "").strip() or None
     if new_key and not KEY_RE.match(new_key):
         raise UserError("API key chứa khoảng trắng hoặc ký tự không hợp lệ (hoặc quá ngắn). Hãy sao chép lại đúng nguyên key, không kèm dấu cách/xuống dòng.")
-    base = llm.check_base_url(p.get("base_url"))
     model = (p.get("model") or "").strip()
     if require_model and not model:
         raise UserError("Hãy nhập hoặc chọn tên model.")
     if len(model) > 200 or re.search(r"\s", model):
         raise UserError("Tên model không hợp lệ (không được chứa khoảng trắng, tối đa 200 ký tự).")
-    key = new_key or db.load_llm_cfg(g.user["id"])["api_key"]
-    if not key:
+    raw_base = (p.get("base_url") or "").strip() or config.DEFAULT_BASE_URL
+    mismatch = providers.check_pair(raw_base, model)           # model của nhà này mà Base URL của nhà khác: báo sớm, kèm cách sửa
+    if mismatch:
+        raise UserError(mismatch)
+    saved = db.load_llm_cfg(g.user["id"])
+    key = new_key or saved["api_key"]
+    if not key:                                                # kiểm tra rẻ (không gọi mạng) làm trước kiểm tra DNS của Base URL
         raise UserError("Hãy nhập API key.")
+    old_host, new_host = providers.host_of(saved["base_url"] or config.DEFAULT_BASE_URL), providers.host_of(raw_base)
+    if not new_key and old_host and new_host and old_host != new_host:
+        raise UserError(f"Bạn đã đổi địa chỉ từ {old_host} sang {new_host}. API key đã lưu thuộc nhà cung cấp cũ nên sẽ không được gửi sang địa chỉ mới; "
+                        "hãy nhập API key của nhà cung cấp mới.")
+    base = llm.check_base_url(raw_base)
     return new_key, {"api_key": key, "base_url": base, "model": model}
 
 
@@ -41,7 +50,8 @@ def _limited():
 
 @bp.get("/api/settings/llm")
 def get_llm():
-    return jsonify({**db.llm_public(g.user["id"]), "default_model": config.DEFAULT_MODEL})
+    pub = db.llm_public(g.user["id"])
+    return jsonify({**pub, "default_model": config.DEFAULT_MODEL, "provider": providers.provider_of_url(pub["base_url"]) or "custom", "providers": providers.public()})
 
 
 @bp.post("/api/settings/llm")

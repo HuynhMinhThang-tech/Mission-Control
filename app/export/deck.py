@@ -15,7 +15,7 @@ from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from ..utils import compact, vn
-from .common import PRI_ORDER, chart_rows, facts, scale, trunc
+from .common import PRI_ORDER, chart_rows, facts, pp, scale, trunc
 
 NAVY, PRI, SOFT, INK, SUB, LINE, BG = "0F172A", "4F46E5", "EEF2FF", "1F2937", "5B6275", "E5E7EB", "F8FAFC"
 OK, WARN, BAD, MUTE, WHITE = "0F8F6A", "B76A00", "D6304A", "B4BAD6", "FFFFFF"
@@ -153,7 +153,7 @@ def cover(d):
     text(s, MX + .35, 1.9, 10.5, 2.3, trunc(F["title"], 120), size=38, bold=True, color=WHITE, anchor=MSO_ANCHOR.MIDDLE)
     text(s, MX + .35, 4.45, 10.5, 1.0, "Câu hỏi: " + trunc(F["question"], 220), size=17, color="C7CCF5")
     meta = [F["date"]] + ([F["period"]] if F.get("period") else [])
-    text(s, MX + .35, 6.3, 11, .4, "   |   ".join(meta) + "   |   Dựa trên " + ", ".join(trunc(f["name"], 28) for f in F["files"][:3]), size=12, color="9CA3D9")
+    text(s, MX + .35, 6.3, 11, .4, "   |   ".join(meta) + "   |   Dựa trên " + ", ".join(trunc(n, 34) for n in list(dict.fromkeys(str(f["name"]).split("::")[0] for f in F["files"]))[:3]), size=12, color="9CA3D9")
 
 
 def exec_summary(d):
@@ -204,7 +204,7 @@ def kpi_slide(d):
 
 def _chart(s, x, y, w, h, rows, kind, div):
     cd = CategoryChartData()
-    cd.categories = [trunc(l, 18) for l, _ in rows]
+    cd.categories = [trunc(pp(l), 18) for l, _ in rows]
     cd.add_series("Giá trị", [round(v / div, 3) for _, v in rows])
     donut = kind == "donut"
     line = kind == "line"
@@ -298,7 +298,7 @@ def insight_slides(d):
     for k in range(0, len(ins), 3):
         part = ins[k:k + 3]
         s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Phát hiện")
-        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
+        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", "") + (f"  ⚠ Cần kiểm tra số liệu: {', '.join(x['check'])}" if x.get("check") else ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
         conf = {"Cao": OK, "Trung bình": WARN, "Thấp": BAD}
 
         def st(i, j, v):
@@ -355,7 +355,7 @@ def appendix(d):
     qb = sum((q.get("before") or {}).values())
     qa = sum((q.get("after") or {}).values())
     blocks = [
-        ("DỮ LIỆU", [f"{trunc(f['name'], 34)}: {vn(f['rows'], 0)} dòng" for f in F["files"][:5]] + ([f"Khoảng thời gian: {F['period']}"] if F.get("period") else [])),
+        ("DỮ LIỆU", [f"{trunc(str(f['name']).replace('::', ' · '), 40)}: {vn(f['rows'], 0)} dòng" for f in F["files"][:5]] + ([f"Khoảng thời gian: {F['period']}"] if F.get("period") else [])),
         ("LÀM SẠCH", ([f"Vấn đề trước/sau: {vn(qb, 0)} → {vn(qa, 0)}"] if q else []) + [trunc(x, 60) for x in F["applied"][:6]] or ["Không áp dụng thao tác nào"]),
         ("PHÂN TÍCH", [trunc(t["title"], 70) for t in F["tasks"][:7]]),
     ]

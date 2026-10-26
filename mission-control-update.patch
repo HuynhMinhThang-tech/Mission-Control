@@ -1,0 +1,1909 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index d728d82..b873f05 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,17 @@
+ # Changelog
+ 
++## 0.1.4-dev
++- **Sửa lỗi "Không hiển thị được bước này: MLAB is not defined"** (`static/js/app.js`): thẻ thao tác làm sạch gọi `MLAB[x]` nhưng `MLAB` chưa từng được định nghĩa; nhãn các cách xử lý thiếu nằm sẵn ở `d.meth`. Khi một bước lỗi hiển thị, giờ có "Chi tiết kỹ thuật" và nút "Thử hiển thị lại".
++- **Số và đơn vị tiếng Việt thống nhất** (`app/numfmt.py`, mới): mọi chữ do AI viết đi qua một bộ chuẩn hóa. "2.24 trillion VNĐ" thành "2,24 tỷ đồng", "2 241 813 537 điểm" thành "2.241.813.537 đồng", `2240813537.5` thành `2.240.813.537,5`, "6.97%" thành "6,97%"; KPI `11773398767.5` hiện "11,77 tỷ đồng"; KPI rỗng không lên báo cáo. Áp cho agent Phân tích, Phát hiện, Báo cáo, và bước chốt báo cáo (báo cáo HTML, Markdown, PPTX, bảng điều khiển). Luật định dạng số cũng được thêm vào prompt (`app/lang.py`).
++- **Đối chiếu số với bảng kết quả**: số lớn trong phát hiện không khớp ô hoặc tổng nào trong bảng (kể cả lệch một chữ số) bị hạ độ tin cậy xuống "Thấp" và gắn nhãn "Cần kiểm tra số liệu" ở bảng điều khiển, báo cáo HTML và slide.
++- **Tiêu đề biểu đồ khớp dữ liệu** (`export/common.py: refine_charts`): câu kết luận AI viết sai hướng tăng/giảm hoặc sai tỷ lệ % (vd "giảm 15,7%" trên biểu đồ tăng 84%) được thay bằng câu tính từ chính số liệu. Nhãn kỳ gọn `T1/2026` thay cho `2026-01-01`, hết chồng chữ trên trục.
++- **Nhãn cột tiếng Việt, đơn vị suy theo từ** (`app/labels.py`, mới): `DanhMuc` thành "Danh mục", `TrongLuongKg` thành "Trọng lượng" (đơn vị kg, không còn bị coi là tiền), `order_id` thành "Mã đơn hàng". Cột đơn giá/tỷ lệ/trọng lượng dùng trung bình thay vì tổng. Không thêm dấu nửa vời khi có quá nhiều từ lạ.
++- **Nhiều sheet = nhiều tab** (`loader.py`, `routes.py`, `app.js`, `live.js`): tệp Excel nhiều sheet cho chọn một hoặc nhiều sheet (kèm số dòng x cột), mỗi sheet là một tab để chuyển đổi góc nhìn; bảng điều khiển cũng đổi bảng bằng tab thay vì ô chọn. Ngày trong xem trước hiện `01/01/2026`.
++- **Bộ chọn biểu đồ mới ở bước Báo cáo**: mỗi biểu đồ là một thẻ có xem trước, chỉ đưa ra các loại phù hợp với hình dạng dữ liệu kèm lý do (thay cho ba ô chọn rời rạc); trục để trong "Tùy chỉnh trục".
++- **Tab API & Model theo nhà cung cấp** (`app/providers.py`, mới; `settings.py`, `settings.js`): chọn nhà cung cấp thì Base URL tự điền đúng (Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter, Groq, Ollama, Tuỳ chỉnh). Gõ model lệch họ (vd `gemini-*` dưới OpenAI) thì hiện nút "Chuyển sang…"; máy chủ cũng báo lỗi tiếng Việt kèm cách sửa. Đổi địa chỉ mà chưa nhập key mới thì API key đã lưu không bị gửi sang nhà cung cấp khác. Kiểm tra thiếu key chạy trước kiểm tra DNS.
++- **Kinh nghiệm phân tích đưa vào Agent** (`app/agents/playbook.py`, `app/data/scope.py`, mới): code tự tính tín hiệu phạm vi (cột phân loại bản ghi, số vừa âm vừa dương, kỳ cuối chưa đủ ngày, cột thiếu nhiều) và đưa vào prompt; quy tắc định nghĩa chỉ số trước khi tính, đối chiếu tổng, có mốc so sánh, quy mô tác động và khoảng cách tới mục tiêu.
++- Test mới: `tests/format_test.py` (53 kiểm tra).
++
+ ## 0.1.3-dev
+ - **Ngôn ngữ thống nhất tiếng Việt** (`app/lang.py`): mọi Agent nhận luật "viết toàn bộ bằng tiếng Việt, không xen tiếng Anh"; tên cột của bảng kết quả phân tích phải là tiếng Việt (AI đặt ngay trong code, có bước dịch lại và từ điển dự phòng nếu còn sót tên kiểu COUNT_PER_LEVEL). Đổi các nhãn còn tiếng Anh: "Insight" thành "Phát hiện", "Dashboard" thành "Bảng điều khiển", "Review và export" thành "Duyệt và xuất file".
+ - **Bảng điều khiển tương tác thiết kế lại** (`app/export/assets/live.js`, `live.css`): bỏ 4 ô chọn trên từng biểu đồ; chỉ còn thanh lọc chung (khoảng thời gian, tối đa 3 chiều, chọn chỉ số) và lọc chéo bằng cách bấm vào biểu đồ. Hệ thống tự chọn loại biểu đồ theo dữ liệu (đường theo tháng, vòng tròn khi ít nhóm, thanh ngang xếp hạng khi nhiều nhóm), bỏ chiều thiếu dữ liệu nhiều, tiêu đề không còn lặp ("Tổng Tổng"), ô trống ghi "Chưa có dữ liệu", trục số tròn, dòng nhận xét tự tính dưới mỗi biểu đồ, chế độ tối, hiển thị tốt trên điện thoại.
+diff --git a/app/agents/insight.py b/app/agents/insight.py
+index 7d416a0..a53245d 100644
+--- a/app/agents/insight.py
++++ b/app/agents/insight.py
+@@ -1,5 +1,8 @@
+ # -*- coding: utf-8 -*-
+ """AGENT 4 · Insight và tư vấn kinh doanh (bước 5)."""
++from .. import numfmt
++from ..data.scope import scope_block
++from .playbook import INSIGHT_RULES
+ from ..state import A, put, tick
+ from ..llm import llm_json
+ from ..utils import J
+@@ -11,7 +14,7 @@ PROMPT = (
+     'Trả về DUY NHẤT JSON: {"summary":"tóm tắt điều hành 2-3 câu, câu đầu TRẢ LỜI THẲNG câu hỏi kinh doanh",'
+     '"insights":[{"title":"câu khẳng định đầy đủ, có số","confidence":"Cao|Trung bình|Thấp","evidence":"phép tính cụ thể bằng số có trong bảng","source":"bảng/biểu đồ nguồn"}],'
+     '"actions":[{"text":"hành động cụ thể, bắt đầu bằng động từ","priority":"Cao|Trung bình|Thấp","impact":"tác động kỳ vọng, nêu theo số liệu nếu có"}],"risks":["..."]}\n'
+-    "3-5 phát hiện; mỗi phát hiện PHẢI có bằng chứng truy ngược được về bảng kết quả.")
++    "3-5 phát hiện; mỗi phát hiện PHẢI có bằng chứng truy ngược được về bảng kết quả." + INSIGHT_RULES)
+ 
+ 
+ def run(fb=""):
+@@ -20,5 +23,8 @@ def run(fb=""):
+     txt = "\n\n".join(f"### [{i}] {t['title']}\n{A['x'][3][i].head(30).to_csv(index=False)}"
+                       for i, t in enumerate(r3["tables"]) if A["x"][3][i] is not None)
+     tick(1)
+-    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + PROMPT)
+-    put(4, {"summary": r.get("summary", ""), "insights": r.get("insights", []), "actions": r.get("actions", []), "risks": r.get("risks", [])})
++    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + scope_block(A["clean"]) + PROMPT)
++    known = numfmt.Known.from_dfs(A["x"][3])
++    r = numfmt.fix_payload(r, known)
++    ins = numfmt.audit_insights(r.get("insights", []), known)                     # số lớn không có trong bảng nào -> không để "Độ tin cậy: Cao"
++    put(4, {"summary": r.get("summary", ""), "insights": ins, "actions": r.get("actions", []), "risks": r.get("risks", [])})
+diff --git a/app/agents/planner.py b/app/agents/planner.py
+index c35e35d..0d4f2e5 100644
+--- a/app/agents/planner.py
++++ b/app/agents/planner.py
+@@ -3,6 +3,9 @@
+ from ..data.quality import schema
+ from ..data.sandbox import describe_error, df_table, prepare, run_code
+ from ..errors import UserError
++from .. import numfmt
++from ..data.scope import scope_block
++from .playbook import CODE_RULES, SUM_RULES
+ from ..lang import COLNAME_RULE, localize
+ from ..llm import llm, llm_json, strip_code
+ from ..state import A, LOCK, bump, next_gen, put, tick
+@@ -26,17 +29,17 @@ PROMPT_MENU = (
+ PROMPT_CODE = (
+     'Viết code cho TỪNG mục (đúng thứ tự, thêm 1 mục riêng cho yêu cầu bổ sung nếu có). Trả về DUY NHẤT JSON: {"tasks":[{"title":"...","goal":"...","code":"..."}]}\n'
+     "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file, KHÔNG dùng .query()/.eval()/thuộc tính bắt đầu bằng gạch dưới (dùng lọc bool df[df['x']>0]); kết quả gán vào biến `result` là DataFrame đã tổng hợp "
+-    "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE)
++    "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE + CODE_RULES)
+ 
+ PROMPT_SUM = (
+     'Trả về DUY NHẤT JSON: {"kpis":[{"label":"","value":"","delta":""}],"charts":[{"task":<số thứ tự bảng>,"x":"cột nhãn","y":"cột số","kind":"bars|cols|line|donut","title":"","unit":""}],'
+     '"findings":[{"tag":"Mô tả|Chẩn đoán|Dự báo|Lưu ý","text":"có số liệu"}]}\n'
+-    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, giá trị không âm). x,y phải là tên cột có thật.")
++    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, giá trị không âm). x,y phải là tên cột có thật." + SUM_RULES)
+ 
+ 
+ def menu(fb=""):
+     tick(0)
+-    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + PROMPT_MENU
++    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + scope_block(A["clean"]) + PROMPT_MENU
+                  + ("\nNgười dùng đã góp ý: hãy ĐIỀU CHỈNH danh sách theo đúng góp ý (thêm/bớt/đổi mục), giữ các mục không liên quan." if fb else ""))
+     items = r["menu"]
+     for k, m in enumerate(items):
+@@ -54,7 +57,7 @@ def write_code(ids, custom, fb="", t0=0):
+                f"NGƯỜI DÙNG GÓP Ý: {fb}\nHãy SỬA code/cách tính theo đúng góp ý (đổi chỉ số, nhóm theo cột khác, lọc, thêm/bớt mục...), giữ phần không bị góp ý.\n")
+     r = llm_json(SYS(ROLE_CODE),
+                  ctx_txt(fb) + f"Dữ liệu đã làm sạch (biến `dfs` là dict tên file→DataFrame):\n{J(schema(A['clean'], 3), 6000)}\n"
+-                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n{old}\n" + PROMPT_CODE, 12000)
++                 f"Các phân tích người dùng đã chọn:\n{J(items)}\nYêu cầu bổ sung của người dùng: {custom or 'không'}\n{old}\n" + scope_block(A["clean"]) + PROMPT_CODE, 12000)
+     tasks = [t for t in r.get("tasks", []) if isinstance(t, dict) and t.get("code")]
+     if not tasks:
+         raise RuntimeError("AI không trả về code nào. Hãy bấm Thử lại hoặc mô tả góp ý rõ hơn.")
+@@ -131,6 +134,9 @@ def execute(codes, t0=0):
+     A["x"][3] = dfs
+     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
+     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)
++    known = numfmt.Known.from_dfs(dfs)                                   # mọi số có thật trong bảng kết quả: dùng để đoán đúng độ lớn và đối chiếu
++    kpis = numfmt.fix_kpis(r.get("kpis"), known)                          # KPI: 11773398767.5 -> "11,77 tỷ đồng"
++    r = {**numfmt.fix_payload({k: v for k, v in r.items() if k != "kpis"}, known), "kpis": kpis}
+     charts = valid_charts(r.get("charts", []), tabs)
+     if not charts:
+         for i, t in enumerate(tabs):
+diff --git a/app/agents/playbook.py b/app/agents/playbook.py
+new file mode 100644
+index 0000000..9578b57
+--- /dev/null
++++ b/app/agents/playbook.py
+@@ -0,0 +1,25 @@
++# -*- coding: utf-8 -*-
++"""Quy tắc nghề của người phân tích dữ liệu nhiều năm kinh nghiệm, đưa vào prompt. Áp dụng cho MỌI bộ dữ liệu và câu hỏi (không gắn lĩnh vực nào)."""
++
++CODE_RULES = (
++    "\nQUY TẮC NGHỀ PHÂN TÍCH (bắt buộc): "
++    "(1) ĐỊNH NGHĨA CHỈ SỐ TRƯỚC KHI TÍNH: mỗi chỉ số nêu rõ công thức, bản ghi nào được tính, bản ghi nào bị loại và vì sao (ghi trong `goal`). Có cột phân loại bản ghi hoặc cột số vừa âm vừa dương thì "
++    "phải xét từng nhóm, không cộng gộp mặc định. "
++    "(2) KỲ CHƯA ĐỦ: kỳ cuối thiếu ngày thì không so thẳng với kỳ đủ; so cùng số ngày hoặc ghi rõ tạm tính. "
++    "(3) ĐỐI CHIẾU: tổng các phần phải bằng tổng chung; nếu lệch hãy tìm nguyên nhân thay vì bỏ qua. "
++    "(4) MỌI CON SỐ CÓ MỐC SO SÁNH (kỳ trước, trung bình nhiều kỳ, hoặc mục tiêu), nêu cả chênh lệch tuyệt đối và tương đối; nhóm dưới 30 quan sát chỉ là định hướng. "
++    "(5) KHÔNG dùng cột thiếu từ 50% làm cơ cấu hoặc xếp hạng. "
++    "(6) Nếu câu hỏi có MỤC TIÊU định lượng (tăng/giảm thêm X), thêm một bảng 'khoảng cách tới mục tiêu': cơ sở, mức thay đổi hợp lý theo dữ liệu, tác động ước tính. ")
++
++SUM_RULES = (
++    "\nKPI: giá trị phải khớp một ô hoặc tổng của bảng, nêu phạm vi tính (vd 'chỉ đơn hoàn thành') và delta so với mốc nào; KPI không tính được thì BỎ, tuyệt đối không để value rỗng. "
++    "Mỗi finding nêu mốc so sánh, tránh ngôn ngữ nhân quả khi chỉ có tương quan (dùng 'đi cùng với', 'tập trung ở').")
++
++INSIGHT_RULES = (
++    "\nQUY TẮC NGHỀ: "
++    "(a) summary: câu đầu TRẢ LỜI THẲNG câu hỏi kèm MỘT con số then chốt có mốc so sánh. "
++    "(b) Mỗi phát hiện gồm: sự kiện + so sánh + ý nghĩa với quyết định. 'Cao' chỉ khi bằng chứng là số trực tiếp từ bảng, kỳ đủ, nhóm đủ lớn; kỳ chưa đủ hoặc suy diễn thì 'Thấp'. "
++    "(c) Khuyến nghị chỉ xét thứ NGƯỜI DÙNG KIỂM SOÁT ĐƯỢC; tác động ước tính = cơ sở trong bảng × mức thay đổi hợp lý (nêu giả định), xếp ưu tiên theo tác động và độ dễ làm; mỗi hành động kèm chỉ số theo dõi. "
++    "Nếu câu hỏi có mục tiêu định lượng: tính khoảng cách tới mục tiêu và đưa 2-3 phương án (thận trọng / cân bằng / quyết liệt) với tổng tác động so với mục tiêu. "
++    "(d) risks: nêu kỳ chưa đủ, cột thiếu nhiều, mẫu nhỏ, phạm vi chỉ số còn mơ hồ. "
++    "(e) Mọi con số PHẢI sao chép từ bảng, không tự cộng trừ nhẩm.")
+diff --git a/app/agents/reporter.py b/app/agents/reporter.py
+index 733957d..071ab28 100644
+--- a/app/agents/reporter.py
++++ b/app/agents/reporter.py
+@@ -1,9 +1,11 @@
+ # -*- coding: utf-8 -*-
+ """AGENT 5 · Thiết kế dashboard và báo cáo (bước 6)."""
++from .. import numfmt
+ from ..llm import llm_json
+ from ..state import A, put, tick
+ from ..utils import J
+ from .base import SYS, ctx_txt, prev
++from ..export.common import refine_charts
+ from .charts import valid_charts
+ 
+ ROLE = "Agent Thiết kế bảng điều khiển và báo cáo"
+@@ -23,4 +25,7 @@ def run(fb=""):
+     r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\n\n" + PROMPT)
+     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
+     tick(1)
++    known = numfmt.Known.from_dfs(A["x"][3])
++    r = numfmt.fix_payload(r, known)
++    charts = refine_charts(numfmt.fix_payload(charts, known), A["x"][3])        # tiêu đề biểu đồ không khớp số liệu -> thay bằng câu tính từ dữ liệu
+     put(5, {"title": r.get("title") or "Báo cáo phân tích", "narrative": r.get("narrative", A["d"][4]["summary"]), "charts": charts})
+\ No newline at end of file
+diff --git a/app/data/loader.py b/app/data/loader.py
+index 7c48ff5..c8bb762 100644
+--- a/app/data/loader.py
++++ b/app/data/loader.py
+@@ -95,6 +95,20 @@ def _table_meta(t, n_tables, res):
+ EXCEL_EXT = (".xlsx", ".xls", ".xlsm")
+ 
+ 
++def _sheet_dims(b, name):
++    """Số dòng x cột của từng sheet (đọc nhanh, không nạp dữ liệu) để người dùng chọn sheet có cơ sở. Không đọc được thì bỏ qua."""
++    if not name.lower().endswith((".xlsx", ".xlsm")):
++        return {}
++    try:
++        import openpyxl
++        wb = openpyxl.load_workbook(io.BytesIO(b), read_only=True, data_only=True)
++        out = {ws.title: {"rows": int(ws.max_row or 0), "cols": int(ws.max_column or 0)} for ws in wb.worksheets}
++        wb.close()
++        return out
++    except Exception:
++        return {}
++
++
+ def list_sheets(fs):
+     """Trả về tên các sheet của từng tệp Excel (CSV bỏ qua) để giao diện cho người dùng chọn đúng một sheet."""
+     out = []
+@@ -103,8 +117,9 @@ def list_sheets(fs):
+         if not name.lower().endswith(EXCEL_EXT):
+             continue
+         try:
+-            names = [str(x) for x in pd.ExcelFile(io.BytesIO(f.read())).sheet_names]
+-            out.append({"name": name, "sheets": names})
++            b = f.read()
++            names = [str(x) for x in pd.ExcelFile(io.BytesIO(b)).sheet_names]
++            out.append({"name": name, "sheets": names, "info": _sheet_dims(b, name)})
+         except Exception as e:
+             out.append({"name": name, "error": f"không đọc được tệp Excel ({type(e).__name__})"})
+     return out
+@@ -112,7 +127,8 @@ def list_sheets(fs):
+ 
+ def load_files(fs, sheets=None):
+     """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa).
+-    Tệp Excel nhiều sheet: chỉ đọc đúng sheet người dùng đã chọn (sheets = {tên tệp: tên sheet}); tệp 1 sheet tự dùng sheet đó.
++    Tệp Excel nhiều sheet: đọc các sheet người dùng đã chọn (sheets = {tên tệp: tên sheet | [các sheet]}); mỗi sheet thành một bảng riêng
++    có khóa "tệp::sheet" để giao diện chuyển qua lại bằng tab. Tệp 1 sheet tự dùng sheet đó.
+     Sheet không chuẩn nhưng có bảng bên trong -> tách bảng ra dùng (xem tables.py); ngược lại giữ luồng cũ."""
+     sheets = sheets or {}
+     dfs, reports, alts = {}, {}, {}
+@@ -123,17 +139,20 @@ def load_files(fs, sheets=None):
+         if name.lower().endswith(EXCEL_EXT):
+             xl = pd.ExcelFile(io.BytesIO(b))
+             names = list(xl.sheet_names)
+-            sh = sheets.get(name)
+-            if sh is None:
++            pick = sheets.get(name)
++            pick = [pick] if isinstance(pick, str) else [str(x) for x in pick] if pick else []
++            if not pick:
+                 if len(names) != 1:
+-                    raise ValueError(f"Tệp '{name}' có {len(names)} sheet, hãy chọn một sheet để tải lên.")
+-                sh = names[0]
+-            if sh not in names:
+-                raise ValueError(f"Tệp '{name}' không có sheet '{sh}'.")
++                    raise ValueError(f"Tệp '{name}' có {len(names)} sheet, hãy chọn ít nhất một sheet để tải lên.")
++                pick = [names[0]]
++            miss = [s for s in pick if s not in names]
++            if miss:
++                raise ValueError(f"Tệp '{name}' không có sheet '{miss[0]}'.")
+             wb = _open_wb(b) if name.lower().endswith((".xlsx", ".xlsm")) else None
+-            key = f"{name}::{sh}" if len(names) > 1 else name
+-            merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
+-            items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
++            for sh in dict.fromkeys(pick):                                  # giữ thứ tự chọn, bỏ trùng
++                key = f"{name}::{sh}" if len(names) > 1 else name
++                merged = len(wb[sh].merged_cells.ranges) if wb is not None else 0
++                items.append((key, xl.parse(sh, header=None), xl.parse(sh), merged, ("xlsx" if wb is not None else "xls", wb, sh, None)))
+         else:
+             kw = dict(sep=None, engine="python", encoding="utf-8-sig", encoding_errors="replace")
+             try:
+diff --git a/app/data/scope.py b/app/data/scope.py
+new file mode 100644
+index 0000000..edeaebc
+--- /dev/null
++++ b/app/data/scope.py
+@@ -0,0 +1,71 @@
++# -*- coding: utf-8 -*-
++"""Tín hiệu PHẠM VI và CHẤT LƯỢNG của dữ liệu, do CODE tính (không nhờ AI đoán), đưa vào prompt của các agent.
++
++Lỗi phổ biến nhất của phân tích tự động: cộng gộp lẫn các nhóm bản ghi không cùng phạm vi (đơn hoàn/hủy với đơn thành công, thu với chi,
++dòng tổng với dòng chi tiết...), hoặc so một kỳ chưa đủ ngày với kỳ đủ, hoặc chia cơ cấu theo cột thiếu gần hết giá trị. Ở đây ta chỉ ra *chỗ nào
++cần quyết định*, không áp đặt quyết định: agent phải chọn có lý do và ghi rõ phạm vi vào `goal`. Không gắn với lĩnh vực hay tên cột nào.
++"""
++import calendar
++
++import pandas as pd
++
++from .. import labels
++
++# từ gợi ý cột "loại bản ghi" (xét theo TỪ của tên cột, không dấu)
++KIND_WORDS = {"loai", "type", "kind", "trang", "thai", "status", "hinh", "thuc", "phuong", "kenh", "channel", "nhom", "direction", "state", "giai", "doan"}
++TIME_WORDS = {"ngay", "date", "thang", "month", "time", "ky", "day", "nam", "year"}
++
++
++def _is_time(name, s):
++    return pd.api.types.is_datetime64_any_dtype(s) or (bool(TIME_WORDS & set(labels.tokens(name))) and not pd.api.types.is_numeric_dtype(s))
++
++
++def _pct(x):
++    return f"{x * 100:.0f}%".replace(".", ",")
++
++
++def scope_hints(dfs, max_per_table=6):
++    """dfs = {tên bảng: DataFrame}. Trả về đoạn văn bản (có thể rỗng) liệt kê các điểm cần quyết định về phạm vi/chất lượng."""
++    out = []
++    for name, df in (dfs or {}).items():
++        if df is None or not len(df):
++            continue
++        n, notes = len(df), []
++        for c in df.columns:
++            s = df[c]
++            if pd.api.types.is_numeric_dtype(s) or pd.api.types.is_datetime64_any_dtype(s):
++                continue
++            k = s.nunique(dropna=True)
++            if 2 <= k <= 8 and (KIND_WORDS & set(labels.tokens(c))):
++                vc = s.value_counts(normalize=True, dropna=True).head(6)
++                notes.append(f"Cột phân loại bản ghi «{c}»: " + ", ".join(f"{i} {_pct(v)}" for i, v in vc.items())
++                             + " → hãy QUYẾT ĐỊNH nhóm nào được tính vào chỉ số (vd bỏ nhóm hoàn/hủy/nội bộ khỏi doanh thu) và ghi rõ phạm vi lọc vào `goal`.")
++        for c in df.columns:
++            s = df[c]
++            if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
++                v = s.dropna()
++                if len(v) and (v < 0).any() and (v > 0).any() and not labels.is_id(c):
++                    notes.append(f"Cột số «{c}» có cả giá trị âm ({int((v < 0).sum())} dòng) và dương → xác nhận quy ước dấu; đừng cộng gộp nếu âm/dương thuộc hai nhóm khác nhau (vd hoàn tiền, điều chỉnh).")
++        for c in df.columns:
++            if _is_time(c, df[c]):
++                d = pd.to_datetime(df[c].head(20000), errors="coerce", dayfirst=True)
++                d = d.dropna()
++                if len(d) >= max(5, n * 0.5):
++                    last = d.max()
++                    dim = calendar.monthrange(last.year, last.month)[1]
++                    if last.day < dim:
++                        notes.append(f"Cột thời gian «{c}»: dữ liệu kết thúc ngày {last.day:02d}/{last.month:02d}/{last.year}, kỳ tháng cuối mới có {last.day}/{dim} ngày → "
++                                     "KHÔNG so trực tiếp tháng cuối với tháng đủ ngày; so cùng số ngày, hoặc nêu rõ là tạm tính.")
++                    break
++        miss = [(c, df[c].isna().mean()) for c in df.columns if df[c].isna().mean() >= .5]
++        for c, r in miss[:3]:
++            notes.append(f"Cột «{c}» thiếu {_pct(r)} giá trị → KHÔNG dùng để chia cơ cấu hoặc xếp hạng; nếu cần, nêu rõ phần 'chưa phân loại'.")
++        if notes:
++            out.append(f"[{name}] ({n:,} dòng)".replace(",", ".") + "\n" + "\n".join("- " + x for x in notes[:max_per_table]))
++    return "\n".join(out)
++
++
++def scope_block(dfs):
++    """Khối chữ sẵn sàng ghép vào prompt; rỗng nếu không có điểm nào cần lưu ý."""
++    t = scope_hints(dfs)
++    return ("TÍN HIỆU PHẠM VI & CHẤT LƯỢNG DỮ LIỆU (do máy tính từ dữ liệu thật, bạn phải xử lý từng điểm):\n" + t + "\n\n") if t else ""
+diff --git a/app/export/__init__.py b/app/export/__init__.py
+index 6ad98be..314901c 100644
+--- a/app/export/__init__.py
++++ b/app/export/__init__.py
+@@ -7,11 +7,12 @@ from datetime import datetime
+ 
+ from .. import db
+ from ..state import A, current_user_id, now_iso
++from .. import numfmt
+ from ..utils import clean_json
+ from .dashboard import build_html
+ from .interactive import build_dashboard
+ from .deck import build_pptx
+-from .common import dedupe_charts
++from .common import dedupe_charts, refine_charts
+ from .markdown import build_md
+ 
+ 
+@@ -22,19 +23,27 @@ def make_final():
+     period = next((k["value"] for k in A["d"][1]["kpis"] if k["label"] == "Khoảng ngày"), None)
+     tasks = [{"title": t["title"], "goal": t.get("goal", "")} for t in A["d"][3]["tasks"]]
+     method = f"Làm sạch: {', '.join(A.get('applied', [])) or 'không áp dụng'}. Phân tích: {', '.join(t['title'] for t in tasks)}."
+-    return {"title": fin["title"], "question": A["question"], "ctx": A["ctx"], "date": datetime.now().strftime("%d/%m/%Y"),
+-            "kpis": [kpi_all[i] for i in fin["kpis"] if i < len(kpi_all)], "charts": dedupe_charts(fin["charts"], A["x"][3]), "dfs": A["x"][3],
++    known = numfmt.Known.from_dfs(A["x"][3])
++    kpis = [k for k in numfmt.fix_kpis([kpi_all[i] for i in fin["kpis"] if i < len(kpi_all)], known) if numfmt.has_value(k)]     # KPI rỗng không lên báo cáo
++    charts = refine_charts(dedupe_charts(numfmt.fix_payload(fin["charts"], known), A["x"][3]), A["x"][3])
++    d4 = numfmt.fix_payload(d4, known)
++    d4["insights"] = numfmt.audit_insights(d4.get("insights"), known)
++    return {"title": numfmt.fix_text(fin["title"], known), "question": A["question"], "ctx": A["ctx"], "date": datetime.now().strftime("%d/%m/%Y"),
++            "kpis": kpis, "charts": charts, "dfs": A["x"][3],
+             "tables": d3["tables"], "table_titles": [t["title"] for t in d3["tables"]], "tasks": tasks,
+             "summary": d4["summary"], "insights": d4["insights"], "actions": d4["actions"], "risks": d4.get("risks", []),
+-            "narrative": d5["narrative"], "method": method, "applied": A.get("applied", []), "files": A["files"],
++            "narrative": numfmt.fix_text(d5["narrative"], known), "method": method, "applied": A.get("applied", []), "files": A["files"],
+             "period": period, "quality": A["d"].get(2, {}).get("pv")}
+ 
+ 
+ def live_meta(title=None):
+     """Thông tin chữ đi kèm dashboard tương tác. Dùng được cả khi chưa duyệt (xem trước ở bước Báo cáo)."""
+-    d4, d5 = A["d"].get(4) or {}, A["d"].get(5) or {}
+-    return {"title": title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích", "question": A["question"], "ctx": A["ctx"],
+-            "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": d4.get("insights", []),
++    d5 = A["d"].get(5) or {}
++    known = numfmt.Known.from_dfs(A["x"].get(3) or [])
++    d4 = numfmt.fix_payload(A["d"].get(4) or {}, known)               # cùng một lớp chuẩn hóa số/đơn vị như báo cáo HTML, Markdown, PPTX
++    ttl = title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích"
++    return {"title": numfmt.fix_text(ttl, known), "question": A["question"], "ctx": A["ctx"],
++            "date": datetime.now().strftime("%d/%m/%Y"), "summary": d4.get("summary", ""), "insights": numfmt.audit_insights(d4.get("insights", []), known),
+             "actions": d4.get("actions", []), "risks": d4.get("risks", [])}
+ 
+ 
+diff --git a/app/export/assets/dashboard.css b/app/export/assets/dashboard.css
+index f6733d7..48bb719 100644
+--- a/app/export/assets/dashboard.css
++++ b/app/export/assets/dashboard.css
+@@ -62,7 +62,7 @@ th{background:var(--panel);color:var(--sub);font-size:12.5px;font-weight:600}
+ .pr{display:inline-block;min-width:78px;text-align:center;font-weight:600;font-size:12px;padding:3px 12px;border-radius:999px;white-space:nowrap}
+ .p-Cao{background:var(--badb);color:var(--bad)}.p-Trung{background:var(--warnb);color:var(--warn)}.p-Thấp{background:var(--p2);color:var(--sub)}
+ .act-tbl td:nth-child(2){font-weight:600}
+-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}.two ul{padding-left:18px;margin:8px 0 0}.two li{margin:4px 0}
++.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}.two ul{padding-left:18px;margin:8px 0 0}.two li{margin:4px 0;overflow-wrap:anywhere}
+ details{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:10px 16px;background:var(--panel)}summary{cursor:pointer;font-weight:600}
+ .riskbox{background:var(--warnb);border:0}.riskbox b{color:var(--warn)}.riskbox ul{margin:10px 0 0;padding-left:20px}.riskbox li{margin:6px 0}
+ .hs{margin-bottom:16px}
+diff --git a/app/export/assets/live.css b/app/export/assets/live.css
+index cd3d963..55aa4bc 100644
+--- a/app/export/assets/live.css
++++ b/app/export/assets/live.css
+@@ -28,7 +28,13 @@ button,select,input{font:inherit;color:inherit}button{cursor:pointer}
+ .tools{display:flex;gap:8px;align-items:center}
+ .ibtn{width:38px;height:38px;display:grid;place-items:center;border-radius:var(--r2);border:1px solid var(--line);background:var(--surface);color:var(--sub);transition:.15s}
+ .ibtn:hover{color:var(--acc);border-color:var(--acc)}.ibtn svg{width:18px;height:18px}
+-.tools select{height:38px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r2);padding:0 12px;max-width:260px}
++.dtabs{display:flex;gap:4px;margin:18px 0 6px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
++.dtab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:9px 16px 10px;border:0;background:none;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;border-radius:8px 8px 0 0;transition:.15s}
++.dtab span{font-weight:600;color:var(--ink)}.dtab small{font-size:11px;color:var(--sub)}
++.dtab:hover{background:var(--acc-soft)}
++.dtab.on{border-bottom-color:var(--acc)}.dtab.on span{color:var(--acc)}
++.dtab:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
++@media print{.dtabs{display:none}}
+ 
+ /* ---- Kết luận ---- */
+ .ans{display:flex;gap:14px;align-items:flex-start;background:var(--acc-soft);border-radius:var(--r);padding:18px 22px;margin:6px 0 20px}
+diff --git a/app/export/assets/live.js b/app/export/assets/live.js
+index 37d911b..ca9c14f 100644
+--- a/app/export/assets/live.js
++++ b/app/export/assets/live.js
+@@ -184,16 +184,18 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
+   }
+   function narrative() {
+     const first = c => String(c || '').split(' ')[0], order = { Cao: 0, 'Trung bình': 1, 'Thấp': 2 };
+-    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
++    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(x.check || []).length ? `<span class="tag Thấp" title="Số ${esc(x.check.join(', '))} chưa khớp bảng kết quả nào">Cần kiểm tra số liệu</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
+     const acts = [...D.actions].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9)).map(a => `<div class="act"><span class="pr ${esc(first(a.priority))}">${esc(a.priority || '')}</span><b>${esc(a.text)}</b><span class="im">${esc(a.impact || '')}</span></div>`).join('');
+     return (ins ? `<h2 class="sec">Phát hiện chính</h2><div class="ins">${ins}</div>` : '') + (acts ? `<h2 class="sec">Khuyến nghị hành động</h2><div class="acts">${acts}</div>` : '') +
+       (D.risks.length ? `<h2 class="sec">Rủi ro cần lưu ý</h2><div class="card"><ul class="risks">${D.risks.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>` : '');
+   }
+   function shell() {
+-    const sw = D.datasets.length > 1 ? `<select id="dsw" aria-label="Bảng dữ liệu">${D.datasets.map((d, i) => `<option value="${i}" ${d === ds ? 'selected' : ''}>${esc(d.name)} (${f0.format(d.n_src)} dòng)</option>`).join('')}</select>` : '';
++    const parts = d => String(d.name).split('::'), files = new Set(D.datasets.map(d => parts(d)[0]));
++    const tabLabel = d => { const p = parts(d), sh = d.title && p.length > 1 ? d.title : p.slice(1).join(' · '); return files.size > 1 ? (sh ? `${p[0].replace(/\.[^.]+$/, '')} · ${sh}` : p[0].replace(/\.[^.]+$/, '')) : (sh || p[0]) };
++    const sw = D.datasets.length > 1 ? `<nav class="dtabs" role="tablist" aria-label="Bảng dữ liệu (đổi góc nhìn)">${D.datasets.map((d, i) => `<button role="tab" class="dtab ${d === ds ? 'on' : ''}" aria-selected="${d === ds}" data-ds="${i}" title="${esc(d.name)}"><span>${esc(tabLabel(d))}</span><small>${f0.format(d.n_src)} dòng</small></button>`).join('')}</nav>` : '';
+     $('#app').innerHTML = `<header class="top"><div class="wrap"><div><span class="eyebrow">Bảng điều khiển · ${esc(D.date)}</span><h1>${esc(D.title)}</h1>${D.question ? `<p class="q">${esc(D.question)}</p>` : ''}</div>
+-<div class="tools">${sw}<button class="ibtn" id="th" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng hoặc tối">${I.moon}</button><button class="ibtn" id="pr" title="In" aria-label="In">${I.print}</button></div></div></header>
+-<div class="wrap">${D.summary ? `<div class="ans"><span class="ic">${I.check}</span><div><b>Câu trả lời ngắn</b><p>${esc(D.summary)}</p></div></div>` : ''}
++<div class="tools"><button class="ibtn" id="th" title="Đổi giao diện sáng hoặc tối" aria-label="Đổi giao diện sáng hoặc tối">${I.moon}</button><button class="ibtn" id="pr" title="In" aria-label="In">${I.print}</button></div></div></header>
++<div class="wrap">${sw}${D.summary ? `<div class="ans"><span class="ic">${I.check}</span><div><b>Câu trả lời ngắn</b><p>${esc(D.summary)}</p></div></div>` : ''}
+ <div class="filters"><div class="fbar" id="fb"></div></div><div id="kp"></div><div class="grid" id="gr"></div>
+ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) nên được gộp theo các chiều trước khi nhúng${ds.dropped.length ? ` (bỏ chiều: ${esc(ds.dropped.join(', '))})` : ''}. Tổng, trung bình và số bản ghi vẫn chính xác; không xem được từng dòng gốc.</div>` : ''}
+ <div id="nar">${narrative()}</div><div class="foot">Số liệu tính từ dữ liệu đã làm sạch (${esc(ds.name)}). Lọc và tính toán ngay trong trình duyệt, không cần kết nối mạng.</div></div><div id="tt"></div>`;
+@@ -208,6 +210,7 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng)
+     else if (mm) { st.m = mm.dataset.m; render() }
+     else if (so) { const k = so.dataset.sort; st.tb.dir = st.tb.sort === k ? -st.tb.dir : (k === 'l' ? 1 : -1); st.tb.sort = k; render() }
+     else if (q && !t.closest('input')) { const k = q.dataset.k, v = +q.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); s.has(v) ? s.delete(v) : s.add(v); render() }
++    else if (t.closest('[data-ds]')) { openK.clear(); init(+t.closest('[data-ds]').dataset.ds) }
+     else if (t.closest('#th')) { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; render() }
+     else if (t.closest('#pr')) print();
+   });
+@@ -215,7 +218,7 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng)
+     if (t.dataset.sc) { const k = t.dataset.sc, v = +t.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); t.checked ? s.add(v) : s.delete(v); render() }
+     else if (t.dataset.r) { st[t.dataset.r] = +t.value; if (st.from > st.to) { if (t.dataset.r === 'from') st.to = st.from; else st.from = st.to } render() }
+     else if (t.dataset.tb) { st.tb.by = t.value; resetSort(); render() }
+-    else if (t.id === 'dsw') { openK.clear(); init(+t.value) } });
++  });
+   document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.sl) d.open ? openK.add(d.dataset.sl) : openK.delete(d.dataset.sl) }, true);
+   document.addEventListener('mousemove', e => { const el = e.target.closest ? e.target.closest('[data-tt]') : null, b = $('#tt'); if (!b) return;
+     if (!el) { b.style.display = 'none'; return } b.textContent = el.dataset.tt; b.style.display = 'block'; b.style.left = Math.min(e.clientX + 14, innerWidth - 300) + 'px'; b.style.top = (e.clientY + 16) + 'px' });
+diff --git a/app/export/common.py b/app/export/common.py
+index d9eddfd..98b5ee2 100644
+--- a/app/export/common.py
++++ b/app/export/common.py
+@@ -4,8 +4,11 @@ import re
+ 
+ import pandas as pd
+ 
++from .. import labels, numfmt
+ from ..utils import compact, vn
+ 
++pp = numfmt.pretty_period          # 2026-03-01 -> T3/2026 (nhãn kỳ gọn, không bị chồng chữ trên trục)
++
+ PRI_ORDER = {"Cao": 0, "Trung bình": 1, "Thấp": 2}
+ 
+ 
+@@ -31,6 +34,24 @@ def chart_rows(df, x, y, limit=24):
+     return [(l, float(v)) for l, v in rows[:limit]]
+ 
+ 
++def refine_charts(charts, dfs):
++    """Tiêu đề (insight) do AI viết phải KHỚP số liệu của chính biểu đồ; sai hướng tăng/giảm hay sai tỷ lệ % thì thay bằng câu tính từ dữ liệu."""
++    out = []
++    for c in charts or []:
++        c = dict(c)
++        try:
++            rows = chart_rows(dfs[c["task"]], c["x"], c["y"])
++        except Exception:
++            rows = []
++        if rows:
++            tl = is_time_like(rows)
++            if not numfmt.consistent(c.get("insight"), rows, tl):
++                c["insight"] = numfmt.headline(rows, c.get("kind"), c["y"], tl)
++                c["insight_src"] = "tính từ dữ liệu"
++        out.append(c)
++    return out
++
++
+ def dedupe_charts(charts, dfs):
+     """Bỏ biểu đồ có cùng bảng+cột hoặc cùng bộ số liệu với biểu đồ trước đó."""
+     out, seen = [], set()
+@@ -73,14 +94,14 @@ def facts(rows, kind="bars"):
+     out = []
+     if is_time_like(rows) and kind in ("cols", "line"):
+         a, b = rows[0], rows[-1]
+-        s = f"{a[0]} → {b[0]}: {compact(a[1])} → {compact(b[1])}"
++        s = f"{pp(a[0])} → {pp(b[0])}: {compact(a[1])} → {compact(b[1])}"
+         if a[1]:
+             s += f" ({(b[1] / a[1] - 1) * 100:+.1f}%)".replace(".", ",")
+         out.append(s)
+         hi = max(rows, key=lambda r: r[1])
+         lo = min(rows, key=lambda r: r[1])
+-        out.append(f"Cao nhất: {hi[0]} ({compact(hi[1])})")
+-        out.append(f"Thấp nhất: {lo[0]} ({compact(lo[1])})")
++        out.append(f"Cao nhất: {pp(hi[0])} ({compact(hi[1])})")
++        out.append(f"Thấp nhất: {pp(lo[0])} ({compact(lo[1])})")
+         return out
+     hi = max(rows, key=lambda r: r[1])
+     lo = min(rows, key=lambda r: r[1])
+diff --git a/app/export/dashboard.py b/app/export/dashboard.py
+index 1dcded3..6c714e6 100644
+--- a/app/export/dashboard.py
++++ b/app/export/dashboard.py
+@@ -45,7 +45,8 @@ def _insights(F):
+     if not F["insights"]:
+         return ""
+     items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}</h3>'
+-                    f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p></div></div>'
++                    f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p>'
++                    + (f'<p class="ev"><b>Cần kiểm tra số liệu:</b> số {E(", ".join(x["check"]))} chưa khớp bảng kết quả nào.</p>' if x.get("check") else "") + '</div></div>'
+                     for i, x in enumerate(F["insights"]))
+     return f'<section id="insights"><h2 class="hs ins">Phát hiện chính</h2><div class="ins">{items}</div></section>'
+ 
+@@ -71,7 +72,7 @@ def _method(F):
+     q = F.get("quality") or {}
+     qb = ", ".join(f"{k}: {vn(v, 0)}" for k, v in (q.get("before") or {}).items() if v) or "không có"
+     qa = ", ".join(f"{k}: {vn(v, 0)}" for k, v in (q.get("after") or {}).items() if v) or "không còn"
+-    files = "".join(f"<li>{E(f['name'])} · {vn(f['rows'], 0)} dòng</li>" for f in F["files"])
++    files = "".join(f"<li>{E(str(f['name']).replace('::', ' · '))} · {vn(f['rows'], 0)} dòng</li>" for f in F["files"])
+     cl = "".join(f"<li>{E(x)}</li>" for x in F["applied"]) or "<li>Không áp dụng thao tác nào</li>"
+     an = "".join(f"<li><b>{E(t['title'])}</b> — {E(t.get('goal', ''))}</li>" for t in F["tasks"])
+     tabs = "".join(f"<details><summary>{E(t['title'])}</summary><div class='tw'>{_tbl(t)}</div></details>" for t in F["tables"])
+diff --git a/app/export/deck.py b/app/export/deck.py
+index 6ae0182..1803409 100644
+--- a/app/export/deck.py
++++ b/app/export/deck.py
+@@ -15,7 +15,7 @@ from pptx.oxml.ns import qn
+ from pptx.util import Inches, Pt
+ 
+ from ..utils import compact, vn
+-from .common import PRI_ORDER, chart_rows, facts, scale, trunc
++from .common import PRI_ORDER, chart_rows, facts, pp, scale, trunc
+ 
+ NAVY, PRI, SOFT, INK, SUB, LINE, BG = "0F172A", "4F46E5", "EEF2FF", "1F2937", "5B6275", "E5E7EB", "F8FAFC"
+ OK, WARN, BAD, MUTE, WHITE = "0F8F6A", "B76A00", "D6304A", "B4BAD6", "FFFFFF"
+@@ -153,7 +153,7 @@ def cover(d):
+     text(s, MX + .35, 1.9, 10.5, 2.3, trunc(F["title"], 120), size=38, bold=True, color=WHITE, anchor=MSO_ANCHOR.MIDDLE)
+     text(s, MX + .35, 4.45, 10.5, 1.0, "Câu hỏi: " + trunc(F["question"], 220), size=17, color="C7CCF5")
+     meta = [F["date"]] + ([F["period"]] if F.get("period") else [])
+-    text(s, MX + .35, 6.3, 11, .4, "   |   ".join(meta) + "   |   Dựa trên " + ", ".join(trunc(f["name"], 28) for f in F["files"][:3]), size=12, color="9CA3D9")
++    text(s, MX + .35, 6.3, 11, .4, "   |   ".join(meta) + "   |   Dựa trên " + ", ".join(trunc(n, 34) for n in list(dict.fromkeys(str(f["name"]).split("::")[0] for f in F["files"]))[:3]), size=12, color="9CA3D9")
+ 
+ 
+ def exec_summary(d):
+@@ -204,7 +204,7 @@ def kpi_slide(d):
+ 
+ def _chart(s, x, y, w, h, rows, kind, div):
+     cd = CategoryChartData()
+-    cd.categories = [trunc(l, 18) for l, _ in rows]
++    cd.categories = [trunc(pp(l), 18) for l, _ in rows]
+     cd.add_series("Giá trị", [round(v / div, 3) for _, v in rows])
+     donut = kind == "donut"
+     line = kind == "line"
+@@ -298,7 +298,7 @@ def insight_slides(d):
+     for k in range(0, len(ins), 3):
+         part = ins[k:k + 3]
+         s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Phát hiện")
+-        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
++        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", "") + (f"  ⚠ Cần kiểm tra số liệu: {', '.join(x['check'])}" if x.get("check") else ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
+         conf = {"Cao": OK, "Trung bình": WARN, "Thấp": BAD}
+ 
+         def st(i, j, v):
+@@ -355,7 +355,7 @@ def appendix(d):
+     qb = sum((q.get("before") or {}).values())
+     qa = sum((q.get("after") or {}).values())
+     blocks = [
+-        ("DỮ LIỆU", [f"{trunc(f['name'], 34)}: {vn(f['rows'], 0)} dòng" for f in F["files"][:5]] + ([f"Khoảng thời gian: {F['period']}"] if F.get("period") else [])),
++        ("DỮ LIỆU", [f"{trunc(str(f['name']).replace('::', ' · '), 40)}: {vn(f['rows'], 0)} dòng" for f in F["files"][:5]] + ([f"Khoảng thời gian: {F['period']}"] if F.get("period") else [])),
+         ("LÀM SẠCH", ([f"Vấn đề trước/sau: {vn(qb, 0)} → {vn(qa, 0)}"] if q else []) + [trunc(x, 60) for x in F["applied"][:6]] or ["Không áp dụng thao tác nào"]),
+         ("PHÂN TÍCH", [trunc(t["title"], 70) for t in F["tasks"][:7]]),
+     ]
+diff --git a/app/export/interactive.py b/app/export/interactive.py
+index c9429cd..5e8181c 100644
+--- a/app/export/interactive.py
++++ b/app/export/interactive.py
+@@ -12,7 +12,8 @@ from pathlib import Path
+ import numpy as np
+ import pandas as pd
+ 
+-from ..data.quality import norm_key, to_dt
++from .. import labels as lb
++from ..data.quality import to_dt
+ from ..utils import E, is_text
+ 
+ ASSETS = Path(__file__).parent / "assets"
+@@ -21,21 +22,18 @@ MAX_ROWS = 30000       # vượt ngưỡng này thì gộp thành "khối" (nhó
+ MAX_CUBE = 60000
+ WEEK = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+ ID_NAME = re.compile(r"(^|_)(id|ma|code|stt|sdt|phone|email)(_|$)", re.I)
+-PRICE = re.compile(r"(^|_)(don_gia|gia|price|ti_le|tl|rate|pct|percent|diem|score)($|_)", re.I)
+-TIER0 = re.compile(r"tien|doanh|revenue|amount|sales|chi|thu|profit|loi_nhuan|cost|gia_tri|(?<!so_)(?<!san_)luong|thu_nhap|salary|income", re.I)
++TIER0 = re.compile(r"tien|doanh|revenue|amount|sales|chi|thu|profit|loi_nhuan|cost|gia_tri|(?<!so_)(?<!san_)(?<!trong_)luong|thu_nhap|salary|income", re.I)
+ TIER1 = re.compile(r"so_luong|qty|quantity|sl$", re.I)
+ HINT = re.compile(r"tien|doanh|revenue|amount|sales|gia_tri|chi|thu|profit|loi_nhuan|cost|price|don_gia|so_luong|qty|quantity", re.I)
+-MONEY = re.compile(r"tien|doanh|revenue|amount|sales|gia|chi|thu|profit|loi_nhuan|cost|price|vnd|(?<!so_)(?<!san_)luong|phu_cap|thuong|ngan_sach|von|salary|income|wage|bonus", re.I)
+ 
+ 
+ def _k(c):
+-    """Tên cột dạng không dấu, nối bằng gạch dưới (Lương cơ bản -> luong_co_ban) để nhận diện bằng từ khóa dù tên có dấu hay không."""
+-    return norm_key(c).replace(" ", "_")
++    """Tên cột tách THEO TỪ, không dấu, nối bằng gạch dưới: 'TrongLuongKg' / 'Trọng lượng (kg)' -> 'trong_luong_kg'."""
++    return "_".join(lb.tokens(c))
+ 
+ 
+ def _pretty(c):
+-    t = str(c).replace("_", " ").strip()
+-    return t[:1].upper() + t[1:]
++    return lb.label(c)                        # 'DanhMuc' -> 'Danh mục' (đơn vị hiển thị riêng ở chỉ số)
+ 
+ 
+ def _nums(s):
+@@ -66,17 +64,17 @@ def _spec(name, df):
+         if c == tcol or str(c).endswith("_nghi_van") or pd.api.types.is_bool_dtype(df[c]) or pd.api.types.is_datetime64_any_dtype(df[c]):
+             continue
+         s = _nums(df[c]) if is_text(df[c]) and df[c].notna().any() and _nums(df[c]).notna().mean() >= .95 else df[c]
+-        if not pd.api.types.is_numeric_dtype(s) or s.nunique() < 2 or ID_NAME.search(_k(c)):
++        if not pd.api.types.is_numeric_dtype(s) or s.nunique() < 2 or lb.is_id(c) or ID_NAME.search(_k(c)):
+             continue
+-        if pd.api.types.is_integer_dtype(s) and s.nunique() / max(1, s.notna().sum()) > .95 and not HINT.search(_k(c)):
++        if pd.api.types.is_integer_dtype(s) and s.nunique() / max(1, s.notna().sum()) > .95 and not HINT.search(_k(c)) and not lb.unit(c) and not lb.is_rate(c):
+             continue                                   # số nguyên gần như duy nhất = mã định danh
+         meas.append((c, s))
+-    meas.sort(key=lambda x: (3 if PRICE.search(_k(x[0])) else 0 if TIER0.search(_k(x[0])) else 1 if TIER1.search(_k(x[0])) else 2, 0 if _k(x[0]).startswith("tong") else 1))   # cột "Tổng ..." lên trước
++    meas.sort(key=lambda x: (3 if lb.is_rate(x[0]) else 0 if TIER0.search(_k(x[0])) else 1 if TIER1.search(_k(x[0])) else 2, 0 if _k(x[0]).startswith("tong") else 1))   # cột "Tổng ..." lên trước
+     meas = meas[:6]
+     # ---- chiều phân tích
+     dims = []
+     for c in df.columns:
+-        if c == tcol or c in [m[0] for m in meas] or ID_NAME.search(_k(c)):
++        if c == tcol or c in [m[0] for m in meas] or lb.is_id(c) or ID_NAME.search(_k(c)):
+             continue
+         s = df[c]
+         if pd.api.types.is_datetime64_any_dtype(s) or pd.api.types.is_float_dtype(s):
+@@ -109,8 +107,8 @@ def _spec(name, df):
+     if not out_dims and time is None:
+         return None
+     mvals = {f"m{j}": s.astype(float) for j, (c, s) in enumerate(meas)}
+-    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": "đ" if MONEY.search(_k(c)) else "", "avg": bool(PRICE.search(_k(c))),
+-                 "dec": 0 if (MONEY.search(_k(c)) or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
++    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": lb.is_rate(c),
++                 "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
+ 
+     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều
+     cube, dropped = False, []
+@@ -143,7 +141,8 @@ def _spec(name, df):
+     else:
+         w, mc, n = None, None, n_src
+ 
+-    return {"name": str(name), "n_src": int(n_src), "n": int(n), "cube": cube, "dropped": dropped, "w": w, "mc": mc,
++    return {"name": str(name), "title": " · ".join(lb.label(p) for p in str(name).split("::")[1:]) or lb.label(str(name).rsplit(".", 1)[0]),
++            "n_src": int(n_src), "n": int(n), "cube": cube, "dropped": dropped, "w": w, "mc": mc,
+             "dims": [dict(d, codes=[int(x) for x in cols[d["k"]]]) for d in out_dims],
+             "time": dict(time, codes=[int(x) for x in cols["t"]]) if time else None,
+             "meas": [dict(m, vals=_clean_list(mvals[m["k"]].reset_index(drop=True))) for m in out_meas]}
+diff --git a/app/export/svg.py b/app/export/svg.py
+index c89049d..cd16ff7 100644
+--- a/app/export/svg.py
++++ b/app/export/svg.py
+@@ -3,7 +3,7 @@
+ import math
+ 
+ from ..utils import E, compact, vn
+-from .common import is_time_like, trunc
++from .common import is_time_like, pp, trunc
+ 
+ 
+ def _ext(vals):
+@@ -58,7 +58,7 @@ def cols(rows):
+             o.append(f'<text class="vl {"b" if i == imax else ""}" x="{cx:.1f}" y="{vy:.1f}" text-anchor="middle">{E(compact(v))}</text>')
+         lx, ly = cx, H - pb + 18
+         rot = f' transform="rotate(-35 {lx:.1f} {ly})"' if n > 7 else ""
+-        o.append(f'<text class="lb" x="{lx:.1f}" y="{ly}" text-anchor="{"end" if n > 7 else "middle"}"{rot}>{E(trunc(l, 12))}</text>')
++        o.append(f'<text class="lb" x="{lx:.1f}" y="{ly}" text-anchor="{"end" if n > 7 else "middle"}"{rot}>{E(trunc(pp(l), 12))}</text>')
+     return "".join(o) + "</svg>"
+ 
+ 
+@@ -80,13 +80,13 @@ def line(rows):
+          '<polyline class="ln" points="' + " ".join(f"{x:.1f},{y:.1f}" for x, y in pts) + '"/>']
+     key = {0, n - 1, vals.index(max(vals)), vals.index(min(vals))}
+     for i, ((l, v), (x, y)) in enumerate(zip(rows, pts)):
+-        o.append(f'<circle class="dot{" k" if i in key else ""}" cx="{x:.1f}" cy="{y:.1f}" r="{4.5 if i in key else 2.5}"><title>{E(l)}: {vn(v)}</title></circle>')
++        o.append(f'<circle class="dot{" k" if i in key else ""}" cx="{x:.1f}" cy="{y:.1f}" r="{4.5 if i in key else 2.5}"><title>{E(pp(l))}: {vn(v)}</title></circle>')
+         if i in key:
+             anc = "start" if i == 0 else "end" if i == n - 1 else "middle"
+             o.append(f'<text class="vl b" x="{x:.1f}" y="{y - 10:.1f}" text-anchor="{anc}">{E(compact(v))}</text>')
+     step = max(1, n // 8)
+     for i in range(0, n, step):
+-        o.append(f'<text class="lb" x="{pts[i][0]:.1f}" y="{H - pb + 18}" text-anchor="middle">{E(trunc(rows[i][0], 10))}</text>')
++        o.append(f'<text class="lb" x="{pts[i][0]:.1f}" y="{H - pb + 18}" text-anchor="middle">{E(trunc(pp(rows[i][0]), 10))}</text>')
+     return "".join(o) + "</svg>"
+ 
+ 
+diff --git a/app/labels.py b/app/labels.py
+new file mode 100644
+index 0000000..0d8768f
+--- /dev/null
++++ b/app/labels.py
+@@ -0,0 +1,190 @@
++# -*- coding: utf-8 -*-
++"""Tên cột -> nhãn tiếng Việt dễ đọc, và ĐƠN VỊ của cột. Dùng cho bảng điều khiển, báo cáo, slide.
++
++Người dùng không nên thấy `trongLuongKg` hay `danhMuc` trên báo cáo. Quy trình: tách từ (camelCase, snake_case, dấu cách) ->
++khôi phục dấu bằng từ điển cụm từ rồi từ điển từ -> thêm đơn vị nếu có. Tên đã có dấu tiếng Việt thì giữ nguyên.
++Đơn vị suy ra THEO TỪ (không theo chuỗi con): `trongLuongKg` là kg, không phải tiền dù chứa chữ 'luong'.
++"""
++import re
++import unicodedata
++
++# Cụm từ (ưu tiên khớp dài nhất). Khóa: các từ không dấu, viết thường, cách nhau một dấu cách.
++PHRASES = {
++    "gia niem yet": "giá niêm yết", "gia von": "giá vốn", "gia ban": "giá bán", "gia nhap": "giá nhập", "don gia": "đơn giá", "gia tri": "giá trị",
++    "trong luong": "trọng lượng", "so luong": "số lượng", "so lan": "số lần", "so ngay": "số ngày", "so don": "số đơn", "so don hang": "số đơn hàng",
++    "danh muc": "danh mục", "thuong hieu": "thương hiệu", "nha cung cap": "nhà cung cấp", "san pham": "sản phẩm", "ma san pham": "mã sản phẩm",
++    "ten san pham": "tên sản phẩm", "khach hang": "khách hàng", "ma khach hang": "mã khách hàng", "ten khach hang": "tên khách hàng",
++    "don hang": "đơn hàng", "ma don hang": "mã đơn hàng", "ngay dat": "ngày đặt", "ngay dat hang": "ngày đặt hàng", "ngay giao": "ngày giao",
++    "ngay giao hang": "ngày giao hàng", "ngay mua": "ngày mua", "ngay ban": "ngày bán", "ngay thanh toan": "ngày thanh toán",
++    "thanh pho": "thành phố", "tinh thanh": "tỉnh thành", "quan huyen": "quận huyện", "khu vuc": "khu vực", "mien bac": "miền Bắc",
++    "mien nam": "miền Nam", "mien trung": "miền Trung", "dia chi": "địa chỉ", "so dien thoai": "số điện thoại",
++    "doanh thu": "doanh thu", "doanh so": "doanh số", "loi nhuan": "lợi nhuận", "chi phi": "chi phí", "thanh tien": "thành tiền", "tong tien": "tổng tiền",
++    "thue vat": "thuế VAT", "phi van chuyen": "phí vận chuyển", "van chuyen": "vận chuyển", "phuong thuc": "phương thức",
++    "phuong thuc thanh toan": "phương thức thanh toán", "hinh thuc thanh toan": "hình thức thanh toán", "hinh thuc": "hình thức", "thanh toan": "thanh toán",
++    "trang thai": "trạng thái", "trang thai don hang": "trạng thái đơn hàng", "ty le": "tỷ lệ", "ty trong": "tỷ trọng", "ty le hoan tra": "tỷ lệ hoàn trả",
++    "hoan tra": "hoàn trả", "tra hang": "trả hàng", "cap bac": "cấp bậc", "cap bac thanh vien": "cấp bậc thành viên", "thanh vien": "thành viên",
++    "diem tich luy": "điểm tích lũy", "danh gia": "đánh giá", "luong co ban": "lương cơ bản", "phu cap": "phụ cấp", "phong ban": "phòng ban",
++    "nhan vien": "nhân viên", "chuc vu": "chức vụ", "gioi tinh": "giới tính", "ngay sinh": "ngày sinh", "ngay vao lam": "ngày vào làm",
++    "kenh ban": "kênh bán", "kenh ban hang": "kênh bán hàng", "nguon": "nguồn", "chuong trinh khuyen mai": "chương trình khuyến mãi", "khuyen mai": "khuyến mãi",
++    "giam gia": "giảm giá", "tien thuong": "tiền thưởng", "ma giam gia": "mã giảm giá", "ton kho": "tồn kho", "kho hang": "kho hàng", "kich thuoc": "kích thước", "mau sac": "màu sắc",
++    "ghi chu": "ghi chú", "nam sinh": "năm sinh", "thoi gian": "thời gian", "thoi gian giao": "thời gian giao", "ngan sach": "ngân sách",
++    "dien thoai": "điện thoại", "phu kien": "phụ kiện", "dien thoai phu kien": "điện thoại & phụ kiện",
++    "du lieu": "dữ liệu", "thuong mai": "thương mại", "dien tu": "điện tử", "thuong mai dien tu": "thương mại điện tử", "ban hang": "bán hàng", "mua hang": "mua hàng",
++    "bao cao": "báo cáo", "tong hop": "tổng hợp", "chi tiet": "chi tiết", "thong ke": "thống kê", "nhap kho": "nhập kho", "xuat kho": "xuất kho", "hoa don": "hóa đơn",
++    "ngan hang": "ngân hàng", "tai khoan": "tài khoản", "so du": "số dư", "ket qua": "kết quả", "ke hoach": "kế hoạch", "thuc te": "thực tế", "muc tieu": "mục tiêu",
++    "chi tieu": "chi tiêu", "thu nhap": "thu nhập", "tiet kiem": "tiết kiệm", "dau tu": "đầu tư", "tong doanh thu": "tổng doanh thu", "tong chi phi": "tổng chi phí",
++    "theo thang": "theo tháng", "theo nam": "theo năm", "theo vung": "theo vùng", "theo ngay": "theo ngày", "bang": "bảng", "ma vach": "mã vạch",
++}
++
++# Từ đơn (không dấu -> có dấu). Chọn nghĩa thông dụng nhất trong dữ liệu kinh doanh.
++WORDS = {
++    "ma": "mã", "ten": "tên", "ngay": "ngày", "thang": "tháng", "nam": "năm", "quy": "quý", "tuan": "tuần", "gio": "giờ", "ky": "kỳ", "thu": "thu",
++    "so": "số", "luong": "lương", "gia": "giá", "tien": "tiền", "von": "vốn", "phi": "phí", "thue": "thuế", "ban": "bán", "mua": "mua", "nhap": "nhập", "xuat": "xuất",
++    "danh": "danh", "muc": "mục", "loai": "loại", "nhom": "nhóm", "hang": "hàng", "don": "đơn", "khach": "khách", "vung": "vùng", "khu": "khu", "vuc": "vực",
++    "tinh": "tỉnh", "thanh": "thành", "pho": "phố", "quan": "quận", "huyen": "huyện", "phuong": "phường", "xa": "xã", "dia": "địa", "chi": "chi",
++    "san": "sản", "pham": "phẩm", "thuong": "thương", "hieu": "hiệu", "trong": "trọng", "niem": "niêm", "yet": "yết", "tong": "tổng", "trung": "trung", "binh": "bình",
++    "cao": "cao", "thap": "thấp", "nhat": "nhất", "lon": "lớn", "nho": "nhỏ", "moi": "mới", "cu": "cũ", "tot": "tốt", "kem": "kém", "dat": "đặt", "giao": "giao",
++    "hoan": "hoàn", "tra": "trả", "huy": "hủy", "duyet": "duyệt", "cho": "chờ", "ty": "tỷ", "le": "lệ", "phan": "phần", "tram": "trăm", "diem": "điểm",
++    "tich": "tích", "luy": "lũy", "bac": "bậc", "cap": "cấp", "vien": "viên", "nhan": "nhân", "phong": "phòng", "gioi": "giới",
++    "tuoi": "tuổi", "sinh": "sinh", "dong": "đồng", "vnd": "VND", "kho": "kho", "ton": "tồn", "kenh": "kênh", "nguon": "nguồn", "mau": "màu", "sac": "sắc",
++    "kich": "kích", "thuoc": "thước", "rong": "rộng", "dai": "dài", "nang": "nặng", "the": "thẻ", "tin": "tín", "dung": "dụng", "ngan": "ngân",
++    "sach": "sách", "doanh": "doanh", "loi": "lợi", "nhuan": "nhuận", "lai": "lãi", "lo": "lỗ", "du": "dư", "no": "nợ", "co": "có", "cua": "của",
++    "va": "và", "theo": "theo", "voi": "với", "tu": "từ", "den": "đến", "trang": "trạng", "thai": "thái", "ghi": "ghi", "chu": "chú", "mo": "mô", "ta": "tả",
++    "dien": "điện", "thoai": "thoại", "email": "email", "sdt": "SĐT", "stt": "STT", "sku": "SKU", "id": "ID", "url": "URL", "vat": "VAT", "kpi": "KPI",
++    "thoi": "thời", "gian": "gian", "dich": "dịch", "vu": "vụ", "hoa": "hóa", "hop": "hợp", "bao": "báo", "tai": "tài", "khoan": "khoản",
++    "nghiep": "nghiệp", "viec": "việc", "luu": "lưu", "kien": "kiện", "chuyen": "chuyển", "van": "vận", "phat": "phát",
++}
++
++UNIT_TOKENS = {"kg": "kg", "g": "g", "gram": "g", "cm": "cm", "mm": "mm", "km": "km", "ml": "ml", "lit": "lít", "pct": "%", "percent": "%", "vnd": "đ", "usd": "USD"}
++MONEY_PHRASES = ("doanh thu", "doanh so", "loi nhuan", "chi phi", "gia", "don gia", "gia von", "gia ban", "gia niem yet", "gia nhap", "tien", "thanh tien", "tong tien",
++                 "thu nhap", "luong", "luong co ban", "phu cap", "tien thuong", "von", "ngan sach", "phi", "thue", "giam gia", "tra gop", "vnd", "dong",
++                 "revenue", "sales", "amount", "cost", "profit", "price", "salary", "income", "wage", "bonus")
++PCT_PHRASES = ("ty le", "ty trong", "phan tram", "pct", "percent", "ti le", "rate", "ratio", "share")
++RATE_PHRASES = ("gia", "don gia", "gia von", "gia ban", "gia niem yet", "gia nhap", "ty le", "ty trong", "phan tram", "pct", "percent", "ti le", "rate", "ratio", "diem",
++                "danh gia", "rating", "score", "price", "trong luong", "kich thuoc", "tuoi", "nhiet do", "do tuoi", "thoi gian giao")
++HEAD_LAST = {"id": "mã", "name": "tên", "date": "ngày", "code": "mã", "count": "số lượng", "type": "loại", "status": "trạng thái", "rate": "tỷ lệ"}
++ID_WORDS = {"id", "ma", "code", "stt", "sdt", "phone", "email", "sku", "uuid", "guid"}
++_NOT_MONEY_BEFORE = {"so", "san", "trong"}                 # "số lượng", "sản lượng", "trọng lượng" không phải lương/tiền
++
++
++def fold(s):
++    """Bỏ dấu tiếng Việt, viết thường: 'Danh mục' -> 'danh muc'."""
++    s = unicodedata.normalize("NFD", str(s).replace("đ", "d").replace("Đ", "D"))
++    return "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
++
++
++def has_viet(s):
++    """Có ký tự tiếng Việt có dấu (tên cột đã được viết đẹp)."""
++    return bool(re.search(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", str(s).lower()))
++
++
++def _split(col):
++    """Tách tên cột thành các từ gốc (giữ nguyên hoa/thường, dấu): 'TrongLuongKg' -> ['Trong','Luong','Kg']."""
++    s = str(col).strip()
++    s = re.sub(r"(?<=[a-zà-ỹ0-9])(?=[A-ZÀ-Ỹ])", " ", s)            # camelCase
++    s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)                   # HTMLText -> HTML Text
++    return [t for t in re.split(r"[\W_]+", s) if t]
++
++
++def tokens(col):
++    """Các từ không dấu, viết thường: 'TrongLuongKg' -> ['trong','luong','kg']."""
++    return [fold(t) for t in _split(col)]
++
++
++def _phrase_key(toks):
++    return " ".join(toks)
++
++
++def _rebuild(toks, raw_toks):
++    """Ghép lại thành chuỗi tiếng Việt: khớp cụm dài nhất trước, rồi từ đơn; từ lạ giữ nguyên. Trả về (các từ, số từ lạ)."""
++    out, i, unk = [], 0, 0
++    while i < len(toks):
++        for n in (4, 3, 2):
++            key = _phrase_key(toks[i:i + n])
++            if len(toks[i:i + n]) == n and key in PHRASES:
++                out.append(PHRASES[key])
++                i += n
++                break
++        else:
++            t = toks[i]
++            w = WORDS.get(t) or _english(t)
++            if not w:
++                w = raw_toks[i]
++                unk += 0 if (t.isdigit() or len(t) <= 1 or w.isupper()) else 1
++            out.append(w)
++            i += 1
++    return out, unk
++
++
++def _english(t):
++    from .lang import TOK                                           # từ điển tiếng Anh -> Việt đã có sẵn (tránh import vòng nên import trễ)
++    return TOK.get(t)
++
++
++def unit(col):
++    """Đơn vị của cột ('kg', 'đ', '%', ''...). Suy theo TỪ nên không nhầm 'trongLuongKg' thành tiền."""
++    toks = tokens(col)
++    if not toks:
++        return ""
++    last = toks[-1]
++    if last in UNIT_TOKENS and len(toks) > 1:
++        return UNIT_TOKENS[last]
++    key, joined = _phrase_key(toks), _phrase_key(toks)
++    if any(p in joined for p in PCT_PHRASES) and not any(p in joined for p in ("doanh thu", "chi phi")):
++        return "%"
++    for i, t in enumerate(toks):                                    # "trong luong", "so luong", "san luong" -> không phải lương
++        if t == "luong" and i > 0 and toks[i - 1] in _NOT_MONEY_BEFORE:
++            toks = toks[:i - 1] + ["_"] + toks[i + 1:]
++    joined = " ".join(toks)
++    if any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in MONEY_PHRASES):
++        return "đ"
++    return ""
++
++
++def is_rate(col):
++    """Cột kiểu đơn giá/tỷ lệ/điểm/trọng lượng: tổng gộp không có nghĩa, nên dùng trung bình."""
++    joined = " ".join(tokens(col))
++    return any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in RATE_PHRASES) and not re.search(r"(^| )(tong|so luong)( |$)", joined)
++
++
++def is_id(col):
++    toks = tokens(col)
++    return bool(toks) and (toks[0] in ID_WORDS or toks[-1] in ID_WORDS or _phrase_key(toks[:2]) in ("ma so",))
++
++
++def label(col, with_unit=False):
++    """'DanhMuc' -> 'Danh mục' · 'trongLuongKg' -> 'Trọng lượng' (with_unit=True: 'Trọng lượng (kg)') · tên đã đẹp thì giữ nguyên."""
++    s = str(col).strip()
++    if not s:
++        return s
++    if has_viet(s) and "_" not in s and not re.search(r"[a-zà-ỹ][A-ZÀ-Ỹ]", s):
++        return s[:1].upper() + s[1:]                                  # đã là tiếng Việt có dấu, viết đẹp: giữ nguyên
++    raw = _split(s)
++    toks = tokens(s)
++    u = UNIT_TOKENS.get(toks[-1]) if len(toks) > 1 and toks[-1] in UNIT_TOKENS else None
++    core_t, core_r = (toks[:-1], raw[:-1]) if u else (toks, raw)
++    if len(core_t) > 1 and core_t[-1] in HEAD_LAST:                   # tiếng Anh đặt danh từ chính ở cuối, tiếng Việt đặt ở đầu: customer_name -> "Tên khách hàng"
++        words, unk = _rebuild(core_t[:-1], core_r[:-1])
++        words = [HEAD_LAST[core_t[-1]]] + words
++    else:
++        words, unk = _rebuild(core_t, core_r)
++    if len(core_t) >= 2 and unk / len(core_t) > .4:                  # quá nhiều từ lạ: thêm dấu nửa vời trông sai hơn là giữ nguyên
++        plain = " ".join(core_r)
++        return plain[:1].upper() + plain[1:]
++    text = " ".join(words).strip()
++    text = text[:1].upper() + text[1:]
++    if with_unit and (u or unit(col)):
++        un = u or unit(col)
++        text += f" ({un})"
++    return text or s
++
++
++def labelize_columns(cols, with_unit=False):
++    """Danh sách nhãn không trùng nhau cho một nhóm cột."""
++    seen, out = {}, []
++    for c in cols:
++        t = label(c, with_unit)
++        k = seen.get(t, 0)
++        seen[t] = k + 1
++        out.append(t if not k else f"{t} ({k + 1})")
++    return out
+diff --git a/app/lang.py b/app/lang.py
+index ce910e3..1ea6025 100644
+--- a/app/lang.py
++++ b/app/lang.py
+@@ -6,7 +6,10 @@ import re
+ RULE = ("NGÔN NGỮ: viết TOÀN BỘ bằng tiếng Việt có dấu (tiêu đề, nhận định, tên bảng, tên cột kết quả, nhãn biểu đồ, đơn vị). "
+         "Không xen tiếng Anh (không viết insight, dashboard, KPI, count, avg, total, ratio...). Tên cột kết quả phải đọc tự nhiên như người Việt viết, "
+         "viết hoa chữ cái đầu, có dấu cách, ví dụ 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'; tuyệt đối không dùng snake_case hay chữ IN HOA. "
+-        "Chỉ giữ nguyên tên riêng, mã và giá trị gốc có trong dữ liệu.")
++        "Chỉ giữ nguyên tên riêng, mã và giá trị gốc có trong dữ liệu. "
++        "SỐ VÀ ĐƠN VỊ: dùng dấu chấm ngăn nghìn, dấu phẩy thập phân (1.234.567,5); tiền viết bằng chữ Việt: '2,24 tỷ đồng', '850 triệu đồng' (tuyệt đối không viết trillion, billion, million, VND; "
++        "không dùng 'điểm' làm đơn vị tiền); tỷ lệ viết '57,3%'. Mọi con số PHẢI sao chép từ bảng kết quả được cung cấp, không tự cộng trừ nhẩm, không làm tròn lệch; "
++        "giá trị KPI là chuỗi đã định dạng kiểu Việt (vd '11,77 tỷ đồng').")
+ 
+ COLNAME_RULE = ("TÊN CỘT của `result` PHẢI là tiếng Việt có dấu, tự nhiên (vd 'Cấp bậc', 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'): "
+                 "đặt tên ngay khi tổng hợp hoặc đổi tên ở cuối code bằng result = result.rename(columns={...}). Không dùng tên tiếng Anh, snake_case hay chữ IN HOA.")
+@@ -31,11 +34,9 @@ def foreign(name, known=()):
+ 
+ 
+ def humanize(name):
+-    """Dự phòng: tách snake_case/camelCase, dịch từng từ bằng từ điển, viết hoa chữ đầu."""
+-    t = re.sub(r"([a-z])([A-Z])", r"\1 \2", str(name))
+-    words = [w for w in re.split(r"[_\s]+", t.strip()) if w]
+-    out = " ".join(TOK.get(w.lower(), w.lower()) for w in words).strip()
+-    return (out[:1].upper() + out[1:]) or str(name)
++    """Dự phòng: tách snake_case/camelCase, khôi phục dấu tiếng Việt và dịch từ tiếng Anh bằng từ điển (xem labels.py)."""
++    from . import labels
++    return labels.label(name) or str(name)
+ 
+ 
+ def _unique(names):
+diff --git a/app/numfmt.py b/app/numfmt.py
+new file mode 100644
+index 0000000..072cf27
+--- /dev/null
++++ b/app/numfmt.py
+@@ -0,0 +1,327 @@
++# -*- coding: utf-8 -*-
++"""Chuẩn hóa SỐ và ĐƠN VỊ trong mọi chữ do AI viết (một thứ tiếng, một kiểu số) và đối chiếu số với bảng kết quả.
++
++Vì sao cần: AI hay viết "2.24 trillion VNĐ", "2 241 813 537 điểm", "2240813537.5" - sai ngôn ngữ, sai đơn vị, không có dấu ngăn nghìn,
++và đôi khi sai cả độ lớn. Ở đây mọi văn bản đi qua `fix_text` trước khi hiển thị; số lớn còn được đối chiếu với các bảng kết quả (`audit`).
++Kiểu số Việt Nam: 1.234.567,5 · tiền lớn viết 2,24 tỷ đồng · tỷ lệ 57,3%.
++"""
++import re
++
++import numpy as np
++import pandas as pd
++
++from .utils import vn
++
++# ------------------------------------------------------------------ định dạng --
++MONEY_WORDS = re.compile(r"doanh thu|doanh số|chi phí|lợi nhuận|\bgiá\b|tiền|thu nhập|vốn|ngân sách|lương|đóng góp|chi tiêu|thanh toán|khoản thu", re.I)
++
++
++def money_vi(v, nd=2):
++    """1.250.000.000 -> '1,25 tỷ' · 2,4e12 -> '2,4 nghìn tỷ' (không kèm 'đồng')."""
++    a = abs(v)
++    for d, u in ((1e12, " nghìn tỷ"), (1e9, " tỷ"), (1e6, " triệu"), (1e3, " nghìn")):
++        if a >= d:
++            return vn(v / d, nd) + u
++    return vn(v, nd)
++
++
++def num_vi(v, nd=2):
++    return vn(v, nd)
++
++
++def pct_vi(ratio, nd=1):
++    return vn(ratio * 100, nd) + "%"
++
++
++# ------------------------------------------------------------------ giá trị đã biết --
++class Known:
++    """Tập mọi con số có trong các bảng kết quả (từng ô + tổng từng cột), để đối chiếu số trong văn bản."""
++
++    def __init__(self, values=()):
++        arr = np.asarray([float(v) for v in values if v is not None and np.isfinite(v)], dtype=float)
++        self.a = np.unique(np.abs(arr)) if arr.size else arr
++
++    @classmethod
++    def from_dfs(cls, dfs):
++        vals = []
++        for df in (dfs.values() if isinstance(dfs, dict) else dfs or []):
++            if df is None or not hasattr(df, "columns"):
++                continue
++            for c in df.columns:
++                s = pd.to_numeric(df[c], errors="coerce").dropna()
++                if s.empty or pd.api.types.is_bool_dtype(df[c]):
++                    continue
++                vals.extend(s.tolist()[:2000])
++                vals.append(float(s.sum()))
++                if 2 <= len(s) <= 40:                                       # số suy ra hợp lệ: chênh lệch và tổng hai giá trị cùng cột (vd tháng này so với tháng trước)
++                    a = s.to_numpy(dtype=float)
++                    vals.extend((a[:, None] - a[None, :]).ravel().tolist())
++                    vals.extend((a[:, None] + a[None, :]).ravel().tolist())
++        return cls(vals)
++
++    def has(self, x, tol=None):
++        """Có giá trị nào trong bảng khớp x (sai số tol, tối thiểu nửa đơn vị làm tròn)? Dung sai CHẶT: lệch cả một chữ số là phải bị bắt."""
++        if not self.a.size:
++            return True                          # chưa có bảng nào để đối chiếu -> không kết luận sai
++        x = abs(float(x))
++        tol = max(tol or 0.5, 0.5)
++        i = int(np.searchsorted(self.a, x))
++        return any(0 <= j < self.a.size and abs(self.a[j] - x) <= tol for j in (i - 1, i))
++
++    def __bool__(self):
++        return bool(self.a.size)
++
++
++# ------------------------------------------------------------------ sửa chữ --
++_EN_UNIT = {"trillion": 1e12, "billion": 1e9, "million": 1e6, "thousand": 1e3}
++_NUM = r"\d{1,3}(?:[.,\u202f\u00a0 ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
++_RE_EN = re.compile(rf"(?<![\w.,])({_NUM})\s*(trillions?|billions?|millions?|thousands?)\b(?:\s*(VN[DĐ]|đồng|dong|đ)(?!\w))?", re.I)
++_RE_GRP = re.compile(r"(?<![\d.,])\d{1,3}(?:[\u202f\u00a0]\d{3})+(?:[.,]\d+)?(?!\d)|(?<![\d.,])\d{1,3}(?: \d{3}){2,}(?:[.,]\d+)?(?!\d)")
++_RE_RAW = re.compile(r"(?<![\d.,])(?!0\d)(\d{4,})(?:\.(\d+))?(?![\d.,]*\d)")
++_RE_DEC = re.compile(r"(?<![\d.,])(\d{1,3})\.(\d+)(?!\d|\.\d)")
++_RE_DIEM = re.compile(r"(\d[\d.,]{5,})(\s+)điểm\b")
++_RE_CUR = re.compile(r"\bVN[DĐ]\b", re.I)
++_RE_PCT_SP = re.compile(r"(\d)\s+%")
++
++
++def _to_float_en(s):
++    s = re.sub(r"[\u202f\u00a0 ]", "", s)
++    if "," in s and "." in s:
++        s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
++    elif "," in s:
++        s = s.replace(",", "") if re.fullmatch(r"\d{1,3}(,\d{3})+", s) else s.replace(",", ".")
++    elif s.count(".") > 1:
++        s = s.replace(".", "")
++    return float(s)
++
++
++def fix_text(text, known=None):
++    """Đưa số/đơn vị trong một đoạn chữ về kiểu Việt Nam. `known` (Known) dùng để đoán đúng độ lớn khi AI ghi 'trillion' cho số tỷ."""
++    if not isinstance(text, str) or not text or not re.search(r"\d", text):
++        return text
++    s = text
++
++    def en(m):
++        num, word, cur = m.group(1), m.group(2).lower().rstrip("s"), m.group(3)
++        try:
++            v = _to_float_en(num)
++        except ValueError:
++            return m.group(0)
++        cands = [v * _EN_UNIT[word]] + ([v * 1e9] if word == "trillion" else [])      # AI hay gọi nhầm "tỷ" là trillion
++        pick = next((c for c in cands if known and known.has(c, c * 0.003)), cands[0])
++        return money_vi(pick) + (" đồng" if cur else "")
++
++    s = _RE_EN.sub(en, s)
++    s = _RE_GRP.sub(lambda m: _grp(m.group(0)), s)
++    s = _RE_RAW.sub(_raw, s)
++    s = _RE_DEC.sub(_dec, s)
++    s = _RE_CUR.sub("đồng", s)
++    s = _RE_PCT_SP.sub(r"\1%", s)
++    if MONEY_WORDS.search(s):                                   # "2.241.813.537 điểm" trong câu nói về tiền -> đồng
++        s = _RE_DIEM.sub(r"\1\2đồng", s)
++    return s
++
++
++def _grp(tok):
++    t = re.sub(r"[\u202f\u00a0 ]", "", tok).replace(",", ".")
++    try:
++        return vn(float(t), 2)
++    except ValueError:
++        return tok
++
++
++def _raw(m):
++    ip, fp = m.group(1), m.group(2)
++    if fp is None and len(ip) == 4 and 1900 <= int(ip) <= 2100:
++        return m.group(0)                                       # năm
++    try:
++        return vn(float(ip + ("." + fp if fp else "")), 2)
++    except ValueError:
++        return m.group(0)
++
++
++def _dec(m):
++    ip, fp = m.group(1), m.group(2)
++    if len(fp) == 3 and ip != "0":
++        return m.group(0)                                       # 2.240 có thể là hai nghìn hai trăm bốn mươi: giữ nguyên
++    if ip == "0" and len(fp) > 4:
++        fp = f"{float('0.' + fp):.4f}"[2:].rstrip("0") or "0"
++    elif len(fp) > 2 and ip != "0":
++        fp = f"{float('0.' + fp):.2f}"[2:].rstrip("0") or "0"
++    return f"{ip},{fp}"
++
++
++_SKIP_KEYS = {"code", "cmd", "name", "file", "col", "column", "id", "src", "kind", "x", "y", "task", "tag", "priority", "confidence"}
++
++
++def fix_payload(o, known=None):
++    """Áp fix_text cho mọi chuỗi trong dict/list (bỏ qua các khóa kỹ thuật như code, tên cột, mã)."""
++    if isinstance(o, str):
++        return fix_text(o, known)
++    if isinstance(o, list):
++        return [fix_payload(v, known) for v in o]
++    if isinstance(o, dict):
++        return {k: (v if k in _SKIP_KEYS else fix_payload(v, known)) for k, v in o.items()}
++    return o
++
++
++# ------------------------------------------------------------------ KPI --
++_PURE_NUM = re.compile(r"^\s*([-+−]?)\s*(\d[\d.,\s\u202f\u00a0]*)\s*(%|đ|đồng|VN[DĐ])?\s*$", re.I)
++_PCT_LABEL = re.compile(r"tỷ lệ|tỷ trọng|phần trăm|tăng trưởng|\(%\)|%", re.I)
++
++
++def _parse_vi_or_en(s):
++    s = re.sub(r"[\s\u202f\u00a0]", "", s)
++    if "," in s and "." in s:
++        s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
++    elif s.count(".") > 1:
++        s = s.replace(".", "")
++    elif s.count(",") > 1:
++        s = s.replace(",", "")
++    elif "," in s:
++        s = s.replace(",", ".") if not re.fullmatch(r"\d{1,3},\d{3}", s) else s.replace(",", "")
++    return float(s)
++
++
++def fix_kpi(k, known=None):
++    """Một KPI {label, value, delta}: giá trị toàn số được định dạng kiểu Việt (có dấu ngăn nghìn; tiền lớn viết tỷ/triệu)."""
++    k = dict(k)
++    label, val = str(k.get("label") or ""), k.get("value")
++    if isinstance(val, (int, float)) and not isinstance(val, bool):
++        val = repr(val)
++    if isinstance(val, str):
++        m = _PURE_NUM.match(val)
++        if m:
++            try:
++                x = _parse_vi_or_en(m.group(2)) * (-1 if m.group(1) else 1)
++                unit = (m.group(3) or "").lower()
++                pctish = _PCT_LABEL.search(label) and not MONEY_WORDS.search(label)
++                if unit == "%" or (not unit and pctish and abs(x) <= 100):
++                    ratio = not unit and abs(x) <= 1          # "Tỷ lệ hoàn trả = 0.0697" là tỷ lệ 0-1, không phải 0,07%
++                    shown = x * 100 if ratio else x
++                    val = vn(shown, 2 if abs(shown) < 10 else 1) + "%"
++                elif unit in ("đ", "đồng", "vnd", "vnđ") or MONEY_WORDS.search(label):
++                    val = (money_vi(x) + " đồng") if abs(x) >= 1e6 else (vn(x, 0) + " đồng")
++                else:
++                    val = vn(x, 0 if float(x).is_integer() or abs(x) >= 1000 else 2)
++            except ValueError:
++                pass
++        else:
++            val = fix_text(val, known)
++    k["value"] = val if val is not None else ""
++    if k.get("delta"):
++        k["delta"] = fix_text(str(k["delta"]), known)
++    k["label"] = fix_text(label, known)
++    return k
++
++
++def fix_kpis(ks, known=None):
++    return [fix_kpi(k, known) for k in (ks or []) if isinstance(k, dict)]
++
++
++def has_value(k):
++    v = k.get("value")
++    return v is not None and str(v).strip() not in ("", "—", "-", "N/A", "n/a", "None", "nan")
++
++
++# ------------------------------------------------------------------ đối chiếu số --
++_RE_VI_NUM = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?)(?:\s*(nghìn tỷ|tỷ|triệu))?(?![\d])")
++_SCALE = {"nghìn tỷ": 1e12, "tỷ": 1e9, "triệu": 1e6}
++
++
++def big_numbers(text):
++    """Các số 'cỡ tiền' (từ 1 triệu trở lên, hoặc có chữ tỷ/triệu) trong văn bản đã chuẩn hóa: [(chuỗi, giá trị, sai số làm tròn)]."""
++    out = []
++    for m in _RE_VI_NUM.finditer(text or ""):
++        raw, unit = m.group(1), m.group(2)
++        try:
++            x = float(raw.replace(".", "").replace(",", ".")) if "," in raw or raw.count(".") > 1 or re.fullmatch(r"\d{1,3}\.\d{3}", raw) else float(raw)
++        except ValueError:
++            continue
++        dec = len(raw.split(",")[1]) if "," in raw else 0
++        if unit:
++            v, tol = x * _SCALE[unit], 0.5 * 10 ** -dec * _SCALE[unit]
++        else:
++            v, tol = x, 0.5 if dec == 0 else 0.5 * 10 ** -dec
++        if abs(v) >= 1e6:
++            out.append((m.group(0).strip(), v, tol))
++    return out
++
++
++def audit(text, known):
++    """Trả về các số lớn trong `text` KHÔNG tìm thấy (kể cả làm tròn) trong bảng kết quả."""
++    if not known:
++        return []
++    return [s for s, v, tol in big_numbers(text) if not known.has(v, tol)]
++
++
++def audit_insights(insights, known):
++    """Gắn cờ các phát hiện có số lớn không khớp bảng kết quả nào: thêm `check` và hạ độ tin cậy xuống 'Thấp'. Trả về danh sách mới."""
++    out = []
++    for x in insights or []:
++        if isinstance(x, dict):
++            x = dict(x)
++            bad = audit(f"{x.get('title', '')} {x.get('evidence', '')}", known)
++            if bad:
++                x["check"], x["confidence"] = bad, "Thấp"
++        out.append(x)
++    return out
++
++
++# ------------------------------------------------------------------ tiêu đề biểu đồ tính từ dữ liệu --
++def pretty_period(label):
++    """2026-03-01 -> T3/2026 · 2026-03 -> T3/2026 · giữ nguyên nếu không phải ngày."""
++    s = str(label)
++    m = re.match(r"^(\d{4})-(\d{1,2})(?:-\d{1,2})?(?:[ T].*)?$", s)
++    return f"T{int(m.group(2))}/{m.group(1)}" if m else s
++
++
++def headline(rows, kind, metric, time_like=False):
++    """Một câu kết luận TÍNH TỪ SỐ LIỆU của biểu đồ (không do AI viết). rows = [(nhãn, giá trị)]."""
++    if not rows:
++        return ""
++    metric = re.sub(r"\s*\(.*?\)", "", str(metric or "Giá trị")).strip() or "Giá trị"
++    m = metric[:1].upper() + metric[1:]
++    if time_like and len(rows) >= 2:
++        rs = sorted(rows, key=lambda r: str(r[0]))
++        a, b = rs[0], rs[-1]
++        if a[1]:
++            ch = b[1] / a[1] - 1
++            if abs(ch) < 0.005:
++                return f"{m} ổn định từ {pretty_period(a[0])} đến {pretty_period(b[0])}"
++            return f"{m} {'tăng' if ch > 0 else 'giảm'} {vn(abs(ch) * 100, 1)}% từ {pretty_period(a[0])} đến {pretty_period(b[0])}"
++    hi = max(rows, key=lambda r: r[1])
++    tot = sum(v for _, v in rows)
++    if len(rows) > 1 and all(v >= 0 for _, v in rows) and tot > 0:
++        return f"{pretty_period(hi[0])} dẫn đầu {metric[:1].lower() + metric[1:]}, chiếm {vn(hi[1] / tot * 100, 1)}% tổng"
++    return f"{pretty_period(hi[0])} có {metric[:1].lower() + metric[1:]} cao nhất"
++
++
++def _pct_set(rows, time_like):
++    """Mọi tỷ lệ % hợp lệ có thể suy ra từ dữ liệu biểu đồ (so đầu-cuối, kỳ liền kề, tỷ trọng từng phần)."""
++    out = set()
++    vals = [v for _, v in (sorted(rows, key=lambda r: str(r[0])) if time_like else rows)]
++    if time_like and len(vals) >= 2:
++        if vals[0]:
++            out.add(abs(vals[-1] / vals[0] - 1) * 100)
++        out.update(abs(b / a - 1) * 100 for a, b in zip(vals, vals[1:]) if a)
++    tot = sum(v for v in vals if v > 0)
++    if tot > 0:
++        out.update(v / tot * 100 for v in vals if v > 0)
++    return out
++
++
++def consistent(insight, rows, time_like=False):
++    """Câu kết luận của AI có khớp số liệu biểu đồ không? (hướng tăng/giảm và các tỷ lệ % nêu ra)."""
++    t = str(insight or "").lower()
++    if not t.strip() or not rows:
++        return False
++    if time_like and len(rows) >= 2:
++        rs = sorted(rows, key=lambda r: str(r[0]))
++        if rs[0][1]:
++            ch = rs[-1][1] / rs[0][1] - 1
++            if abs(ch) >= 0.01 and ((ch > 0 and re.search(r"\bgiảm\b|sụt", t) and not re.search(r"\btăng\b", t)) or (ch < 0 and re.search(r"\btăng\b", t) and not re.search(r"\bgiảm\b|sụt", t))):
++                return False
++    claims = [float(x.replace(",", ".")) for x in re.findall(r"(\d+(?:,\d+)?)\s*%", t)]
++    allowed = _pct_set(rows, time_like)
++    return all(any(abs(c - a) <= max(0.15, a * 0.01) for a in allowed) for c in claims) if claims and allowed else True
+diff --git a/app/providers.py b/app/providers.py
+new file mode 100644
+index 0000000..7232a57
+--- /dev/null
++++ b/app/providers.py
+@@ -0,0 +1,71 @@
++# -*- coding: utf-8 -*-
++"""Nhà cung cấp LLM: Base URL KHÔNG phải ô nhập độc lập, mà là hệ quả của nhà cung cấp được chọn.
++
++Ứng dụng gọi mọi nhà cung cấp qua giao diện tương thích OpenAI. Mỗi nhà cung cấp có Base URL riêng và họ model riêng
++(gemini-*, gpt-*, claude-*...). Nếu model thuộc họ này mà Base URL trỏ tới nhà cung cấp khác thì chắc chắn lỗi, nên ta báo sớm bằng
++tiếng Việt kèm cách sửa thay vì để API trả về 404/400 khó hiểu. Gateway (OpenRouter, Groq, Ollama, tuỳ chỉnh) chạy nhiều họ model nên không bị ép khớp.
++Gemini, Anthropic đã đối chiếu tài liệu chính thức; các địa chỉ còn lại là địa chỉ công khai phổ biến, nút "Lưu và kiểm tra kết nối" sẽ bắt sai lệch.
++"""
++import re
++from urllib.parse import urlparse
++
++PROVIDERS = [
++    {"id": "gemini", "label": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "host": r"generativelanguage\.googleapis\.com",
++     "model_re": r"^(models/)?gemini", "hint": "gemini-2.5-flash"},
++    {"id": "openai", "label": "OpenAI", "base_url": "https://api.openai.com/v1", "host": r"api\.openai\.com",
++     "model_re": r"^(gpt-|o\d|chatgpt-)", "hint": "gpt-4o-mini"},
++    {"id": "anthropic", "label": "Anthropic (Claude)", "base_url": "https://api.anthropic.com/v1/", "host": r"api\.anthropic\.com",
++     "model_re": r"^claude", "hint": "claude-sonnet-4-5",
++     "note": "Lớp tương thích OpenAI của Anthropic được hãng mô tả là dùng để thử và so sánh, không khuyến nghị cho sản xuất lâu dài."},
++    {"id": "deepseek", "label": "DeepSeek", "base_url": "https://api.deepseek.com", "host": r"api\.deepseek\.com",
++     "model_re": r"^deepseek", "hint": "deepseek-chat"},
++    {"id": "openrouter", "label": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "host": r"openrouter\.ai",
++     "model_re": None, "hint": "google/gemini-2.5-flash", "gateway": True},
++    {"id": "groq", "label": "Groq", "base_url": "https://api.groq.com/openai/v1", "host": r"api\.groq\.com",
++     "model_re": None, "hint": "llama-3.3-70b-versatile", "gateway": True},
++    {"id": "ollama", "label": "Ollama (máy cục bộ)", "base_url": "http://localhost:11434/v1", "host": r"^(localhost|127\.0\.0\.1)$",
++     "model_re": None, "hint": "llama3.1", "gateway": True, "note": "Chỉ dùng được khi chạy máy cá nhân (máy chủ công khai chặn địa chỉ nội bộ)."},
++    {"id": "custom", "label": "Tuỳ chỉnh (tương thích OpenAI)", "base_url": "", "host": None,
++     "model_re": None, "hint": "tên-model", "gateway": True, "custom": True},
++]
++BY_ID = {p["id"]: p for p in PROVIDERS}
++FAMILIES = [p for p in PROVIDERS if p.get("model_re")]
++
++
++def host_of(url):
++    try:
++        return (urlparse((url or "").strip()).hostname or "").lower()
++    except ValueError:
++        return ""
++
++
++def provider_of_url(url):
++    """Nhà cung cấp mà Base URL trỏ tới (id) hoặc None nếu là địa chỉ lạ."""
++    h = host_of(url)
++    for p in PROVIDERS:
++        if p.get("host") and h and re.search(p["host"], h):
++            return p["id"]
++    return None
++
++
++def family_of_model(model):
++    """Họ model (id nhà cung cấp gốc) theo tên: 'gpt-4o' -> 'openai'. None nếu không nhận ra."""
++    m = (model or "").strip().lower()
++    for p in FAMILIES:
++        if re.search(p["model_re"], m):
++            return p["id"]
++    return None
++
++
++def check_pair(base_url, model):
++    """Trả về thông báo lỗi tiếng Việt nếu Base URL và model chắc chắn không đi với nhau; None nếu ổn hoặc không đủ cơ sở kết luận."""
++    pid, fam = provider_of_url(base_url), family_of_model(model)
++    if not pid or not fam or fam == pid or BY_ID[pid].get("gateway"):
++        return None
++    return (f"Model '{model}' là của {BY_ID[fam]['label']} nhưng Base URL đang trỏ tới {BY_ID[pid]['label']}. "
++            f"Hãy chọn nhà cung cấp \"{BY_ID[fam]['label']}\" (Base URL sẽ tự điền đúng), hoặc đổi tên model cho khớp {BY_ID[pid]['label']}.")
++
++
++def public():
++    """Danh sách gửi cho giao diện (không chứa bí mật)."""
++    return [{k: p.get(k) for k in ("id", "label", "base_url", "model_re", "hint", "note", "gateway", "custom")} for p in PROVIDERS]
+diff --git a/app/routes.py b/app/routes.py
+index a24c0d1..23628ee 100644
+--- a/app/routes.py
++++ b/app/routes.py
+@@ -44,7 +44,7 @@ def api_state():
+ 
+ @bp.post("/api/inspect")
+ def inspect_files():
+-    """Bước 1 của tải lên: liệt kê sheet của các tệp Excel để người dùng chọn sheet cần tải (không lưu gì vào phiên)."""
++    """Bước 1 của tải lên: liệt kê sheet (kèm số dòng x cột) của các tệp Excel để người dùng chọn các sheet cần tải (không lưu gì vào phiên)."""
+     fs = request.files.getlist("files")
+     if not fs:
+         return bad("Chưa chọn tệp")
+@@ -58,7 +58,7 @@ def upload():
+         return bad("Chưa chọn tệp")
+     try:
+         sheets = json.loads(request.form.get("sheets") or "{}")
+-        sheets = {str(k): str(v) for k, v in sheets.items()} if isinstance(sheets, dict) else {}
++        sheets = {str(k): ([str(x) for x in v] if isinstance(v, list) else str(v)) for k, v in sheets.items()} if isinstance(sheets, dict) else {}
+     except (ValueError, AttributeError):
+         sheets = {}
+     try:
+diff --git a/app/settings.py b/app/settings.py
+index f449fdc..33b5e62 100644
+--- a/app/settings.py
++++ b/app/settings.py
+@@ -4,7 +4,7 @@ import re
+ 
+ from flask import Blueprint, g, jsonify, request
+ 
+-from . import config, db, llm, state
++from . import config, db, llm, providers, state
+ from .auth import bad, over_limit
+ from .errors import UserError
+ 
+@@ -23,15 +23,24 @@ def _read(require_model):
+     new_key = (p.get("api_key") or "").strip() or None
+     if new_key and not KEY_RE.match(new_key):
+         raise UserError("API key chứa khoảng trắng hoặc ký tự không hợp lệ (hoặc quá ngắn). Hãy sao chép lại đúng nguyên key, không kèm dấu cách/xuống dòng.")
+-    base = llm.check_base_url(p.get("base_url"))
+     model = (p.get("model") or "").strip()
+     if require_model and not model:
+         raise UserError("Hãy nhập hoặc chọn tên model.")
+     if len(model) > 200 or re.search(r"\s", model):
+         raise UserError("Tên model không hợp lệ (không được chứa khoảng trắng, tối đa 200 ký tự).")
+-    key = new_key or db.load_llm_cfg(g.user["id"])["api_key"]
+-    if not key:
++    raw_base = (p.get("base_url") or "").strip() or config.DEFAULT_BASE_URL
++    mismatch = providers.check_pair(raw_base, model)           # model của nhà này mà Base URL của nhà khác: báo sớm, kèm cách sửa
++    if mismatch:
++        raise UserError(mismatch)
++    saved = db.load_llm_cfg(g.user["id"])
++    key = new_key or saved["api_key"]
++    if not key:                                                # kiểm tra rẻ (không gọi mạng) làm trước kiểm tra DNS của Base URL
+         raise UserError("Hãy nhập API key.")
++    old_host, new_host = providers.host_of(saved["base_url"] or config.DEFAULT_BASE_URL), providers.host_of(raw_base)
++    if not new_key and old_host and new_host and old_host != new_host:
++        raise UserError(f"Bạn đã đổi địa chỉ từ {old_host} sang {new_host}. API key đã lưu thuộc nhà cung cấp cũ nên sẽ không được gửi sang địa chỉ mới; "
++                        "hãy nhập API key của nhà cung cấp mới.")
++    base = llm.check_base_url(raw_base)
+     return new_key, {"api_key": key, "base_url": base, "model": model}
+ 
+ 
+@@ -41,7 +50,8 @@ def _limited():
+ 
+ @bp.get("/api/settings/llm")
+ def get_llm():
+-    return jsonify({**db.llm_public(g.user["id"]), "default_model": config.DEFAULT_MODEL})
++    pub = db.llm_public(g.user["id"])
++    return jsonify({**pub, "default_model": config.DEFAULT_MODEL, "provider": providers.provider_of_url(pub["base_url"]) or "custom", "providers": providers.public()})
+ 
+ 
+ @bp.post("/api/settings/llm")
+diff --git a/static/css/app.css b/static/css/app.css
+index 9f0f791..b647fbe 100644
+--- a/static/css/app.css
++++ b/static/css/app.css
+@@ -202,3 +202,36 @@ a.nv{text-decoration:none}.nv .bdg{margin-left:auto;background:var(--pri);color:
+ .mb{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--p2);margin-right:10px;vertical-align:middle;overflow:hidden}.mb i{display:block;height:100%;background:var(--pri);border-radius:3px}
+ .mmsel{width:190px;max-width:100%;padding:4px 6px;font-size:12.5px}
+ .vrest{margin-top:10px}.vrest>summary{cursor:pointer;font-weight:600;color:var(--sub)}
++
++
++/* ---- Tab đổi góc nhìn: nhiều bảng (sheet) của cùng một tệp ---- */
++.fgrp{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
++.fgh{display:flex;align-items:baseline;gap:10px;padding:10px 14px 0}.fgh b{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fgh small{color:var(--sub)}.fgh .lnk{margin-left:auto}
++.ftabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
++.ftab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 14px 9px;border:0;background:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;white-space:nowrap}
++.ftab span{font-weight:600;color:var(--ink);font-size:13.5px}.ftab small{font-size:11px;color:var(--sub)}
++.ftab:hover{background:var(--p2)}.ftab.on{border-bottom-color:var(--pri)}.ftab.on span{color:var(--pri)}
++.ftab:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
++.ftp{padding:4px 10px 12px}.ftp .fl:first-child{margin-top:8px}
++.errpre{white-space:pre-wrap;font-size:12px;max-height:200px;overflow:auto;background:var(--p2);padding:8px;border-radius:8px;margin:8px 0}
++
++/* ---- Hộp chọn nhiều sheet ---- */
++.dlg:has(.spf){width:min(560px,100%)}
++.spf{border:1px solid var(--line);border-radius:10px;margin:12px 0 0;padding:6px 12px 10px}
++.spf legend{display:flex;align-items:baseline;gap:8px;padding:0 6px;font-weight:600;max-width:100%}.spf legend span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}.spf legend small{color:var(--sub);font-weight:400}.spf legend .lnk{margin-left:6px;font-weight:600}
++.spc{display:flex;align-items:center;gap:10px;padding:7px 4px;border-radius:8px;cursor:pointer}.spc:hover{background:var(--p2)}.spc input{width:16px;height:16px;accent-color:var(--pri)}.spc small{margin-left:auto;color:var(--sub);font-size:12px}
++
++/* ---- Bộ chọn biểu đồ: thẻ có xem trước, chỉ loại phù hợp ---- */
++.cpg{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:8px}
++.cpc{border:1.5px solid var(--line);border-radius:12px;padding:12px;background:var(--panel);display:flex;flex-direction:column;gap:8px;transition:.15s}
++.cpc.on{border-color:var(--pri);background:var(--soft)}
++.cph{display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0!important}.cph input{margin-top:3px;width:16px;height:16px;accent-color:var(--pri)}
++.cph span{display:flex;flex-direction:column;gap:2px}.cph small{color:var(--sub);font-weight:400;line-height:1.35}
++.cpv{min-height:96px;background:var(--panel);border-radius:8px;padding:8px;overflow:hidden}
++.cpk{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.cpk small.warn{color:var(--warn)}
++.cpa summary{cursor:pointer;color:var(--sub);font-size:12.5px}
++
++/* ---- Tab API & Model: gợi ý theo nhà cung cấp ---- */
++.sh{display:block;margin-top:4px;color:var(--sub);font-size:12.5px;line-height:1.45;min-height:0}.sh:empty{display:none}
++.sh.warn{color:var(--warn);font-weight:600}.sh .lnk{font-weight:700}
++#sBase.ro{background:var(--p2);color:var(--sub);cursor:not-allowed}
+diff --git a/static/js/app.js b/static/js/app.js
+index 00588aa..a0899d2 100644
+--- a/static/js/app.js
++++ b/static/js/app.js
+@@ -18,11 +18,14 @@ const bar = (rows, u = '') => { if (!rows.length) return ''; const m = Math.max(
+   return rows.map(([l, v]) => `<div class="br"><span class="l" title="${esc(l)}">${esc(l)}</span><span class="tr"><span class="bf ${v < 0 ? 'neg' : ''}" style="width:${Math.abs(v) / m * 100}%"></span></span><span class="v">${sg ? (v > 0 ? '+' : v < 0 ? '−' : '') : ''}${N(Math.abs(v))}${esc(u)}</span></div>`).join('') };
+ const cols = rows => { rows = rows.slice(-14); const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, hi = rows.findIndex(r => Math.abs(r[1]) === m);
+   return `<div class="cols">${rows.map(([l, v], i) => `<div><i class="${i === hi ? 'hi' : ''}" style="height:${Math.abs(v) / m * 80}px"></i>${esc(String(l).slice(0, 8))}<br>${NC(v)}</div>`).join('')}</div>` };
+-const kp = a => `<div class="kpis">${a.map(([l, v, d]) => `<div class="kpi"><b>${esc(v)}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
++const fv = v => { const s = String(v ?? '').trim(); return /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô -> 11.773.398.767,5
++const kp = a => `<div class="kpis">${a.filter(x => String(x[1] ?? '').trim()).map(([l, v, d]) => `<div class="kpi"><b>${esc(fv(v))}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
+ const kpo = a => kp(a.map(k => [k.label, k.value, k.delta]));
+ const tbl = (h, r) => `<div class="tw"><table><thead><tr>${h.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${r.map(x => `<tr>${x.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ const fnd = (t, s, c = '') => `<div class="f ${c}"><span class="tg">${esc(s || 'Phát hiện')}</span>${t}</div>`;
+-const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : c);
++const ISOD = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$/;
++const fdt = s => { const m = ISOD.exec(s); return m ? (m[4] + m[5] + m[6] === '000000' ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`) : s };   // 2026-01-01T00:00:00.000 -> 01/01/2026
++const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : fdt(String(c)));
+ const tableOf = t => t.err && !t.cols.length ? `<div class="note">${esc(t.title)}: ${esc(t.err)}</div>` : tbl(t.cols, t.rows.slice(0, 30).map(r => r.map(cell)));
+ const numCols = t => t.cols.filter((c, i) => t.rows.some(r => typeof r[i] === 'number'));
+ const PAL = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
+@@ -30,17 +33,32 @@ const TIME = /^(\d{4}[-\/]\d{1,2}|\d{1,2}[-\/]\d{4}|Q[1-4]|T\d{1,2}|Tháng|W\d|\
+ function uniq(rows, kind) { const seen = new Set(), o = []; rows.forEach(r => { const k = r[0] + '|' + r[1]; if (!seen.has(k)) { seen.add(k); o.push(r) } });
+   if (kind === 'line' || (rows.length >= 4 && rows.filter(r => TIME.test(r[0])).length / rows.length >= .6)) return o;
+   const m = new Map(); o.forEach(([l, v]) => m.set(l, (m.get(l) || 0) + v)); return [...m] }
++const pp = s => { const m = /^(\d{4})-(\d{1,2})(?:-\d{1,2})?(?:[ T].*)?$/.exec(String(s)); return m ? `T${+m[2]}/${m[1]}` : String(s) };      // 2026-03-01 -> T3/2026
+ const line = rows => { rows = rows.slice(-24); if (rows.length < 2) return bar(rows); const W = 300, H = 110, mx = Math.max(...rows.map(r => r[1])), mn = Math.min(...rows.map(r => r[1])), sp = (mx - mn) || 1;
+   const pts = rows.map((r, i) => [6 + i * (W - 12) / Math.max(rows.length - 1, 1), 8 + (mx - r[1]) / sp * (H - 30)]);
+-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(rows[0][0])}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(rows[rows.length - 1][0])}</text></svg>` };
++  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(pp(rows[0][0]))}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(pp(rows[rows.length - 1][0]))}</text></svg>` };
+ const donut = rows => { rows = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]); if (rows.length < 2) return bar(rows); if (rows.length > 7) { const rest = rows.slice(6).reduce((s, r) => s + r[1], 0); rows = [...rows.slice(0, 6), ['Khác', rest]] }
+   const tot = rows.reduce((s, r) => s + r[1], 0) || 1; let acc = 0; const g = rows.map((r, i) => { const a = acc / tot * 100; acc += r[1]; return `${PAL[i % 7]} ${a}% ${acc / tot * 100}%` }).join(',');
+   return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative"><div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div></div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${N(r[1] / tot * 100)}%</b></div>`).join('')}</div></div>` };
+ const KIND = { bars: 'Cột ngang', cols: 'Cột dọc', line: 'Đường', donut: 'Tròn' };
+ const kindSel = (s, k, cur) => `<select data-s="${s}" data-k="${k}">${Object.entries(KIND).map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+-function chart(c, T) { const t = T[c.task]; if (!t) return ''; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return '';
+-  const rows = uniq(t.rows.map(r => [String(r[xi]), Number(r[yi]) || 0]), c.kind).slice(0, 24);
+-  return `<div class="box"><h4>${esc(c.title)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</h4>${c.kind === 'cols' ? cols(rows) : c.kind === 'line' ? line(rows) : c.kind === 'donut' ? donut(rows) : bar(rows, '')}${c.insight ? `<div class="hint">${esc(c.insight)}</div>` : ''}</div>` }
++function chartRows(c, T) { const t = T[c.task]; if (!t) return null; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return null;
++  return uniq(t.rows.map(r => [String(r[xi]), Number(r[yi]) || 0]), c.kind).slice(0, 24) }
++function chartBody(c, T) { const rows = chartRows(c, T); if (!rows) return ''; return c.kind === 'cols' ? cols(rows) : c.kind === 'line' ? line(rows) : c.kind === 'donut' ? donut(rows) : bar(rows, '') }
++function chart(c, T) { if (!chartRows(c, T)) return '';
++  return `<div class="box"><h4>${esc(c.title)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</h4>${chartBody(c, T)}${c.insight ? `<div class="hint">${esc(c.insight)}</div>` : ''}</div>` }
++/* Bộ chọn biểu đồ: chỉ đưa ra các loại PHÙ HỢP với hình dạng dữ liệu (thay vì mọi loại + ba ô chọn rời rạc) */
++const KWHY = { line: 'thấy xu hướng theo thời gian', cols: 'so sánh từng kỳ hoặc ít nhóm', bars: 'xếp hạng; nhãn dài vẫn dễ đọc', donut: 'tỷ trọng các phần trong tổng (tối đa 7 phần)' };
++function kindsFor(rows) { const n = rows.length, tl = n >= 3 && rows.filter(r => TIME.test(String(r[0]))).length / n >= .6, neg = rows.some(r => r[1] < 0);
++  if (n < 2) return ['bars']; if (tl) return n >= 4 ? ['line', 'cols'] : ['cols', 'line']; if (n <= 7 && !neg) return ['bars', 'cols', 'donut']; return n <= 12 ? ['bars', 'cols'] : ['bars'] }
++function chartCard(c, i, s, T) { const t = T[c.task]; if (!t) return '';
++  const on = s['c' + i] ?? c.recommended, kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [];
++  const ks = kindsFor(rows), all = [...new Set([...ks, kd])], fit = ks.includes(kd);
++  return `<div class="cpc ${on ? 'on' : ''}"><label class="cph"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')}</small></span></label>
++<div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
++<div class="cpk"><div class="seg" role="group" aria-label="Loại biểu đồ">${all.map(k => `<button type="button" class="${k === kd ? 'on' : ''}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k])}">${KIND[k]}</button>`).join('')}</div>
++<small class="${fit ? 'sub' : 'sub warn'}">${fit ? (kd === ks[0] ? 'Phù hợp nhất: ' : 'Phù hợp: ') + KWHY[kd] : 'Loại này ít phù hợp với dữ liệu hiện tại'} · từ: ${esc(t.title)}</small></div>
++<details class="cpa"><summary>Tùy chỉnh trục</summary><div class="hint">Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div></details></div>` }
+ const sel$ = (s, k, opts, cur) => `<select data-s="${s}" data-k="${k}">${opts.map(o => `<option ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+ const ico = (n, s) => ic(n, s);
+ 
+@@ -66,22 +84,35 @@ async function pvLoad(name, src) { const k = name + '\u0001' + src; if (PVC[k])
+ function pvPanel(name) { const p = PV[name], d = PVC[name + '\u0001' + p.src];
+   if (!d) return '<div class="pvp"><small><span class="spin sm"></span> Đang tải dữ liệu…</small></div>'; if (d.err) return `<div class="pvp"><div class="note" style="margin:0">${esc(d.err)}</div></div>`;
+   const tabs = d.variants.length > 1 ? `<div class="seg">${d.variants.map(v => `<button class="${v === p.src ? 'on' : ''}" data-a="pvsrc" data-v="${esc(name)}" data-x="${v}">${PVL[v]}</button>`).join('')}</div>` : '';
+-  const cell2 = v => v === null ? '<span class="nul">∅</span>' : typeof v === 'number' ? N(v) : esc(String(v).length > 60 ? String(v).slice(0, 59) + '…' : v);
++  const cell2 = v => v === null ? '<span class="nul">∅</span>' : typeof v === 'number' ? N(v) : esc((s => s.length > 60 ? s.slice(0, 59) + '…' : s)(fdt(String(v))));
+   return `<div class="pvp"><div class="pvh"><b>${N(d.shape[0])} dòng × ${N(d.shape[1])} cột</b>${tabs}</div>
+ <div class="cs">${d.cols.map(c => `<span class="cc ${c.missing ? 'w' : ''}" title="${N(c.unique)} giá trị khác nhau"><b>${esc(c.name)}</b> ${esc(c.dtype)}${c.missing ? ' · thiếu ' + N(c.missing) : ''}</span>`).join('')}${d.extra_cols ? `<span class="cc">+${d.extra_cols} cột nữa</span>` : ''}</div>
+ <div class="tw"><table><thead><tr><th>#</th>${d.cols.map(c => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>${d.rows.map((r, i) => `<tr><td class="rn">${i + 1}</td>${r.map(v => `<td>${cell2(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+ <small class="hint">Hiển thị ${d.rows.length}/${N(d.shape[0])} dòng đầu${d.src === 'original' || (d.src === 'current' && d.mode === 'original' && d.verdict && d.verdict !== 'tidy') ? '. Đây là dữ liệu thô nên có thể có ô trống, tiêu đề lệch hoặc dòng tổng.' : '.'}</small></div>` }
+ 
++const GT = {}, PVP = new Set();                            // GT: tab đang chọn của từng tệp nhiều bảng
++const grpOf = n => String(n).split('::')[0], tabName = n => { const p = String(n).split('::'); return p.slice(1).join(' · ') || p[0] };
++function pvEnsure(name) { const o = PV[name] = PV[name] || { src: 'current', open: true }, k = name + '\u0001' + o.src;
++  if (!PVC[k] && !PVP.has(k)) { PVP.add(k); pvLoad(name, o.src).then(() => { PVP.delete(k); stage() }) } }
++function fileRow(S, f, edit, ok, grouped) {
++  if (grouped && !RO()) pvEnsure(f.name);
++  return `<div class="fl"><span class="dot ${(S.dirty || []).includes(f.name) && !ok ? 'w' : ''}"></span>${esc(grouped ? tabName(f.name) : f.name)}${f.demo ? ' <span class="tag">mẫu</span>' : ''}<small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small>${RO() ? '' : `<button class="pvb ${PV[f.name] && PV[f.name].open ? 'on' : ''}" data-a="pv" data-v="${esc(f.name)}" aria-expanded="${!!(PV[f.name] && PV[f.name].open)}">${ic('eye', 15)}Xem trước</button>`}${edit ? `<button class="rm" data-a="rmfile" data-v="${esc(f.name)}" title="Xóa bảng này" aria-label="Xóa ${esc(f.name)}">${ic('trash', 16)}</button>` : ''}</div>` + (PV[f.name] && PV[f.name].open && !RO() ? pvPanel(f.name) : '') + structCard(S, f) }
+ function fileList(S) {
+-  const ok = S.st[2] === 'done', edit = S.st[0] !== 'done' && !RO();
+-  return `<div class="filebar"><label>Danh sách dữ liệu (${S.files.length} tệp)</label>${edit ? '<button class="lnk" data-a="clearfiles">Xóa tất cả</button>' : ''}</div>` + S.files.map(f => `<div class="fl"><span class="dot ${(S.dirty || []).includes(f.name) && !ok ? 'w' : ''}"></span>${esc(f.name)}${f.demo ? ' <span class="tag">mẫu</span>' : ''}<small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small>${RO() ? '' : `<button class="pvb ${PV[f.name] && PV[f.name].open ? 'on' : ''}" data-a="pv" data-v="${esc(f.name)}" aria-expanded="${!!(PV[f.name] && PV[f.name].open)}">${ic('eye', 15)}Xem trước</button>`}${edit ? `<button class="rm" data-a="rmfile" data-v="${esc(f.name)}" title="Xóa tệp này" aria-label="Xóa tệp ${esc(f.name)}">${ic('trash', 16)}</button>` : ''}</div>` + (PV[f.name] && PV[f.name].open && !RO() ? pvPanel(f.name) : '') + structCard(S, f)).join('')
++  const ok = S.st[2] === 'done', edit = S.st[0] !== 'done' && !RO(), groups = [];
++  S.files.forEach(f => { const g = groups.find(x => x.base === grpOf(f.name)); g ? g.items.push(f) : groups.push({ base: grpOf(f.name), items: [f] }) });
++  return `<div class="filebar"><label>Danh sách dữ liệu (${S.files.length} bảng, ${groups.length} tệp)</label>${edit ? '<button class="lnk" data-a="clearfiles">Xóa tất cả</button>' : ''}</div>` + groups.map(g => {
++    if (g.items.length === 1) return fileRow(S, g.items[0], edit, ok, false);
++    const act = g.items.find(f => f.name === GT[g.base]) || g.items[0];
++    return `<div class="fgrp"><div class="fgh"><b title="${esc(g.base)}">${esc(g.base)}</b><small>${g.items.length} bảng · bấm tab để đổi góc nhìn</small>${edit ? `<button class="lnk" data-a="rmgroup" data-v="${esc(g.base)}">Xóa cả tệp</button>` : ''}</div>
++<div class="ftabs" role="tablist" aria-label="Các bảng trong ${esc(g.base)}">${g.items.map(f => `<button type="button" role="tab" class="ftab ${f === act ? 'on' : ''}" aria-selected="${f === act}" data-a="ftab" data-v="${esc(f.name)}"><span>${esc(tabName(f.name))}</span><small>${f.rows != null ? N(f.rows) + ' dòng' : ''}</small></button>`).join('')}</div>
++<div class="ftp" role="tabpanel">${fileRow(S, act, edit, ok, true)}</div></div>` }).join('')
+ }
+ 
+ /* chọn lựa cuối cùng của bước Báo cáo (live: theo lựa chọn đang chỉnh; sau khi chấp nhận / xem lại: theo bản chốt) */
+ function selCharts() { const S = S_(), d = S.d[5], s = sel(5); if (d.final && S.st[5] !== 'await') return d.final.charts;
+   return d.charts.map((c, i) => ({ ...c, kind: s['k' + i] ?? c.kind, x: s['x' + i] ?? c.x, y: s['y' + i] ?? c.y, on: s['c' + i] ?? c.recommended })).filter(c => c.on) }
+ function selKpis() { const S = S_(), r = S.d[3].result, s = sel(5), d = S.d[5]; if (d.final && S.st[5] !== 'await') return d.final.kpis.map(i => r.kpis[i]).filter(Boolean);
+-  return r.kpis.filter((k, i) => s['p' + i] ?? true) }
++  return r.kpis.filter((k, i) => (s['p' + i] ?? true) && String(k.value ?? '').trim()) }
+ const outline = (S, ch) => [['Trang bìa', (S.d[5].final || S.d[5]).title], ['Tóm tắt điều hành', 'Câu trả lời trước, bằng chứng sau'], ['Chỉ số then chốt', 'Bức tranh số liệu'],
+   ...ch.map(c => [c.insight || c.title, 'Biểu đồ + "điều này có nghĩa là"']), ['Phát hiện chính', 'Kèm bằng chứng và độ tin cậy'], ['Khuyến nghị', 'Sắp theo mức ưu tiên'],
+   ['Quyết định và rủi ro', 'Cần lãnh đạo phê duyệt'], ['Phụ lục', 'Dữ liệu, làm sạch, phân tích']];
+@@ -128,7 +159,7 @@ function opCard(o, d, aw, s, fx) {
+   const alt = fill ? (o.alts || []).find(a => a.method === m) : null, MI = d.meth || {};
+   const note = fill ? ((alt && alt.reason) || (MI[m] && MI[m][1]) || '') : '', risk = fill ? ((alt && alt.risk) || '') : (o.risk || '');
+   const opts = (o.numeric ? ['median', 'mean', 'mode', 'drop_rows', 'value'] : ['mode', 'drop_rows', 'value']);
+-  const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${MLAB[x]}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
++  const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${esc((MI[x] || [x])[0])}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
+   return `<div class="op ${on ? 'on' : ''}"><label class="oph"><input type="checkbox" data-s="2" data-k="c${o.id}" ${on ? 'checked' : ''} ${aw ? '' : 'disabled'}><b>${esc(o.label || o.title)}</b></label>
+ ${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${mapView(o)}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
+ ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ? 'Kết quả' : 'Nếu áp dụng'}: <b>${esc(fx[o.id])}</b></span></div>` : ''}</div>` }
+@@ -171,9 +202,8 @@ ${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Ph
+ ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
+   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
+     const panel = aw ? `<details open><summary>Chọn biểu đồ và chỉ số đưa lên báo cáo và slide</summary><div class="ask" style="padding-top:10px"><label>Tiêu đề báo cáo</label><input data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
+- <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(k.value)}</b><small>${esc(k.label)}</small></span></label>`).join('')}
+- <p class="hint">Biểu đồ</p>${d.charts.map((c, i) => { const t = T[c.task], on = s['c' + i] ?? c.recommended, kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y;
+-      return `<label class="opt ${on ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')} (từ: ${esc(t.title)})</small></span></label><div class="hint" style="margin:-4px 0 8px 34px">Loại ${kindSel(5, 'k' + i, kd)} Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div>` }).join('')}</details>` : '';
++ <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => !String(k.value ?? '').trim() ? '' : `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(fv(k.value))}</b><small>${esc(k.label)}</small></span></label>`).join('')}
++ <p class="hint">Biểu đồ (chọn loại phù hợp, xem trước ngay)</p><div class="cpg">${d.charts.map((c, i) => chartCard(c, i, s, T)).join('')}</div></details>` : '';
+     const title = (d.final && !aw) ? d.final.title : (aw ? (s.rt ?? d.title) : d.title);
+     return `<h2>Báo cáo</h2>${panel}
+ <div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
+@@ -205,7 +235,7 @@ function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card
+   if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div>`;
+   else if (s === 'error') h += `<h2>${STEPS[i].t}</h2><div class="note">Lỗi: ${esc(S.err && S.err.msg)}</div><div class="act"><button class="btn" data-a="retry">Thử lại</button></div>`;
+   else if (s === 'pending' && i > 0) h += `<p class="lead">Bước này chưa chạy.</p>`;
+-  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}</div>`; console.error(e) } h += actions(i, s) }
++  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
+   $('stage').innerHTML = h + '</div>'; applyRO() }
+ function applyRO() { $('vFlow').classList.toggle('ro', RO()); if (!RO()) return;
+   document.querySelectorAll('#stage input,#stage select').forEach(e => e.disabled = true);
+@@ -269,17 +299,22 @@ async function post(u, b) { BUSY = true; PVC = {}; try { const r = await fetch(u
+   if (!r.ok) notify(await readError(r)); await refresh(); return r.ok } catch (e) { netErr(); return false } finally { BUSY = false } }
+ async function pvClean() { try { const r = await fetch('/api/preview_clean', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload(2)) }); if (r.ok) sel(2).pv = await r.json() } catch (e) { netErr() } }
+ const setUpl = v => { UPL = v; if (V === 0 && !R && NAV === 'flow' && ST) stage() };
+-/* Hộp chọn sheet: chỉ hiện khi tệp Excel có từ 2 sheet trở lên. Trả về {tên tệp: tên sheet} hoặc null nếu hủy. */
++/* Hộp chọn sheet: hiện khi tệp Excel có từ 2 sheet. Chọn một hoặc nhiều sheet, mỗi sheet thành một tab. Trả về {tên tệp: [sheet...]} hoặc null nếu hủy. */
+ function askSheets(list) { return new Promise(res => {
+-  const ov = document.createElement('div'); ov.className = 'ov';
++  const ov = document.createElement('div'), dim = (f, s) => { const d = (f.info || {})[s]; return d ? `${N(Math.max(0, d.rows - 1))} dòng · ${d.cols} cột` : '' }; ov.className = 'ov';
+   ov.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="sdT"><div class="dh2">${ic('database', 22)}<b id="sdT">Chọn sheet để tải lên</b></div>
+-${list.map((f, i) => `<div class="sp"><label for="sp${i}" title="${esc(f.name)}"><span>${esc(f.name)}</span><small>${f.sheets.length} sheet</small></label><select id="sp${i}">${f.sheets.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>`).join('')}
++<p class="sub" style="margin:6px 0 0">Mỗi sheet được chọn sẽ thành một tab riêng để bạn chuyển đổi góc nhìn. Chọn một hoặc nhiều sheet.</p>
++${list.map((f, i) => `<fieldset class="spf" data-f="${i}"><legend title="${esc(f.name)}"><span>${esc(f.name)}</span><small>${f.sheets.length} sheet</small><button type="button" class="lnk" data-all="${i}">Chọn tất cả</button></legend>${f.sheets.map((x, j) => `<label class="spc"><input type="checkbox" value="${esc(x)}" ${(f.sheets.length <= 3 || j === 0) ? 'checked' : ''}><span>${esc(x)}</span><small>${dim(f, x)}</small></label>`).join('')}</fieldset>`).join('')}
+ <div class="act"><button class="btn g" data-r="0">Hủy</button><button class="btn" data-r="1">Tải lên</button></div></div>`;
+   const done = v => { document.removeEventListener('keydown', key); ov.remove(); res(v) };
+   const key = e => { if (e.key === 'Escape') done(null) };
+-  ov.onclick = e => { if (e.target === ov) return done(null); const b = e.target.closest('[data-r]'); if (!b) return;
+-    if (b.dataset.r === '0') return done(null); const o = {}; list.forEach((f, i) => o[f.name] = ov.querySelector('#sp' + i).value); done(o) };
+-  document.addEventListener('keydown', key); document.body.appendChild(ov); ov.querySelector('select').focus() }) }
++  const chk = () => { ov.querySelectorAll('[data-all]').forEach(a => { const bs = [...ov.querySelectorAll(`.spf[data-f="${a.dataset.all}"] input`)]; a.textContent = bs.every(x => x.checked) ? 'Bỏ chọn tất cả' : 'Chọn tất cả' }); const bad = [...ov.querySelectorAll('.spf')].some(fs => !fs.querySelector('input:checked')); const b = ov.querySelector('[data-r="1"]'); b.disabled = bad; b.title = bad ? 'Mỗi tệp cần chọn ít nhất một sheet' : '' };
++  ov.addEventListener('change', chk); chk();
++  ov.onclick = e => { if (e.target === ov) return done(null); const all = e.target.closest('[data-all]');
++    if (all) { const bs = [...ov.querySelectorAll(`.spf[data-f="${all.dataset.all}"] input`)], on = bs.some(x => !x.checked); bs.forEach(x => x.checked = on); return chk() }
++    const b = e.target.closest('[data-r]'); if (!b || b.disabled) return;
++    if (b.dataset.r === '0') return done(null); const o = {}; list.forEach((f, i) => o[f.name] = [...ov.querySelectorAll(`.spf[data-f="${i}"] input:checked`)].map(x => x.value)); done(o) };
++  document.addEventListener('keydown', key); document.body.appendChild(ov); ov.querySelector('input').focus() }) }
+ async function upload(files) { files = [...files]; if (UPL || !files.length) return;
+   const xl = files.filter(f => /\.(xlsx|xlsm|xls)$/i.test(f.name)); let sheets = {};
+   setUpl(true);
+@@ -329,6 +364,10 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
+   else if (a === 'start') { const q = $('q').value.trim(); if (!q) { $('q').focus(); return } if (await post('/api/start', { question: q, ctx: U.ctx })) { V = 1; all() } }
+   else if (a === 'go') { V = +v; FB = false; all() }
+   else if (a === 'tab') { TAB = v; stage() }
++  else if (a === 'rerender') { stage() }
++  else if (a === 'ckind') { sel(5)['k' + b.dataset.i] = v; stage() }
++  else if (a === 'ftab') { GT[grpOf(v)] = v; stage() }
++  else if (a === 'rmgroup') { for (const f of S_().files.filter(f => grpOf(f.name) === v)) { delete PV[f.name]; await post('/api/remove_file', { name: f.name }) } delete GT[v] }
+   else if (a === 'adj') { FB = !FB; stage() }
+   else if (a === 'fbs') { const t = U.fbt.trim(); if (!t) return; U.fbt = ''; FB = false; await post('/api/run/' + V, { feedback: t }) }
+   else if (a === 'retry') { await post('/api/run/' + V, {}) }
+diff --git a/static/js/settings.js b/static/js/settings.js
+index 3f4906e..3bea83f 100644
+--- a/static/js/settings.js
++++ b/static/js/settings.js
+@@ -1,4 +1,5 @@
+-// Tab "API & Model": mỗi người dùng tự nhập khóa API (lưu mã hóa), Base URL và model của riêng mình.
++// Tab "API & Model": mỗi người dùng tự nhập khóa API (lưu mã hóa), nhà cung cấp và model của riêng mình.
++// Base URL KHÔNG phải ô nhập độc lập: nó tự điền theo nhà cung cấp, chỉ nhập tay khi chọn "Tuỳ chỉnh".
+ (function () {
+   const $s = id => document.getElementById(id);
+   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+@@ -8,15 +9,50 @@
+     if (!r.ok) throw new Error(j.error || ('Lỗi máy chủ (' + r.status + ')'));
+     return j;
+   }
+-  const form = () => ({ base_url: $s('sBase').value.trim(), api_key: $s('sKey').value.trim(), model: $s('sModel').value.trim() });
++  let PS = [], SAVED = 'custom', HAS_KEY = false;
++  const prov = id => PS.find(p => p.id === id) || PS[PS.length - 1];
++  const host = u => { try { return new URL(u).hostname } catch (e) { return '' } };
++  const byHost = u => { const h = host(u); return h ? PS.find(p => !p.custom && p.base_url && host(p.base_url) === h) : null };
++  const family = m => { m = (m || '').trim(); return m ? PS.find(p => p.model_re && new RegExp(p.model_re, 'i').test(m)) || null : null };
++  const fits = (p, m) => !p.model_re || new RegExp(p.model_re, 'i').test(m);
++  const form = () => { const p = prov($s('sProv').value); return { base_url: p.custom ? $s('sBase').value.trim() : p.base_url, api_key: $s('sKey').value.trim(), model: $s('sModel').value.trim() } };
++
++  function hints() {
++    const p = prov($s('sProv').value), m = $s('sModel').value.trim(), f = family(m), mh = $s('sModelHint'), kh = $s('sKeyHint');
++    if (m && f && f.id !== p.id && !p.gateway) {
++      mh.className = 'sh warn';
++      mh.innerHTML = `Model "${E(m)}" thuộc ${E(f.label)}, nhưng nhà cung cấp đang chọn là ${E(p.label)}. <button type="button" class="lnk" id="sFix">Chuyển sang ${E(f.label)}</button>`;
++      $s('sFix').onclick = () => setProvider(f.id, false);
++    } else { mh.className = 'sh'; mh.textContent = 'Gõ tên model, hoặc bấm "Tải danh sách" để chọn từ chính API key này.' }
++    const changed = HAS_KEY && p.id !== SAVED && !$s('sKey').value.trim();
++    kh.className = 'sh' + (changed ? ' warn' : '');
++    kh.textContent = changed ? `API key đang lưu thuộc nhà cung cấp khác. Hãy nhập API key của ${p.label}; key cũ sẽ không được gửi sang địa chỉ mới.` : '';
++  }
++
++  function setProvider(id, clearModel) {
++    const p = prov(id), b = $s('sBase'), m = $s('sModel');
++    $s('sProv').value = p.id;
++    if (!p.custom) b.value = p.base_url;                       // đổi nhà cung cấp -> Base URL tự khớp, không bao giờ "kẹt" ở nhà cũ
++    b.readOnly = !p.custom; b.classList.toggle('ro', !p.custom);
++    $s('sBaseNote').textContent = p.custom ? 'Nhập địa chỉ endpoint tương thích OpenAI (thường kết thúc bằng /v1).' : 'Tự điền theo nhà cung cấp, không cần sửa. Muốn dùng địa chỉ riêng, hãy chọn "Tuỳ chỉnh".';
++    $s('sProvNote').textContent = p.note || '';
++    m.placeholder = 'vd: ' + p.hint;
++    if (clearModel && m.value && !fits(p, m.value.trim())) { m.value = ''; $s('sModels').innerHTML = '' }
++    if (!$s('sModels').innerHTML) $s('sModels').innerHTML = `<option value="${E(p.hint)}">`;
++    hints();
++  }
++
+   function paint(S, defModel) {
++    SAVED = S.provider || (byHost(S.base_url) || {}).id || 'custom'; HAS_KEY = !!S.has_key;
+     $s('sBase').value = S.base_url || '';
+-    $s('sModel').value = S.model || (S.configured ? '' : defModel || '');
++    setProvider(SAVED, false);
++    $s('sModel').value = S.model || (S.configured ? '' : (SAVED === 'gemini' ? defModel : '') || '');
+     $s('sKey').value = '';
+     $s('sKey').placeholder = S.has_key ? 'Đã lưu (…' + S.key_hint + ')' : 'API key';
+     $s('sState').className = 'pill ' + (S.broken ? 'w' : S.has_key ? 'g' : 'w');
+     $s('sState').textContent = S.broken ? 'Không đọc được key, hãy nhập lại' : S.has_key ? 'Đã có API key' : 'Chưa có API key';
+     $s('sClear').hidden = !S.has_key && !S.broken;
++    hints();
+   }
+   async function busy(btn, label, fn) {
+     const old = btn.textContent; btn.disabled = true; btn.textContent = label;
+@@ -24,28 +60,33 @@
+   }
+   window.renderSettings = async function () {
+     const box = $s('vSet');
+-    box.innerHTML = `<div class="card"><h2>API &amp; Model</h2>
++    try {
++      const S = await api('/api/settings/llm'); PS = S.providers || [];
++      box.innerHTML = `<div class="card"><h2>API &amp; Model</h2>
+       <div class="sf">
+-        <div><label for="sKey">API key <span id="sState" class="pill w"></span></label><input id="sKey" type="password" autocomplete="off" spellcheck="false"></div>
+-        <div><label for="sBase">Base URL</label><input id="sBase" type="url" autocomplete="off" spellcheck="false" placeholder="https://..."><small>Mặc định là Gemini. Đổi nếu dùng nhà cung cấp khác (OpenAI, OpenRouter...).</small></div>
+-        <div><label for="sModel">Model</label><div class="sr"><input id="sModel" list="sModels" autocomplete="off" spellcheck="false" placeholder="vd: gemini-2.5-flash"><datalist id="sModels"></datalist><button class="btn g" id="sList" type="button">Tải danh sách model</button></div>
+-          <small>Gõ tên model, hoặc bấm tải danh sách từ chính API key này rồi chọn.</small></div>
++        <div><label for="sProv">Nhà cung cấp</label><select id="sProv">${PS.map(p => `<option value="${E(p.id)}">${E(p.label)}</option>`).join('')}</select><small id="sProvNote" class="sh"></small></div>
++        <div><label for="sKey">API key <span id="sState" class="pill w"></span></label><input id="sKey" type="password" autocomplete="off" spellcheck="false"><small id="sKeyHint" class="sh"></small></div>
++        <div><label for="sBase">Base URL</label><input id="sBase" type="url" autocomplete="off" spellcheck="false" placeholder="https://..."><small id="sBaseNote" class="sh"></small></div>
++        <div><label for="sModel">Model</label><div class="sr"><input id="sModel" list="sModels" autocomplete="off" spellcheck="false"><datalist id="sModels"></datalist><button class="btn g" id="sList" type="button">Tải danh sách</button></div>
++          <small id="sModelHint" class="sh"></small></div>
+         <div class="sb"><button class="btn" id="sSave" type="button">Lưu và kiểm tra kết nối</button><button class="btn g" id="sClear" type="button" hidden>Xóa API key</button></div>
+       </div></div>`;
+-    try {
+-      const S = await api('/api/settings/llm'); paint(S, S.default_model);
++      paint(S, S.default_model);
++      $s('sProv').onchange = e => setProvider(e.target.value, true);
++      $s('sModel').oninput = hints; $s('sKey').oninput = hints;
++      $s('sBase').oninput = e => { const hp = byHost(e.target.value); if (hp && prov($s('sProv').value).custom) $s('sProvNote').textContent = `Địa chỉ này là của ${hp.label}: nên chọn đúng nhà cung cấp ở trên để Base URL tự khớp.` };
+       $s('sSave').onclick = e => busy(e.currentTarget, 'Đang kiểm tra...', async () => {
+-        const r = await api('/api/settings/llm', form()); paint(r.settings, '');
++        const r = await api('/api/settings/llm', form()); paint({ ...r.settings, provider: (byHost(r.settings.base_url) || {}).id || 'custom' }, '');
+         if (r.test.ok) notify(r.test.message, 'ok', 'Đã lưu'); else notify(r.test.message, 'error', 'Đã lưu, nhưng kết nối bị lỗi');
+       });
+       $s('sList').onclick = e => busy(e.currentTarget, 'Đang tải...', async () => {
+-        const f = form(); const r = await api('/api/settings/llm/models', { base_url: f.base_url, api_key: f.api_key });
++        const f = form(); const r = await api('/api/settings/llm/models', { base_url: f.base_url, api_key: f.api_key, model: '' });
+         $s('sModels').innerHTML = r.models.map(m => `<option value="${E(m)}">`).join('');
+         notify(`Tìm thấy ${r.models.length} model. Bấm vào ô Model để chọn.`, 'ok'); $s('sModel').focus();
+       });
+       $s('sClear').onclick = async e => {
+         if (!(await askConfirm('Xóa API key đã lưu? Bạn sẽ cần nhập lại để chạy phân tích.', 'Xóa key'))) return;
+-        busy(e.currentTarget, 'Đang xóa...', async () => { const r = await api('/api/settings/llm/clear', {}); paint(r.settings, ''); notify('Đã xóa API key.', 'ok') });
++        busy(e.currentTarget, 'Đang xóa...', async () => { const r = await api('/api/settings/llm/clear', {}); paint({ ...r.settings, provider: SAVED }, ''); notify('Đã xóa API key.', 'ok') });
+       };
+     } catch (e) { notify(e.message, 'error') }
+   };
+diff --git a/tests/format_test.py b/tests/format_test.py
+new file mode 100644
+index 0000000..a775af5
+--- /dev/null
++++ b/tests/format_test.py
+@@ -0,0 +1,177 @@
++# -*- coding: utf-8 -*-
++"""Kiểm thử hồi quy cho: số/đơn vị tiếng Việt, nhãn cột, tiêu đề biểu đồ khớp dữ liệu, nhiều sheet, nhà cung cấp LLM.
++Dựng lại ĐÚNG các lỗi người dùng đã thấy (2.24 trillion VNĐ, 11773398767.5, 'điểm', trongLuongKg, tiêu đề 'giảm 15,7%' trên biểu đồ tăng...).
++Chạy: python tests/format_test.py"""
++import io
++import os
++import re
++import sys
++import tempfile
++import zipfile
++
++tmp = tempfile.mkdtemp()
++os.environ.update(DATABASE_URL=f"sqlite:///{tmp}/f.db")
++sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++
++import numpy as np  # noqa: E402
++import pandas as pd  # noqa: E402
++
++from app import create_app, db, labels, numfmt, providers, state  # noqa: E402
++from app.data.loader import list_sheets, load_files  # noqa: E402
++from app.export import publish  # noqa: E402
++
++n_ok = 0
++
++
++def check(cond, label):
++    global n_ok
++    if not cond:
++        print("FAIL:", label)
++        sys.exit(1)
++    n_ok += 1
++    print("ok  ", label)
++
++
++# ------------------------------------------------------------------ 1. số và đơn vị --
++known = numfmt.Known.from_dfs([pd.DataFrame({"Tháng": ["9", "8"], "Doanh thu": [2240813537.5, 1935760431.25]})])
++t = numfmt.fix_text("Doanh thu tháng 9 đạt 2.24 trillion VNĐ, cao nhất trong năm.", known)
++check("trillion" not in t and "VNĐ" not in t and "2,24 tỷ đồng" in t, f"'2.24 trillion VNĐ' -> '2,24 tỷ đồng' ({t})")
++t = numfmt.fix_text("Doanh thu tháng 9 lên tới 2 241 813 537 điểm, vượt 12 % so với tháng 8.", known)
++check("2.241.813.537 đồng" in t and "12%" in t and "điểm" not in t, f"số ngăn bằng dấu cách + 'điểm' -> chuẩn Việt ({t})")
++t = numfmt.fix_text("Tháng 9 = 2240813537.5, tỷ lệ tăng 2240813537.5/1935760431.25-1≈0.157", known)
++check("2.240.813.537,5" in t and "0,157" in t and "." not in t.replace("2.240.813.537", "").replace("1.935.760.431", ""), f"số thô có dấu ngăn nghìn + dấu phẩy thập phân ({t})")
++t = numfmt.fix_text("Tỷ lệ hoàn trả cao nhất tháng 3 (6.97%), vượt mức 4.9%. Ngày 24.10.2026, bản 1.2.3, giá 2.240 đồng.")
++check("6,97%" in t and "4,9%" in t and "24.10.2026" in t and "1.2.3" in t and "2.240 đồng" in t, f"đổi dấu thập phân nhưng không đụng ngày/phiên bản/số nghìn ({t})")
++check(numfmt.fix_text(numfmt.fix_text("Tổng 2.24 trillion VNĐ, 6.97%", known), known) == numfmt.fix_text("Tổng 2.24 trillion VNĐ, 6.97%", known), "chuẩn hóa là idempotent (chạy hai lần không đổi)")
++kp = numfmt.fix_kpi({"label": "Doanh thu tổng năm 2026", "value": "11773398767.5"})
++check(kp["value"] == "11,77 tỷ đồng", f"KPI 11773398767.5 -> {kp['value']}")
++check(numfmt.fix_kpi({"label": "Số đơn", "value": "14500"})["value"] == "14.500", "KPI số đếm có dấu ngăn nghìn")
++check(numfmt.fix_kpi({"label": "Tỷ lệ hoàn trả", "value": "0.0697"})["value"] == "6,97%", "KPI tỷ lệ 0-1 -> phần trăm")
++check(not numfmt.has_value(numfmt.fix_kpi({"label": "Tỷ trọng bán hàng theo vùng", "value": ""})), "KPI rỗng bị nhận diện để loại")
++bad = numfmt.audit("Điện thoại & phụ kiện chiếm 1.557.676.062 đồng, tháng 9 đạt 2,24 tỷ đồng", numfmt.Known([2557676062.5, 2240813537.5]))
++check(bad == ["1.557.676.062"], f"bắt số lớn không khớp bảng ({bad}), không bắt số đúng")
++
++check(numfmt.audit("Doanh thu tháng 9 lên tới 2.241.813.537 đồng", numfmt.Known([2240813537.5, 1935760431.25])) == ["2.241.813.537"],
++      "bắt số AI viết lệch 1 triệu so với bảng (2.241.813.537 so với 2.240.813.537,5)")
++check(numfmt.audit("Tăng 304.053.106 đồng so với tháng 8", numfmt.Known.from_dfs([pd.DataFrame({"Doanh thu": [2240813537.5, 1936760431.25]})])) == [],
++      "số suy ra hợp lệ (chênh lệch hai ô cùng cột) không bị báo oan")
++
++# ------------------------------------------------------------------ 1b. tín hiệu phạm vi & chất lượng (generic) --
++from app.data.scope import scope_hints  # noqa: E402
++_r = np.random.default_rng(2)
++_n = 200
++_df = pd.DataFrame({"NgayDat": pd.date_range("2026-01-01", "2026-09-24", periods=_n), "TrangThaiDon": _r.choice(["Hoàn thành", "Hoàn trả", "Đã hủy"], _n, p=[.82, .07, .11]),
++                    "SoTien": np.where(_r.random(_n) < .07, -1, 1) * _r.integers(100000, 900000, _n), "ThuongHieu": _r.choice(list("ABCD"), _n), "ChiTiet": [None] * 160 + ["x"] * 40})
++_h = scope_hints({"don_hang": _df})
++check("«TrangThaiDon»" in _h and "QUYẾT ĐỊNH" in _h, "phát hiện cột phân loại bản ghi cần quyết định phạm vi")
++check("«SoTien»" in _h and "âm" in _h, "phát hiện cột số vừa âm vừa dương")
++check("24/30" in _h and "tạm tính" in _h, "phát hiện kỳ cuối chưa đủ ngày")
++check("«ChiTiet» thiếu 80%" in _h, "phát hiện cột thiếu nhiều không dùng để chia cơ cấu")
++check("«ThuongHieu»" not in _h, "cột phân loại thường (thương hiệu) không bị coi là loại bản ghi")
++
++# ------------------------------------------------------------------ 2. nhãn và đơn vị cột --
++for raw, want in [("DanhMuc", "Danh mục"), ("ThuongHieu", "Thương hiệu"), ("TrongLuongKg", "Trọng lượng"), ("GiaNiemYet", "Giá niêm yết"),
++                  ("GiaVon", "Giá vốn"), ("order_id", "Mã đơn hàng"), ("Doanh thu (đ)", "Doanh thu (đ)"), ("PhuongThucThanhToan", "Phương thức thanh toán"), ("Customer_Name", "Tên khách hàng"),
++                  ("du_lieu_thuong_mai_dien_tu", "Dữ liệu thương mại điện tử")]:
++    check(labels.label(raw) == want, f"nhãn: {raw} -> {labels.label(raw)}")
++check(labels.unit("TrongLuongKg") == "kg" and labels.unit("ThuongHieu") == "" and labels.unit("SoLuong") == "" and labels.unit("GiaNiemYet") == "đ"
++      and labels.unit("DoanhThu") == "đ" and labels.unit("TyLeHoanTra") == "%", "đơn vị suy theo TỪ: kg không phải tiền, thương hiệu không phải thưởng")
++check(labels.is_rate("GiaNiemYet") and labels.is_rate("TrongLuongKg") and not labels.is_rate("SoLuong") and labels.is_id("MaSanPham") and not labels.is_id("DanhMuc"), "nhận diện đơn giá/tỷ lệ (dùng trung bình) và cột mã")
++
++# ------------------------------------------------------------------ 3. tiêu đề biểu đồ khớp dữ liệu --
++rows = [("2026-01-01", 1.2e9), ("2026-02-01", 1.0e9), ("2026-09-01", 2.2e9)]
++check(not numfmt.consistent("Doanh thu giảm 15,7% từ tháng 1 đến 3", rows, True), "tiêu đề 'giảm' trên biểu đồ tăng bị phát hiện")
++check(numfmt.consistent("Doanh thu tăng 83,3% từ đầu kỳ", rows, True), "tiêu đề đúng hướng, đúng % được giữ")
++check(numfmt.headline(rows, "line", "Doanh thu (đ)", True) == "Doanh thu tăng 83,3% từ T1/2026 đến T9/2026", f"câu tính từ dữ liệu: {numfmt.headline(rows, 'line', 'Doanh thu (đ)', True)}")
++
++# ------------------------------------------------------------------ 4. toàn bộ báo cáo: dashboard, HTML, MD, PPTX --
++app = create_app()
++u = db.create_user("An", "an@gmail.com", "matkhau-123", status="approved")
++rng = np.random.default_rng(7)
++n = 69
++prod = pd.DataFrame({"MaSanPham": [f"SP{i:03d}" for i in range(n)], "DanhMuc": rng.choice(["Điện thoại & Phụ kiện", "Thời trang", "Gia dụng"], n),
++                     "ThuongHieu": rng.choice(["Alpha", "Beta", "Gamma", "Delta"], n), "TrongLuongKg": rng.uniform(.5, 5, n).round(1),
++                     "GiaNiemYet": rng.choice([1_200_000, 2_500_000, 3_900_000], n), "GiaVon": rng.choice([700_000, 1_500_000, 2_800_000], n)})
++days = pd.date_range("2026-01-01", "2026-09-24", freq="D")
++sales = pd.DataFrame({"NgayDat": days, "DoanhThu": (rng.uniform(3e7, 9e7, len(days)) * np.linspace(1, 2.2, len(days))).round(0)})
++month = pd.DataFrame({"Tháng": [f"2026-{m:02d}-01" for m in range(1, 10)], "Doanh thu": [1.2e9, 1.0e9, 1.1e9, 1.05e9, 1.15e9, 1.25e9, 1.5e9, 1.9357604e9, 2.2408135e9]})
++region = pd.DataFrame({"Vùng": ["Miền Nam", "Miền Bắc", "Miền Trung"], "Doanh thu": [5759948862.0, 4689363481.25, 2211528975.0]})
++
++
++def tab(title, df):
++    return {"title": title, "cols": list(df.columns), "rows": df.values.tolist(), "err": None}
++
++
++with app.test_request_context():
++    state.bind(u["id"])
++    A = state.A
++    A["question"], A["ctx"], A["started"] = "Cho tôi tình hình kinh doanh, sản phẩm bán chạy", "Thương mại điện tử", state.now_iso()
++    A["files"] = [{"name": "du_lieu_thuong_mai_dien_tu.xlsx::SanPham", "rows": n}, {"name": "du_lieu_thuong_mai_dien_tu.xlsx::DoanhThu", "rows": len(days)}]
++    A["clean"] = {"du_lieu_thuong_mai_dien_tu.xlsx::SanPham": prod, "du_lieu_thuong_mai_dien_tu.xlsx::DoanhThu": sales}
++    A["x"] = {3: {0: month, 1: region}}
++    A["d"] = {1: {"kpis": []}, 2: {"pv": None},
++              3: {"phase": "result", "tasks": [{"title": "Doanh thu hàng tháng", "goal": "xu hướng"}, {"title": "Doanh thu theo vùng", "goal": "so sánh"}],
++                  "result": {"kpis": [{"label": "Doanh thu tổng năm 2026", "value": "11773398767.5"}, {"label": "Doanh thu bán chạy nhất", "value": "2258413537.5"},
++                                      {"label": "Tỷ trọng bán hàng theo vùng", "value": ""}],
++                             "tables": [tab("Doanh thu hàng tháng", month), tab("Doanh thu theo vùng", region)], "findings": []}},
++              4: {"summary": "Doanh thu tháng 9 đạt 2.24 trillion VNĐ, cao nhất trong năm, với điện thoại & phụ kiện chiếm 57% tổng doanh thu.",
++                  "insights": [{"title": "Doanh thu tháng 9 lên tới 2 241 813 537 điểm, vượt 12 % so với tháng 8", "confidence": "Cao", "source": "Doanh thu hàng tháng",
++                                "evidence": "Tháng 9 = 2240813537.5, Tháng 8 = 1935760431.25, tỷ lệ tăng 2240813537.5/1935760431.25-1≈0.157"},
++                               {"title": "Điện thoại & phụ kiện chiếm 1 557 676 062 điểm, tương đương 57% doanh thu", "confidence": "Cao", "source": "Doanh thu theo vùng",
++                                "evidence": "Điện thoại & phụ kiện = 2557676062.5"}],
++                  "actions": [{"text": "Tối ưu khuyến mãi", "priority": "Cao", "impact": "Tăng 1.5 triệu VND"}], "risks": ["Tháng 9 mới có 24 ngày"]},
++              5: {"title": "Tình hình doanh thu 2026", "narrative": "Doanh thu tháng 9 đạt 2.24 trillion VNĐ.",
++                  "final": {"title": "Tình hình doanh thu 2026", "kpis": [0, 1, 2],
++                            "charts": [{"task": 0, "x": "Tháng", "y": "Doanh thu", "kind": "line", "title": "Doanh thu tháng 2026", "unit": "đ",
++                                        "insight": "Doanh thu giảm 15,7% từ tháng 1 đến 3", "recommended": True},
++                                       {"task": 1, "x": "Vùng", "y": "Doanh thu", "kind": "bars", "title": "Doanh thu theo vùng", "unit": "đ", "insight": "", "recommended": True}]}}}
++    publish()
++    aid = A["id"]
++    state.unbind()
++
++get = lambda name: db.get_file(u["id"], aid, name)[0]       # noqa: E731
++html, md, dash = get("bao_cao.html").decode("utf8"), get("bao_cao.md").decode("utf8"), get("dashboard.html").decode("utf8")
++from pptx import Presentation  # noqa: E402
++prs = Presentation(io.BytesIO(get("bao_cao.pptx")))
++ppt = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
++for name, body in [("báo cáo HTML", html), ("Markdown", md), ("PPTX", ppt), ("dashboard", dash)]:
++    check(not re.search(r"trillion|billion|million|VNĐ|VND", body.replace("VND_", "")) , f"{name}: không còn trillion/VND tiếng Anh")
++    check("11773398767.5" not in body and "2240813537.5" not in body and "1935760431.25" not in body, f"{name}: không còn số thô thiếu dấu ngăn nghìn")
++check("11,77 tỷ đồng" in html and "11,77 tỷ đồng" in md, "KPI hiện '11,77 tỷ đồng' ở HTML và Markdown")
++check("Tỷ trọng bán hàng theo vùng" not in html and "Tỷ trọng bán hàng theo vùng" not in ppt, "KPI rỗng không lên báo cáo và PPTX")
++check("giảm 15,7%" not in html and "giảm 15,7%" not in ppt and "tăng" in html and "T1/2026" in html, "tiêu đề biểu đồ sai hướng được thay bằng câu tính từ dữ liệu")
++check("điểm" not in html.replace("Điểm", "") .replace("điểm bất", ""), "đơn vị tiền không còn là 'điểm'")
++check("Cần kiểm tra số liệu" in html, "phát hiện có số lớn không khớp bảng được gắn cờ 'Cần kiểm tra số liệu'")
++check("Danh mục" in dash and "Thương hiệu" in dash and "Trọng lượng" in dash and '"DanhMuc"' not in dash and "trongLuongKg" not in dash, "dashboard dùng nhãn tiếng Việt thay tên biến")
++check("class=\"dtabs\"" in dash and "data-ds=" in dash and 'id="dsw"' not in dash, "dashboard đổi bảng bằng tab, không còn ô chọn")
++
++# ------------------------------------------------------------------ 5. nhiều sheet = nhiều tab --
++buf = io.BytesIO()
++with pd.ExcelWriter(buf, engine="openpyxl") as w:
++    pd.DataFrame({"Thang": ["2026-01", "2026-02", "2026-03"], "DoanhThu": [100, 120, 90]}).to_excel(w, sheet_name="DoanhThu", index=False)
++    pd.DataFrame({"DanhMuc": list("ABCD"), "SoLuong": [3, 4, 5, 6]}).to_excel(w, sheet_name="SanPham", index=False)
++
++
++class F:
++    filename = "ban_hang.xlsx"
++
++    def read(self):
++        return buf.getvalue()
++
++
++info = list_sheets([F()])[0]
++check(info["sheets"] == ["DoanhThu", "SanPham"] and info["info"]["SanPham"]["rows"] == 5, "liệt kê sheet kèm số dòng x cột")
++d, *_ = load_files([F()], {"ban_hang.xlsx": ["DoanhThu", "SanPham"]})
++check(list(d) == ["ban_hang.xlsx::DoanhThu", "ban_hang.xlsx::SanPham"], "chọn nhiều sheet -> mỗi sheet một bảng 'tệp::sheet'")
++d, *_ = load_files([F()], {"ban_hang.xlsx": "SanPham"})
++check(list(d) == ["ban_hang.xlsx::SanPham"], "vẫn nhận chọn một sheet dạng chuỗi (tương thích cũ)")
++
++# ------------------------------------------------------------------ 6. nhà cung cấp và Base URL --
++check(providers.check_pair("https://api.openai.com/v1", "gemini-2.5-flash") and "Google Gemini" in providers.check_pair("https://api.openai.com/v1", "gemini-2.5-flash"),
++      "model Gemini + Base URL OpenAI: báo lỗi tiếng Việt kèm cách sửa")
++check(providers.check_pair("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-2.5-flash") is None and providers.check_pair("https://openrouter.ai/api/v1", "gpt-4o") is None
++      and providers.check_pair("https://api.noi-bo.vn/v1", "gpt-4o") is None, "khớp hoặc là gateway/địa chỉ riêng thì không chặn")
++check(providers.BY_ID["gemini"]["base_url"].startswith("https://generativelanguage.googleapis.com/v1beta/openai") and providers.provider_of_url("https://api.anthropic.com/v1/") == "anthropic",
++      "mỗi nhà cung cấp có Base URL mặc định riêng; nhận ra nhà cung cấp từ địa chỉ")
++
++print(f"\nTẤT CẢ {n_ok} KIỂM TRA ĐỀU ĐẠT")

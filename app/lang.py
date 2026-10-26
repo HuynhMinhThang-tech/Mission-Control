@@ -6,7 +6,10 @@ import re
 RULE = ("NGÔN NGỮ: viết TOÀN BỘ bằng tiếng Việt có dấu (tiêu đề, nhận định, tên bảng, tên cột kết quả, nhãn biểu đồ, đơn vị). "
         "Không xen tiếng Anh (không viết insight, dashboard, KPI, count, avg, total, ratio...). Tên cột kết quả phải đọc tự nhiên như người Việt viết, "
         "viết hoa chữ cái đầu, có dấu cách, ví dụ 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'; tuyệt đối không dùng snake_case hay chữ IN HOA. "
-        "Chỉ giữ nguyên tên riêng, mã và giá trị gốc có trong dữ liệu.")
+        "Chỉ giữ nguyên tên riêng, mã và giá trị gốc có trong dữ liệu. "
+        "SỐ VÀ ĐƠN VỊ: dùng dấu chấm ngăn nghìn, dấu phẩy thập phân (1.234.567,5); tiền viết bằng chữ Việt: '2,24 tỷ đồng', '850 triệu đồng' (tuyệt đối không viết trillion, billion, million, VND; "
+        "không dùng 'điểm' làm đơn vị tiền); tỷ lệ viết '57,3%'. Mọi con số PHẢI sao chép từ bảng kết quả được cung cấp, không tự cộng trừ nhẩm, không làm tròn lệch; "
+        "giá trị KPI là chuỗi đã định dạng kiểu Việt (vd '11,77 tỷ đồng').")
 
 COLNAME_RULE = ("TÊN CỘT của `result` PHẢI là tiếng Việt có dấu, tự nhiên (vd 'Cấp bậc', 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'): "
                 "đặt tên ngay khi tổng hợp hoặc đổi tên ở cuối code bằng result = result.rename(columns={...}). Không dùng tên tiếng Anh, snake_case hay chữ IN HOA.")
@@ -31,11 +34,9 @@ def foreign(name, known=()):
 
 
 def humanize(name):
-    """Dự phòng: tách snake_case/camelCase, dịch từng từ bằng từ điển, viết hoa chữ đầu."""
-    t = re.sub(r"([a-z])([A-Z])", r"\1 \2", str(name))
-    words = [w for w in re.split(r"[_\s]+", t.strip()) if w]
-    out = " ".join(TOK.get(w.lower(), w.lower()) for w in words).strip()
-    return (out[:1].upper() + out[1:]) or str(name)
+    """Dự phòng: tách snake_case/camelCase, khôi phục dấu tiếng Việt và dịch từ tiếng Anh bằng từ điển (xem labels.py)."""
+    from . import labels
+    return labels.label(name) or str(name)
 
 
 def _unique(names):

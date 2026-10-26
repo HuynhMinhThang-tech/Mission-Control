@@ -3,7 +3,7 @@
 import math
 
 from ..utils import E, compact, vn
-from .common import is_time_like, trunc
+from .common import is_time_like, pp, trunc
 
 
 def _ext(vals):
@@ -58,7 +58,7 @@ def cols(rows):
             o.append(f'<text class="vl {"b" if i == imax else ""}" x="{cx:.1f}" y="{vy:.1f}" text-anchor="middle">{E(compact(v))}</text>')
         lx, ly = cx, H - pb + 18
         rot = f' transform="rotate(-35 {lx:.1f} {ly})"' if n > 7 else ""
-        o.append(f'<text class="lb" x="{lx:.1f}" y="{ly}" text-anchor="{"end" if n > 7 else "middle"}"{rot}>{E(trunc(l, 12))}</text>')
+        o.append(f'<text class="lb" x="{lx:.1f}" y="{ly}" text-anchor="{"end" if n > 7 else "middle"}"{rot}>{E(trunc(pp(l), 12))}</text>')
     return "".join(o) + "</svg>"
 
 
@@ -80,13 +80,13 @@ def line(rows):
          '<polyline class="ln" points="' + " ".join(f"{x:.1f},{y:.1f}" for x, y in pts) + '"/>']
     key = {0, n - 1, vals.index(max(vals)), vals.index(min(vals))}
     for i, ((l, v), (x, y)) in enumerate(zip(rows, pts)):
-        o.append(f'<circle class="dot{" k" if i in key else ""}" cx="{x:.1f}" cy="{y:.1f}" r="{4.5 if i in key else 2.5}"><title>{E(l)}: {vn(v)}</title></circle>')
+        o.append(f'<circle class="dot{" k" if i in key else ""}" cx="{x:.1f}" cy="{y:.1f}" r="{4.5 if i in key else 2.5}"><title>{E(pp(l))}: {vn(v)}</title></circle>')
         if i in key:
             anc = "start" if i == 0 else "end" if i == n - 1 else "middle"
             o.append(f'<text class="vl b" x="{x:.1f}" y="{y - 10:.1f}" text-anchor="{anc}">{E(compact(v))}</text>')
     step = max(1, n // 8)
     for i in range(0, n, step):
-        o.append(f'<text class="lb" x="{pts[i][0]:.1f}" y="{H - pb + 18}" text-anchor="middle">{E(trunc(rows[i][0], 10))}</text>')
+        o.append(f'<text class="lb" x="{pts[i][0]:.1f}" y="{H - pb + 18}" text-anchor="middle">{E(trunc(pp(rows[i][0]), 10))}</text>')
     return "".join(o) + "</svg>"
 
 
