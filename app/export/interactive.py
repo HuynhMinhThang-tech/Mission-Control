@@ -159,12 +159,15 @@ def _safe(obj):
         .replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
-def build_dashboard(meta, dfs):
-    """meta: title, question, ctx, date, summary, insights, actions, risks, kpis. dfs: {tên: DataFrame đã làm sạch}."""
+def build_dashboard(meta, dfs, plan=None):
+    """meta: title, question, ctx, date, summary, insights, actions, risks, kpis. dfs: {tên: DataFrame đã làm sạch}.
+    plan: danh sách biểu đồ được chọn (xem export/dash_plan.py); None = để trình duyệt tự chọn bố cục theo dữ liệu như trước."""
     ds = build_datasets(dfs)
     payload = {"title": meta["title"], "question": meta["question"], "ctx": meta.get("ctx") or "", "date": meta["date"],
                "summary": meta.get("summary") or "", "insights": meta.get("insights") or [], "actions": meta.get("actions") or [],
                "risks": meta.get("risks") or [], "datasets": ds}
+    if plan is not None:
+        payload["plan"] = plan
     css = (ASSETS / "live.css").read_text("utf-8")
     js = (ASSETS / "live.js").read_text("utf-8")
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'

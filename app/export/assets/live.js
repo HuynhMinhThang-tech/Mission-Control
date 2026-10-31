@@ -134,19 +134,51 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const top = (real.length ? real : g).reduce((b, r) => r.v > b.v ? r : b), tot = g.reduce((s, r) => s + Math.max(r.v, 0), 0);
     return add && tot > 0 ? `<b>${esc(top.l)}</b> dẫn đầu, chiếm ${pct(top.v / tot)} tổng` : `Cao nhất: <b>${esc(top.l)}</b> (${esc(v(top.v))})`;
   }
+  /* ---- biểu đồ cột dọc (so sánh ít nhóm, hoặc chuỗi thời gian dạng cột) ---- */
+  function colsHTML(g, by, m, a) {
+    const isT = by === 't', ord = isT || (ds.dims.find(d => d.k === by) || {}).ord, u = m ? m.unit : '';
+    let rows = ord ? g.slice().sort((x, y) => x.q - y.q) : g.slice().sort((x, y) => (x.na - y.na) || (y.v - x.v));
+    const cap = isT ? 24 : 10, cut = rows.length - cap; if (cut > 0) rows = isT ? rows.slice(-cap) : rows.slice(0, cap);
+    const mx = Math.max(...rows.map(r => r.v), 0) || 1;
+    return `<div class="cols">${rows.map(r => `<div class="col ${r.na ? 'na' : ''} ${cls(by, r.q)}" data-k="${by}" data-q="${r.q}" data-tt="${tt({ ...r, l: isT ? ml(r.l) : r.l }, m, a)}">
+<span class="cv">${a === 'count' ? f0.format(r.v) : compact(r.v)}</span><span class="cb"><i style="height:${Math.max(2, r.v / mx * 100)}%"></i></span><span class="cl" title="${esc(isT ? ml(r.l) : r.l)}">${esc(isT ? ml(r.l) : r.l)}</span></div>`).join('')}</div>${cut > 0 ? `<p class="more">và ${cut} ${isT ? 'kỳ trước đó' : 'nhóm khác'} không hiển thị</p>` : ''}`;
+  }
+
+  /* ---- danh sách biểu đồ cần vẽ: theo KẾ HOẠCH do người dùng chọn (D.plan); không có kế hoạch thì tự chọn theo dữ liệu như trước ---- */
+  function cardList() {
+    const gm = cm(), ga = agg();
+    if (!Array.isArray(D.plan)) {
+      const c = []; if (P.timeOk) c.push({ t: 'trend', by: 't', m: gm, a: ga });
+      if (P.donutK) c.push({ t: ga === 'avg' ? 'bars' : 'donut', by: P.donutK, m: gm, a: ga });
+      P.bars.forEach(k => c.push({ t: 'bars', by: k, m: gm, a: ga })); return c;
+    }
+    return D.plan.filter(c => c.ds === ds.name && c.on !== false && (c.by === 't' ? !!ds.time : c.by in L)).map(c => {
+      let m, a;
+      if (c.m == null || c.m === '*') { m = gm; a = ga } else if (c.m === '') { m = null; a = 'count' } else { m = ds.meas.find(x => x.k === c.m) || gm; a = m && m.k === c.m && c.agg === 'avg' ? 'avg' : 'sum'; if (!m) a = 'count' }
+      let t = c.kind === 'line' ? 'trend' : (c.kind || 'bars');
+      if (c.by === 't') t = t === 'trend' ? 'trend' : 'cols'; else if (t === 'trend') t = 'bars';
+      if (t === 'donut' && a !== 'sum' && a !== 'count') t = 'bars';
+      return { t, by: c.by, m, a };
+    });
+  }
+  function spans(cards) {                                   // xếp bố cục 12 cột: đường rộng, tròn hẹp, còn lại ghép đôi
+    const sp = []; let i = 0;
+    while (i < cards.length) { const c = cards[i], n = cards[i + 1];
+      if (c.t === 'trend') { if (n && n.t === 'donut') { sp.push(8, 4); i += 2 } else { sp.push(12); i += 1 } }
+      else if (c.t === 'donut' && n && n.t !== 'trend') { sp.push(4, 8); i += 2 }
+      else if (n && n.t !== 'trend' && c.t !== 'donut') { sp.push(6, 6); i += 2 }
+      else { sp.push(12); i += 1 } }
+    return sp;
+  }
   function chartsHTML() {
-    const m = cm(), a = agg(), cards = []; jobs = [];
-    if (P.timeOk) cards.push({ t: 'trend', by: 't' });
-    if (P.donutK) cards.push({ t: a === 'avg' ? 'bars' : 'donut', by: P.donutK });
-    P.bars.forEach(k => cards.push({ t: 'bars', by: k }));
-    const sp = cards.map(() => 6); let i0 = 0;
-    if (cards[0] && cards[0].t === 'trend') { if (cards[1] && cards[1].by === P.donutK) { sp[0] = 8; sp[1] = 4; i0 = 2 } else { sp[0] = 12; i0 = 1 } }
-    else if (cards[0] && cards[0].by === P.donutK && cards[1]) { sp[0] = 4; sp[1] = 8; i0 = 2 }
-    if ((cards.length - i0) % 2 === 1) sp[cards.length - 1] = 12;
+    const cards = cardList(); jobs = [];
+    if (!cards.length) return `<section class="card c12"><div class="empty">${Array.isArray(D.plan) ? 'Chưa chọn biểu đồ nào cho bảng này. Hãy bật biểu đồ ở mục chọn biểu đồ.' : 'Không có biểu đồ phù hợp.'}</div></section>`;
+    const sp = spans(cards);
     return cards.map((c, i) => {
-      const g = groupBy(c.by, m ? m.k : '', a), name = mName(m, a), title = `${name} theo ${c.t === 'trend' ? 'tháng' : lc(L[c.by])}`;
-      const body = !g.length ? '<div class="empty">Không có dữ liệu với bộ lọc hiện tại.</div>' : c.t === 'trend' ? (jobs.push({ id: 'tr' + i, g, m, a }), `<div class="trend" id="tr${i}"></div>`) : c.t === 'donut' ? donutHTML(g, c.by, m, a) : barsHTML(g, c.by, m, a);
-      return `<section class="card c${sp[i]}"><div class="ch"><h3>${esc(title)}</h3><p>${lead(c.t, g, m, a)}</p></div>${body}</section>`;
+      const { m, a } = c, g = groupBy(c.by, m ? m.k : '', a), name = mName(m, a), title = `${name} theo ${c.by === 't' ? 'tháng' : lc(L[c.by])}`;
+      const body = !g.length ? '<div class="empty">Không có dữ liệu với bộ lọc hiện tại.</div> ' : c.t === 'trend' ? (jobs.push({ id: 'tr' + i, g, m, a }), `<div class="trend" id="tr${i}"></div>`)
+        : c.t === 'donut' ? donutHTML(g, c.by, m, a) : c.t === 'cols' ? colsHTML(g, c.by, m, a) : barsHTML(g, c.by, m, a);
+      return `<section class="card c${sp[i]}"><div class="ch"><h3>${esc(title)}</h3><p>${lead(c.t === 'cols' && c.by === 't' ? 'trend' : c.t, g, m, a)}</p></div>${body}</section>`;
     }).join('');
   }
   function paintTrends() { jobs.forEach(j => { const el = document.getElementById(j.id); if (el) el.innerHTML = trendSVG(j.g, Math.max(320, Math.floor(el.clientWidth)), j.m, j.a) }) }
@@ -223,6 +255,7 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) 
   document.addEventListener('mousemove', e => { const el = e.target.closest ? e.target.closest('[data-tt]') : null, b = $('#tt'); if (!b) return;
     if (!el) { b.style.display = 'none'; return } b.textContent = el.dataset.tt; b.style.display = 'block'; b.style.left = Math.min(e.clientX + 14, innerWidth - 300) + 'px'; b.style.top = (e.clientY + 16) + 'px' });
   document.addEventListener('mousedown', e => { document.querySelectorAll('details.sl[open]').forEach(d => { if (!d.contains(e.target)) { d.open = false; openK.delete(d.dataset.sl) } }) });
+  window.addEventListener('message', e => { const m = e.data; if (e.origin !== location.origin || !m || m.type !== 'mc-plan' || !Array.isArray(m.plan)) return; D.plan = m.plan; if (ds) render() });
   let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (ds) paintTrends() }, 120) });
   if (!D.datasets.length) { $('#app').innerHTML = `<div class="wrap"><h1>${esc(D.title)}</h1><div class="note">Không có bảng dữ liệu phù hợp để dựng bảng điều khiển tương tác (cần ít nhất một cột phân loại hoặc cột ngày tháng).</div></div>` } else init(0);
 })();

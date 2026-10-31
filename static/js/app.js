@@ -11,7 +11,7 @@ const fmtDur = (a, b) => { if (!a || !b) return '—'; let s = Math.max(0, Math.
 let ST = null, R = null, SAVEV = 0, V = 0, NAV = 'flow', TAB = 'dash', FB = false, BUSY = false, UPL = false, SEL = {}, T0 = {};
 const U = { ctx: '', fbt: '' };
 const S_ = () => R || ST, RO = () => !!R;
-const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = { g }; return SEL[i] };
+const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : { g }; return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
 
 /* ---------- thành phần hiển thị ---------- */
 const bar = (rows, u = '') => { if (!rows.length) return ''; const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, sg = rows.some(r => r[1] < 0);
@@ -160,7 +160,7 @@ function opCard(o, d, aw, s, fx) {
   const note = fill ? ((alt && alt.reason) || (MI[m] && MI[m][1]) || '') : '', risk = fill ? ((alt && alt.risk) || '') : (o.risk || '');
   const opts = (o.numeric ? ['median', 'mean', 'mode', 'drop_rows', 'value'] : ['mode', 'drop_rows', 'value']);
   const meth = fill ? `<div class="mt"><span>Cách xử lý:</span>${opts.map(x => `<label class="mc ${m === x ? 'on' : ''}"><input type="radio" name="m${o.id}" data-s="2" data-k="m${o.id}" value="${x}" ${m === x ? 'checked' : ''} ${aw ? '' : 'disabled'}>${esc((MI[x] || [x])[0])}</label>`).join('')}${m === 'value' ? (aw ? `<input class="vi" data-s="2" data-k="v${o.id}" value="${esc(s['v' + o.id] ?? o.value ?? 'Không rõ')}" aria-label="Giá trị điền">` : `<b>= ${esc(o.value)}</b>`) : ''}</div>${note && note !== o.reason ? `<p class="mn">${esc(note)}</p>` : ''}` : '';
-  return `<div class="op ${on ? 'on' : ''}"><label class="oph"><input type="checkbox" data-s="2" data-k="c${o.id}" ${on ? 'checked' : ''} ${aw ? '' : 'disabled'}><b>${esc(o.label || o.title)}</b></label>
+  return `<div class="op ${on ? 'on' : ''}"><label class="oph"><input type="checkbox" data-s="2" data-k="c${o.id}" ${on ? 'checked' : ''} ${aw ? '' : 'disabled'}><b>${esc(o.label || o.title)}</b>${adjTag(d, o.title)}</label>
 ${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${mapView(o)}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
 ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ? 'Kết quả' : 'Nếu áp dụng'}: <b>${esc(fx[o.id])}</b></span></div>` : ''}</div>` }
 
@@ -173,31 +173,23 @@ const VIEW = [
 <div class="frm"><label>Tệp dữ liệu</label>${drop}${none}${F.length ? fileList(S) : ''}
 <label for="ctx">Bối cảnh doanh nghiệp (không bắt buộc)</label><textarea id="ctx" data-i="ctx" ${d ? 'disabled' : ''} placeholder="Mô tả ngắn về doanh nghiệp">${esc(ctx)}</textarea></div>
 ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 16) + 'Bắt đầu phân tích</button></div>'}` },
-  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
-<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
+  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
+${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
 <details><summary>Danh sách vấn đề phát hiện (${d.issues.length})</summary>${d.issues.length ? tbl(['Tệp', 'Cột', 'Vấn đề', 'Số lượng'], d.issues.map(r => [esc(r.file), esc(r.col), esc(r.issue), N(r.n)])) : 'Không phát hiện vấn đề tự động.'}</details>` },
-  () => { const S = S_(), d = S.d[2], s = sel(2), aw = S.st[2] === 'await' && !RO(), pv = (aw && s.pv) || d.pv, fx = pv.fx || d.pv.fx || {};
+  () => { const S = S_(), d = S.d[2], s = sel(2), aw = S.st[2] === 'await' && !RO();
+    if (s.needPv && aw) { s.needPv = false; pvClean().then(() => stage()) }
+    const pv = (aw && s.pv) || d.pv, fx = pv.fx || d.pv.fx || {};
     const groups = new Map(); d.ops.forEach(o => { const k = o.file + '\u0001' + (o.column || ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o) });
     const html = [...groups.values()].map(g => { const f = g[0], found = [...new Set(g.map(o => o.found).filter(Boolean))].join('; ');
       return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${g.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }).join('');
     const keys = Object.keys(pv.before).filter(k => pv.before[k] || pv.after[k]);
-    return `<h2>Làm sạch dữ liệu</h2>${vcBlock(d.vc, aw)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
+    return `<h2>Làm sạch dữ liệu</h2>${adjBanner(d)}${vcBlock(d.vc, aw)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
 <div class="two"><div class="box"><h4>Trước</h4>${bar(keys.map(k => [k, pv.before[k]]))}</div><div class="box"><h4>Sau khi áp dụng</h4>${bar(keys.map(k => [k, pv.after[k]]))}</div></div>
 <div><small style="color:var(--sub)">Đã xử lý khoảng ${N(pv.n)} mục.${aw ? ' Thao tác rủi ro mặc định không được chọn.' : ''}</small></div>` },
   () => { const S = S_(), d = S.d[3], s = sel(3);
-    if (d.phase === 'menu') return `<h2>Phân tích</h2>
-${d.menu.map(m => { const on = s['a' + m.id] ?? m.recommended; return `<label class="opt ${on ? 'on' : ''}"><input type="checkbox" data-s="3" data-k="a${m.id}" ${on ? 'checked' : ''}><span><b>${esc(m.title)}</b> — ${esc(m.goal || '')}<small>Chỉ số: ${esc((m.metrics || []).join('; '))}</small><small>Vì sao: ${esc(m.why || '')}</small></span></label>` }).join('')}
-<div class="frm"><label>Phân tích hoặc chỉ số riêng bạn muốn thêm (không bắt buộc)</label><textarea data-s="3" data-i="anc">${esc(s.anc || '')}</textarea></div>`;
-    if (d.phase === 'code') return `<h2>Phân tích</h2>
-${d.tasks.map((t, i) => `<div class="f"><span class="tg">${i + 1}</span><b>${esc(t.title)}</b> <small>${esc(t.goal || '')}</small><div class="fb"><textarea data-s="3" data-i="code${i}" style="min-height:150px;font-family:ui-monospace,Consolas,monospace;font-size:12px">${esc(s['code' + i] ?? t.code)}</textarea></div></div>`).join('')}
-<div class="note">Code do AI viết sẽ chạy trên máy bạn. Hãy xem lại trước khi thực thi.</div>`;
-    const r = d.result, T = r.tables;
-    return `<h2>Phân tích</h2>${kpo(r.kpis)}
-<div class="two">${r.charts.map(c => chart(c, T)).join('')}</div>${r.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
-<details><summary>Bảng kết quả đầy đủ</summary>${T.map(t => `<p><b>${esc(t.title)}</b></p>` + tableOf(t)).join('')}</details>
-<details><summary>Code đã chạy</summary>${d.tasks.map(t => `<p><b>${esc(t.title)}</b></p><pre style="white-space:pre-wrap;font-size:12px">${esc(t.code)}</pre>`).join('')}</details>` },
+    return d.phase === 'menu' ? a3Menu(d, s) : d.phase === 'code' ? a3Code(d, s) : a3Result(d, s) },
   () => { const S = S_(), d = S.d[4], s = sel(4), aw = S.st[4] === 'await' && !RO(), ck = (k, i) => aw ? `<label style="float:right;font-size:12px;color:var(--sub)"><input type="checkbox" data-s="4" data-k="${k}${i}" ${(s[k + i] ?? true) ? 'checked' : ''}> Đưa vào báo cáo</label>` : '';
-    return `<h2>Phát hiện và hành động</h2>${d.summary ? fnd(esc(d.summary), 'Tóm tắt', 'sum') : ''}
+    return `<h2>Phát hiện và hành động</h2>${adjBanner(d)}${d.summary ? fnd(esc(d.summary), 'Tóm tắt', 'sum') : ''}
 ${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Phát hiện ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small><details><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}</details></div>`).join('')}
 ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
@@ -205,9 +197,9 @@ ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hàn
  <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => !String(k.value ?? '').trim() ? '' : `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(fv(k.value))}</b><small>${esc(k.label)}</small></span></label>`).join('')}
  <p class="hint">Biểu đồ (chọn loại phù hợp, xem trước ngay)</p><div class="cpg">${d.charts.map((c, i) => chartCard(c, i, s, T)).join('')}</div></details>` : '';
     const title = (d.final && !aw) ? d.final.title : (aw ? (s.rt ?? d.title) : d.title);
-    return `<h2>Báo cáo</h2>${panel}
+    return `<h2>Báo cáo</h2>${adjBanner(d)}${panel}
 <div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
-${TAB === 'dash' ? `<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải bảng điều khiển…</div><iframe class="dashf" title="Bảng điều khiển tương tác" src="${S.approved ? `/api/view/${S.id}/dashboard.html` : '/api/dash_preview?title=' + encodeURIComponent(title)}"></iframe></div><div class="hint">Bấm vào biểu đồ để lọc chéo. Số liệu tính từ dữ liệu đã làm sạch.</div>`
+${TAB === 'dash' ? `${aw && d.dash ? dashPick(d, s) : ''}<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải bảng điều khiển…</div><iframe class="dashf" title="Bảng điều khiển tương tác" src="${S.approved ? `/api/view/${S.id}/dashboard.html` : d.dash ? dpSrc(title, aw ? dpState(d, s) : ((d.final && d.final.dash) || d.dash.ai)) : '/api/dash_preview?title=' + encodeURIComponent(title)}"></iframe></div><div class="hint">Bấm vào biểu đồ để lọc chéo. Số liệu tính từ dữ liệu đã làm sạch.</div>`
       : TAB === 'rep' ? fnd(esc(S.d[4].summary), 'Câu trả lời') + kpo(sk) + `<div class="two">${sc.map(c => chart(c, T)).join('')}</div>` + fnd(esc(d.narrative).replace(/\n/g, '<br>'), 'Tóm tắt') + fnd(esc(S.question) + (S.ctx ? '<br>' + esc(S.ctx) : ''), 'Bối cảnh') + fnd('Dựa trên ' + S.d[3].tasks.length + ' phân tích đã chọn và dữ liệu đã làm sạch.', 'Phương pháp') + fnd(S.d[4].actions.map(a => esc(a.text)).join('<br>') || '—', 'Khuyến nghị')
       : `<div class="slides">${outline(S, sc).map((x, i) => `<div class="sl">${i + 1}. ${esc(i === 0 ? title : x[0])}<small>${esc(x[1])}</small></div>`).join('')}</div>`}` },
   () => { const S = S_(), d = S.d[6], ap = S.approved;
@@ -217,7 +209,7 @@ ${TAB === 'dash' ? `<div class="dashw"><div class="dashl"><span class="spin lg">
 function payload(i) { const s = sel(i), S = S_();
   if (i === 2) { const d = S.d[2]; return { manual: Object.entries(s.mm || {}).map(([k, m]) => { const [file, column] = k.split('\u0001'); return { file, column, mapping: m } }).filter(x => Object.keys(x.mapping).length), sel: Object.fromEntries(d.ops.map(o => [o.id, s['c' + o.id] ?? o.recommended])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
   if (i === 4) { const d = S.d[4]; return { ins: d.insights.map((x, k) => s['i' + k] ?? true), act: d.actions.map((x, k) => s['a' + k] ?? true) } }
-  if (i === 5) { const r = S.d[3].result; return { title: s.rt ?? S.d[5].title, charts: selCharts(), kpis: r.kpis.map((k, j) => j).filter(j => s['p' + j] ?? true) } }
+  if (i === 5) { const r = S.d[3].result, o = { title: s.rt ?? S.d[5].title, charts: selCharts(), kpis: r.kpis.map((k, j) => j).filter(j => s['p' + j] ?? true) }; if (S.d[5].dash) o.dash = dpState(S.d[5], s); return o }
   return {} }
 
 const FBP = { menu: ['Bạn muốn thêm hoặc bỏ mục nào?', 'Gửi và chỉnh danh sách'], code: ['Bạn muốn sửa gì ở code?', 'Gửi và viết lại code'], result: ['Bạn muốn tính thêm gì?', 'Gửi, viết lại code và chạy lại'] };
@@ -228,11 +220,11 @@ function actions(i, s) { if (RO()) return '';
     else if (ph === 'code') m = '<button class="btn" data-a="a3exec">Thực thi code phân tích</button><button class="btn g" data-a="a3re">Chọn lại danh sách</button>';
     else m = `<button class="btn" data-a="ok">${i === 6 ? 'Duyệt báo cáo' : 'Chấp nhận và tiếp tục'}</button>`;
     const fp = i === 3 ? FBP[ph] : ['Bạn muốn AI chỉnh gì?', 'Gửi và chạy lại'];
-    return fbChips(i) + `<div class="act">${m}<button class="btn g" data-a="adj">Điều chỉnh</button></div>` + (FB ? `<div class="fb"><textarea data-i="fbt" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
+    return fbChips(i) + `<div class="act">${m}${i === 6 ? '' : '<button class="btn g" data-a="adj">Điều chỉnh</button>'}</div>` + (FB && i < 6 ? `<div class="fb"><textarea data-i="fbt" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
   if (s === 'done' && !ST.approved) return fbChips(i) + '<div class="act"><button class="btn g" data-a="redo">Làm lại từ bước này</button></div>'; return '' }
 
 function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card">';
-  if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div>`;
+  if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div><div class="wls" id="waitList">${waitList(S, i)}</div>`;
   else if (s === 'error') h += `<h2>${STEPS[i].t}</h2><div class="note">Lỗi: ${esc(S.err && S.err.msg)}</div><div class="act"><button class="btn" data-a="retry">Thử lại</button></div>`;
   else if (s === 'pending' && i > 0) h += `<p class="lead">Bước này chưa chạy.</p>`;
   else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
@@ -266,6 +258,7 @@ function roBar() { if (!R) { $('robar').innerHTML = ''; return }
 
 function syncLoad() { const j = ST && ST.job; if (j && j.running) { const a = (ST.ag && ST.ag[j.step]) || []; Loading.hold(STEPS[j.step].t + (a[j.k] ? ' · ' + a[j.k] : '')) } else Loading.hold('') }
 function paintAgent() { const S = S_(), i = V, a = (S.ag && S.ag[i]) || [], s = S.st[i], run = S.job.running && S.job.step === i, k = run ? S.job.k : s === 'pending' ? -1 : s === 'error' ? S.job.k : 99;
+  const wl = $('waitList'); if (wl) wl.innerHTML = waitList(S, i);
   if (run) { T0[i] = T0[i] || Date.now(); const w = $('waitSub'); if (w) w.textContent = (a[Math.max(k, 0)] || '') + (a[Math.max(k, 0)] ? ' · ' : '') + Math.round((Date.now() - T0[i]) / 1000) + ' giây' } else delete T0[i];
   $('agents').innerHTML = `<div class="stn">${STEPS[i].t}</div>` + (a.length ? a.map((x, j) => `<div class="ag ${j < k ? 'ok' : j === k && run ? 'on' : ''}"><i>${j < k ? '✓' : ''}</i>${esc(x)}</div>`).join('') : '<div class="ag">Bước này do bạn thực hiện.</div>');
   const P = { running: ['Đang chạy', 'w'], await: ['Chờ bạn', 'w'], done: ['Hoàn tất', ''], pending: ['Chưa chạy', 'w'], error: ['Lỗi', 'w'] }[s]; $('ast').textContent = P[0]; $('ast').className = 'pill ' + P[1];
@@ -369,12 +362,14 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'ftab') { GT[grpOf(v)] = v; stage() }
   else if (a === 'rmgroup') { for (const f of S_().files.filter(f => grpOf(f.name) === v)) { delete PV[f.name]; await post('/api/remove_file', { name: f.name }) } delete GT[v] }
   else if (a === 'adj') { FB = !FB; stage() }
-  else if (a === 'fbs') { const t = U.fbt.trim(); if (!t) return; U.fbt = ''; FB = false; await post('/api/run/' + V, { feedback: t }) }
+  else if (a === 'fbs') { const t = U.fbt.trim(); if (!t) return; U.fbt = ''; FB = false; const i = V, body = { feedback: t };
+    if (i === 3 && ST.d[3].tasks) { const d = ST.d[3], s = sel(3); body.codes = d.tasks.map((x, j) => s['code' + j] ?? x.code) }    // code bạn đã sửa tay đi cùng góp ý, AI sửa trên bản của bạn
+    keepSnap(i); if (!(await post('/api/run/' + i, body))) delete KEEP[i] }
   else if (a === 'retry') { await post('/api/run/' + V, {}) }
   else if (a === 'ok') { const i = V; if (await post('/api/accept/' + i, payload(i)) && i < 6) { V = i + 1; all() } }
   else if (a === 'redo') { FB = false; await post('/api/redo/' + V) }
-  else if (a === 'a3code') { const d = ST.d[3], s = sel(3); await post('/api/a3/code', { ids: d.menu.filter(m => s['a' + m.id] ?? m.recommended).map(m => m.id), custom: s.anc || '' }) }
-  else if (a === 'a3exec') { const d = ST.d[3], s = sel(3); await post('/api/a3/exec', { codes: d.tasks.map((t, i) => s['code' + i] ?? t.code) }) }
+  else if (a === 'a3code') { const d = ST.d[3], s = sel(3); keepSnap(3); if (!(await post('/api/a3/code', { ids: d.menu.filter(m => s['a' + m.id] ?? m.recommended).map(m => m.id), custom: s.anc || '', specs: (s.specs || []).map(x => x.spec) }))) delete KEEP[3] }
+  else if (a === 'a3exec') { const d = ST.d[3], s = sel(3); keepSnap(3); await post('/api/a3/exec', { codes: d.tasks.map((t, i) => s['code' + i] ?? t.code) }) }
   else if (a === 'a3re') { await post('/api/a3/reselect') }
   else if (a === 'viewh') { let r; try { r = await fetch('/api/history/' + v) } catch (e) { netErr(); return } if (!r.ok) { notify(await readError(r)); return }
     if (!R) SAVEV = V; R = await r.json(); R.job = { running: false, step: null, k: 99 }; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; all(); toTop() }

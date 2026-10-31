@@ -61,7 +61,7 @@ def publish():
     F = make_final()
     mt_html, mt_md = "text/html; charset=utf-8", "text/markdown; charset=utf-8"
     files = {
-        "dashboard.html": (build_dashboard(live_meta(F["title"]), A["clean"]).encode("utf-8"), mt_html),   # dashboard TƯƠNG TÁC (lọc, lọc chéo)
+        "dashboard.html": (build_dashboard(live_meta(F["title"]), A["clean"], A["d"][5]["final"].get("dash")).encode("utf-8"), mt_html),   # dashboard TƯƠNG TÁC với đúng các biểu đồ đã chọn
         "bao_cao.html": (build_html(F).encode("utf-8"), mt_html),                                           # báo cáo tĩnh có bằng chứng
         "bao_cao.pptx": (build_pptx(F), "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
         "bao_cao.md": (build_md(F).encode("utf-8"), mt_md),

@@ -144,3 +144,14 @@ h2.sec{margin:36px 0 14px;font-size:18px;font-weight:700;letter-spacing:-.01em}
 @media(max-width:1000px){.c4,.c6,.c8{grid-column:span 12}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.act{grid-template-columns:1fr}.wrap{padding:0 16px}.filters{margin:0 -16px;padding:8px 16px}.top h1{font-size:24px}.filters{position:static}.kpi b{font-size:26px}}
 @media(max-width:560px){.kpis{grid-template-columns:1fr}.bar{grid-template-columns:minmax(70px,38%) minmax(0,1fr) auto}.bv small{display:none}}
 @media print{.filters,.tools{display:none}body{background:#fff}.card,.kpi{break-inside:avoid;box-shadow:none}}
+
+/* biểu đồ cột dọc */
+.cols{display:flex;align-items:flex-end;gap:6px;height:210px;padding:18px 2px 0}
+.col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;gap:4px}
+.col .cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;min-height:0}
+.col .cb i{display:block;width:min(34px,78%);background:var(--acc);border-radius:5px 5px 2px 2px;transition:opacity .15s,filter .15s}
+.col:hover .cb i{filter:brightness(1.12)}
+.col.dim .cb i{opacity:.28}.col.sel .cb i{filter:saturate(1.2)}
+.col.na .cb i{background:var(--na)}
+.col .cv{font-size:11px;color:var(--sub);white-space:nowrap}
+.col .cl{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}

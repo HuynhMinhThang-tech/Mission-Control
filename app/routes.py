@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Toàn bộ API của Flask."""
+import base64
 import json
 import re
 import traceback
@@ -13,11 +14,13 @@ from .llm import ensure_ready
 from .agents import NEXT, RUN
 from .agents.charts import valid_charts
 from .agents.cleaner import apply_choice, preview
-from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, write_code
+from .agents import adjust
+from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, parse_request, write_code
 from .agents.profiler import run as s1_profile
 from .constants import STEP_T
+from .data import analysis_spec
 from .data.loader import list_sheets, load_files, make_sample
-from .export import live_meta, publish
+from .export import dash_plan, live_meta, publish
 from .export.interactive import build_dashboard
 from .state import A, LOCK, bump, current_user_id, log, now_iso, reset, start_job
 from .utils import clean_json
@@ -220,9 +223,12 @@ def start():
 
 @bp.post("/api/run/<int:i>")
 def run(i):
-    fb = ((request.get_json(silent=True) or {}).get("feedback") or "").strip()
+    p = request.get_json(silent=True) or {}
+    fb = (p.get("feedback") or "").strip()
     if i not in RUN:
         return bad("Bước không hợp lệ")
+    if fb and i == 6:
+        return bad("Bước 6 chỉ kiểm tra, không nhận góp ý. Muốn sửa nội dung, hãy mở bước tương ứng và bấm \"Làm lại từ bước này\".")
     labels = A["ag"][i]
     fn = RUN[i]
     if i == 3:
@@ -234,14 +240,22 @@ def run(i):
                 fn, labels = planner_menu, ["Đề xuất phân tích và chỉ số"]
         else:
             labels = planner_labels(fb)
+    job, args = fn, (fb,)
     if fb:
+        # Điều chỉnh: chạy lại theo góp ý, kiểm tra đã áp dụng chưa, tự chạy lại nếu chưa (xem agents/adjust.py)
+        adjust.apply_edits(i, p)                       # code người dùng đã sửa tay đi cùng góp ý, không bị bỏ
+        labels = list(labels) + [adjust.CHECK_LABEL]
+        job, args = adjust.run, (i, fn, fb)
         with LOCK:
-            A["fbh"].setdefault(str(i), []).append(fb)
+            A["fbh"].setdefault(str(i), []).append(fb)    # phải có trong lịch sử TRƯỚC khi luồng nền chạy (prompt đọc lịch sử góp ý)
             bump()
         log("Phản hồi: " + fb)
     try:
-        start_job(i, labels, fn, fb)
+        start_job(i, labels, job, *args)
     except RuntimeError as e:
+        if fb:
+            with LOCK:
+                (A["fbh"].get(str(i)) or [""]).pop()
         return bad(str(e), 409)
     return jsonify(ok=True)
 
@@ -266,11 +280,21 @@ def a3(act):
             d["result"] = None
             bump()
         return jsonify(ok=True)
+    if act == "spec":                                  # kiểm tra + mô tả một ô ghép biến (xử lý ngay, không cần AI)
+        sp, err = analysis_spec.normalize(p.get("spec"), A["clean"])
+        return jsonify(ok=sp is not None, spec=sp, error=err)
+    if act == "parse":                                 # mô tả bằng lời -> AI nhận diện biến -> code kiểm tra với dữ liệu thật
+        try:
+            return jsonify(ok=True, **parse_request(p.get("text")))
+        except UserError as e:
+            return bad(str(e))
     try:
         if act == "code":
-            if not p.get("ids") and not (p.get("custom") or "").strip():
-                return bad("Hãy chọn ít nhất 1 mục")
-            start_job(3, ["Viết code cho các mục đã chọn"], write_code, p.get("ids", []), p.get("custom", ""))
+            specs = [n for n, _ in (analysis_spec.normalize(sp, A["clean"]) for sp in (p.get("specs") or [])[:12]) if n]
+            if not p.get("ids") and not (p.get("custom") or "").strip() and not specs:
+                return bad("Hãy chọn ít nhất 1 mục, hoặc ghép biến / mô tả điều bạn muốn phân tích")
+            start_job(3, ["Viết code cho các mục đã chọn"] if not specs or p.get("ids") or (p.get("custom") or "").strip() else ["Tạo code từ các biến đã ghép"],
+                      write_code, p.get("ids", []), p.get("custom", ""), "", 0, specs)
         elif act == "exec":
             start_job(3, ["Chạy code phân tích", "Tự sửa lỗi nếu có", "Tổng hợp KPI và phát hiện"], execute, p.get("codes", []))
         else:
@@ -302,7 +326,10 @@ def accept(i):
             ch = valid_charts(p.get("charts", []), tabs)
             if not ch:
                 return bad("Hãy chọn ít nhất 1 biểu đồ")
-            A["d"][5]["final"] = {"title": (p.get("title") or A["d"][5]["title"]).strip(), "charts": ch, "kpis": [int(k) for k in p.get("kpis", [])]}
+            d5 = A["d"][5]
+            dash = (d5.get("dash") or {})
+            plan = dash_plan.validate(p["dash"], dash.get("catalog") or dash_plan.catalog(A["clean"])) if isinstance(p.get("dash"), list) else dash.get("ai")
+            d5["final"] = {"title": (p.get("title") or d5["title"]).strip(), "charts": ch, "kpis": [int(k) for k in p.get("kpis", [])], "dash": plan}
         elif i == 6:
             publish()
     except Exception as e:
@@ -393,9 +420,21 @@ def view_file(aid, name):
 
 @bp.get("/api/dash_preview")
 def dash_preview():
-    """Dashboard tương tác dựng từ dữ liệu ĐÃ LÀM SẠCH, dùng để xem thử ở bước Báo cáo (trước khi duyệt)."""
+    """Dashboard tương tác dựng từ dữ liệu ĐÃ LÀM SẠCH, dùng để xem thử ở bước Báo cáo (trước khi duyệt).
+    `plan` (base64url của JSON) là danh sách biểu đồ người dùng đang chọn; không có thì dùng gợi ý của AI."""
     with LOCK:
         if not A["clean"]:
             return bad("Chưa có dữ liệu đã làm sạch.", 404)
-        html = build_dashboard(live_meta(request.args.get("title") or None), A["clean"])
+        dash = (A["d"].get(5) or {}).get("dash") or {}
+        plan = dash.get("ai")
+        raw = request.args.get("plan")
+        if raw:
+            try:
+                got = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+                if isinstance(got, list):
+                    plan = dash_plan.validate(got, dash.get("catalog") or dash_plan.catalog(A["clean"]))
+            except (ValueError, UnicodeDecodeError):
+                pass                                   # plan hỏng thì dùng gợi ý của AI, không làm hỏng trang xem thử
+        html = build_dashboard(live_meta(request.args.get("title") or None), A["clean"], plan)
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+

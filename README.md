@@ -32,4 +32,4 @@ Code pandas do AI viết (hoặc người dùng sửa) KHÔNG chạy trong tiế
 Hạn chế còn lại (chưa phải cô lập mức container): tiến trình con vẫn cùng người dùng hệ điều hành, cùng nhân và cùng container với máy chủ web; chặn mạng và chặn đọc tệp chỉ ở tầng Python (mã gốc/lỗ hổng trong thư viện C vẫn là rủi ro); không có hạn mức theo người dùng; Windows/macOS chỉ có timeout, không có giới hạn RAM/CPU của hệ điều hành. Dùng cho nhóm nhỏ quen biết; trước khi cho người lạ dùng nên chuyển sang dịch vụ sandbox riêng không có mạng.
 
 ## Kiểm thử
-`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py` · `python tests/sandbox_test.py` (cần Linux)
+`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py` · `python tests/sandbox_test.py` (cần Linux) · `python tests/analysis_test.py` · `python tests/flow_test.py` · `python tests/ui_test.py` (cần `pip install playwright && playwright install chromium`)
