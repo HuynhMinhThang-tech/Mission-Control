@@ -5,6 +5,7 @@ import io
 import json
 import re
 import traceback
+import unicodedata
 
 import numpy as np
 import pandas as pd
@@ -125,6 +126,28 @@ def list_sheets(fs):
     return out
 
 
+def nfc_frame(df):
+    """Đưa tên cột và giá trị chữ về dạng dấu dựng sẵn (NFC). Tệp xuất từ macOS/Excel hay có dạng tổ hợp (a + dấu rời) làm
+    lọc `df['Loại'] == 'Chi tiêu'` không khớp (trả về 0 dòng) và vỡ chữ trên giao diện. Không đổi gì nếu dữ liệu đã chuẩn."""
+    if df is None or not hasattr(df, "columns"):
+        return df
+    d = df
+    cols = [unicodedata.normalize("NFC", c) if isinstance(c, str) else c for c in d.columns]
+    if cols != list(d.columns):
+        d = d.copy()
+        d.columns = cols
+    for c in d.columns:
+        s = d[c]
+        if s.dtype != object and not pd.api.types.is_string_dtype(s):
+            continue
+        bad = s.map(lambda v: isinstance(v, str) and not unicodedata.is_normalized("NFC", v))
+        if bool(bad.any()):
+            if d is df:
+                d = d.copy()
+            d[c] = s.map(lambda v: unicodedata.normalize("NFC", v) if isinstance(v, str) else v)
+    return d
+
+
 def load_files(fs, sheets=None):
     """Đọc tệp + chạy cổng kiểm tra cấu trúc. Trả về (dfs đang dùng, báo cáo cấu trúc, bản gốc/bản chuẩn hóa).
     Tệp Excel nhiều sheet: đọc các sheet người dùng đã chọn (sheets = {tên tệp: tên sheet | [các sheet]}); mỗi sheet thành một bảng riêng
@@ -181,6 +204,10 @@ def load_files(fs, sheets=None):
             dfs[key] = res["fixed"] if res["fixed"] is not None else res["plain"]
             reports[key] = meta(res)
             alts[key] = {"plain": res["plain"], "fixed": res["fixed"]}
+    for k in dfs:                                                       # chuẩn hóa dấu tiếng Việt một lần ở cửa vào, mọi bước sau dùng chung
+        dfs[k] = nfc_frame(dfs[k])
+        if k in alts:
+            alts[k] = {a: nfc_frame(v) for a, v in alts[k].items()}
     return dfs, reports, alts
 
 

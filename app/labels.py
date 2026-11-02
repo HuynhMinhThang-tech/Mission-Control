@@ -78,11 +78,36 @@ def has_viet(s):
     return bool(re.search(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", str(s).lower()))
 
 
+def nfc(s):
+    """Chuẩn hóa dấu tiếng Việt về dạng dựng sẵn (NFC). Tệp xuất từ macOS/Excel hay có dạng tổ hợp (a + dấu rời): không chuẩn hóa thì dấu bị coi là ký tự ngăn cách và biến mất."""
+    return unicodedata.normalize("NFC", str(s))
+
+
+def _camel_cut(s):
+    """Chèn dấu cách ở ranh giới camelCase, nhận biết chữ hoa/thường theo Unicode.
+    Không dùng dải [À-Ỹ] trong regex: dải đó chứa cả chữ THƯỜNG có dấu (ạ, ụ, ề, ứ, à...) nên 'Loại' bị tách thành 'Lo ại'."""
+    out = []
+    n = len(s)
+    for i, ch in enumerate(s):
+        if i and ch.isupper():
+            p = s[i - 1]
+            nxt = s[i + 1] if i + 1 < n else ""
+            if p.islower() or p.isdigit():                            # camelCase: 'trongLuong' -> 'trong Luong'
+                out.append(" ")
+            elif p.isupper() and nxt.islower():                       # HTMLText -> HTML Text
+                out.append(" ")
+        out.append(ch)
+    return "".join(out)
+
+
+def has_camel(s):
+    """Có ranh giới camelCase thật (chữ thường rồi tới chữ hoa) hay không."""
+    return any(a.islower() and b.isupper() for a, b in zip(s, s[1:]))
+
+
 def _split(col):
     """Tách tên cột thành các từ gốc (giữ nguyên hoa/thường, dấu): 'TrongLuongKg' -> ['Trong','Luong','Kg']."""
-    s = str(col).strip()
-    s = re.sub(r"(?<=[a-zà-ỹ0-9])(?=[A-ZÀ-Ỹ])", " ", s)            # camelCase
-    s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)                   # HTMLText -> HTML Text
+    s = _camel_cut(nfc(col).strip())
     return [t for t in re.split(r"[\W_]+", s) if t]
 
 
@@ -154,10 +179,10 @@ def is_id(col):
 
 def label(col, with_unit=False):
     """'DanhMuc' -> 'Danh mục' · 'trongLuongKg' -> 'Trọng lượng' (with_unit=True: 'Trọng lượng (kg)') · tên đã đẹp thì giữ nguyên."""
-    s = str(col).strip()
+    s = nfc(col).strip()
     if not s:
         return s
-    if has_viet(s) and "_" not in s and not re.search(r"[a-zà-ỹ][A-ZÀ-Ỹ]", s):
+    if has_viet(s) and "_" not in s and not has_camel(s):
         return s[:1].upper() + s[1:]                                  # đã là tiếng Việt có dấu, viết đẹp: giữ nguyên
     raw = _split(s)
     toks = tokens(s)

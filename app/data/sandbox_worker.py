@@ -133,6 +133,8 @@ def _encode(r, pd):
 
 def _run(code, dfs, pd, np):
     env = {"__builtins__": _safe_builtins(), "pd": pd, "np": np, "dfs": dfs}
+    if len(dfs) == 1:                                            # AI hay viết thẳng `df[...]`: chỉ có một bảng thì không có gì để nhầm
+        env["df"] = next(iter(dfs.values()))
     exec(compile(code, "<phân tích>", "exec"), env)
     r = env.get("result")
     if isinstance(r, pd.Series):

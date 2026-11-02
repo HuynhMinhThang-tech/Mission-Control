@@ -2,7 +2,7 @@
 """AGENT 3 · Hoạch định phân tích → viết code pandas → tổng hợp kết quả (bước 4)."""
 from ..data import analysis_spec as S
 from ..data.quality import schema
-from ..data.sandbox import describe_error, df_table, prepare, run_code
+from ..data.sandbox import autofix_code, describe_error, df_table, prepare, run_code
 from ..errors import UserError
 from .. import numfmt
 from ..data.scope import scope_block
@@ -21,6 +21,7 @@ ROLE_FIX = "lập trình viên pandas"
 ROLE_SUM = "Agent Tổng hợp kết quả phân tích"
 ROLE_LOC = "Biên tập viên tiếng Việt"
 ROLE_PARSE = "Agent Nhận diện yêu cầu phân tích"
+MAX_FIX = 2                                 # số lần nhờ AI sửa một code lỗi trước khi báo lỗi cho người dùng
 
 PROMPT_MENU = (
     "Hãy ĐỀ XUẤT 6-10 phân tích / chỉ số ứng viên để NGƯỜI DÙNG TỰ CHỌN (chưa viết code). Gồm mô tả (điều gì đã xảy ra), "
@@ -42,6 +43,17 @@ PROMPT_CODE = (
     'Viết code cho TỪNG mục (đúng thứ tự, thêm 1 mục riêng cho yêu cầu bổ sung nếu có). Trả về DUY NHẤT JSON: {"tasks":[{"title":"...","goal":"...","code":"..."}]}\n'
     "Mỗi code: Python pandas/numpy (đã có pd, np, dfs), KHÔNG import, KHÔNG đọc/ghi file, KHÔNG dùng .query()/.eval()/thuộc tính bắt đầu bằng gạch dưới (dùng lọc bool df[df['x']>0]); kết quả gán vào biến `result` là DataFrame đã tổng hợp "
     "(<=50 dòng; mục dự báo trả cột kỳ, dự báo, cận dưới, cận trên). Truy cập bằng dfs['tên file']. " + COLNAME_RULE + CODE_RULES)
+
+def code_env(clean):
+    """Nói rõ cho AI code chạy ở đâu và có gì: nguồn gốc lỗi 'name df is not defined' và '.read_csv bị chặn' là AI tưởng phải tự đọc tệp."""
+    names = list(clean or {})
+    ex = names[0] if names else "tên bảng"
+    return (f"\nMÔI TRƯỜNG CHẠY CODE (bắt buộc đọc kỹ): chỉ có sẵn `pd`, `np` và `dfs` = dict {{tên bảng: DataFrame}} ĐÃ NẠP SẴN, không có tệp nào để đọc. "
+            f"Tên các bảng: {J(names, 800)}. Mỗi tác vụ chạy riêng, nên dòng đầu của MỖI code phải là df = dfs[{ex!r}] (chọn đúng bảng chứa cột cần dùng). "
+            "TUYỆT ĐỐI KHÔNG gọi pd.read_csv / pd.read_excel / open / import / to_csv / vẽ biểu đồ (sẽ bị chặn). "
+            "Khi lọc theo giá trị chữ (vd loại = 'Chi tiêu') phải dùng ĐÚNG chữ có trong dữ liệu (xem sample), kiểm tra lọc xong còn dòng; tên cột phải khớp từng ký tự. "
+            "Kết quả cuối gán vào biến `result` là DataFrame đã tổng hợp.\n")
+
 
 PROMPT_SUM = (
     'Trả về DUY NHẤT JSON: {"kpis":[{"label":"","value":"","delta":""}],"charts":[{"task":<số thứ tự bảng>,"x":"cột nhãn","y":"cột số","kind":"bars|cols|line|donut","title":"","unit":""}],'
@@ -126,10 +138,11 @@ def write_code(ids, custom, fb="", t0=0, specs=None):
     if ask_items or custom_all.strip():
         r = llm_json(SYS(ROLE_CODE),
                      ctx_txt(fb) + f"Dữ liệu đã làm sạch (biến `dfs` là dict tên file→DataFrame):\n{J(schema(clean, 3), 6000)}\n"
-                     f"Các phân tích người dùng đã chọn:\n{J(ask_items)}\nYêu cầu bổ sung của người dùng: {custom_all or 'không'}\n{old}\n" + scope_block(clean) + PROMPT_CODE, 12000)
+                     f"Các phân tích người dùng đã chọn:\n{J(ask_items)}\nYêu cầu bổ sung của người dùng: {custom_all or 'không'}\n{old}\n" + scope_block(clean) + code_env(clean) + PROMPT_CODE, 12000)
         for t in r.get("tasks", []):
             if isinstance(t, dict) and t.get("code"):
-                tasks.append({"title": str(t.get("title") or "Phân tích"), "goal": str(t.get("goal") or ""), "code": t["code"], "vars": S.vars_in_code(t["code"], clean), "src": "ai"})
+                code = autofix_code(str(t["code"]), clean)                       # df chưa gán / read_csv('x.csv'): sửa ngay để người dùng không phải thấy lỗi này
+                tasks.append({"title": str(t.get("title") or "Phân tích"), "goal": str(t.get("goal") or ""), "code": code, "vars": S.vars_in_code(code, clean), "src": "ai"})
     if not tasks:
         raise RuntimeError("AI không trả về code nào. Hãy bấm Thử lại hoặc mô tả góp ý rõ hơn.")
     with LOCK:
@@ -181,7 +194,8 @@ def execute(codes, t0=0):
         for t, task in enumerate(d["tasks"]):
             code = codes[t] if t < len(codes) and codes[t].strip() else task["code"]
             err = df = None
-            for attempt in range(2):
+            code = autofix_code(code, A["clean"])
+            for attempt in range(MAX_FIX + 1):
                 try:
                     df = run_code(code, A["clean"])
                     err = None
@@ -190,10 +204,11 @@ def execute(codes, t0=0):
                     raise                                    # hệ thống bận / lỗi không phải do code: đừng nhờ AI sửa code
                 except Exception as e:
                     err = describe_error(e)
-                    if attempt == 0:
+                    if attempt < MAX_FIX:
                         tick(t0 + 1)
-                        code = strip_code(llm(SYS(ROLE_FIX),
-                                              f"Sửa code lỗi, chỉ trả code (không import, không .query()/.eval()).\nLỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}"))
+                        code = autofix_code(strip_code(llm(SYS(ROLE_FIX),
+                                                           "Sửa code lỗi, chỉ trả code Python thuần (không markdown, không giải thích, không import, không .query()/.eval())."
+                                                           + code_env(A["clean"]) + f"Lỗi: {err}\nSchema: {J(schema(A['clean'], 2), 4000)}\nCode:\n{code}")), A["clean"])
             task["code"] = code
             dfs.append(df)
             errs.append(err)

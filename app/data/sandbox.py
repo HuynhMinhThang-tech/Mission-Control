@@ -25,6 +25,7 @@ from contextlib import contextmanager
 import pandas as pd
 
 from .. import config
+from .. import labels as lb
 from ..errors import UserError
 
 WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sandbox_worker.py")
@@ -58,6 +59,11 @@ DENY_ATTRS = {
     "ExcelWriter", "ExcelFile", "HDFStore", "show_config", "plot", "hist", "boxplot", "style",
     "to_csv", "to_excel", "to_pickle", "to_sql", "to_json", "to_parquet", "to_html", "to_clipboard", "to_feather", "to_hdf", "to_stata", "to_latex",
     "to_markdown", "to_xml", "to_orc", "to_gbq", "to_xarray"}
+HINT_READ = (": code không được đọc tệp. Dữ liệu đã nạp sẵn trong `dfs` (từ điển tên bảng -> DataFrame), "
+             "hãy bỏ dòng đọc tệp và viết df = dfs['tên bảng'].")
+HINT_IO = ": code không được ghi tệp hay vẽ biểu đồ; chỉ cần gán bảng kết quả vào biến `result`."
+IO_ATTRS = {"to_csv", "to_excel", "to_pickle", "to_sql", "to_json", "to_parquet", "to_html", "to_clipboard", "to_feather", "to_hdf", "to_stata",
+            "to_latex", "to_markdown", "to_xml", "to_orc", "to_gbq", "to_xarray", "savetxt", "save", "savez", "tofile"}
 BRACE_ATTR = re.compile(r"\{[^{}:!]*[.\[]")                # "{0.__class__}".format(x): TÊN TRƯỜNG đi sâu vào thuộc tính (dấu chấm trong phần định dạng như {:.1f} thì không sao)
 
 
@@ -67,7 +73,8 @@ def check_code(code):
     tree = ast.parse(code)                                  # SyntaxError được giữ nguyên để người dùng/AI thấy dòng lỗi
 
     def block(what):
-        raise CodeError(f"Code bị chặn vì chứa '{what}'")
+        hint = HINT_READ if what.startswith(".read_") else HINT_IO if what[1:] in IO_ATTRS | {"plot", "hist", "boxplot"} else ""
+        raise CodeError(f"Code bị chặn vì chứa '{what}'" + hint)
     for n in ast.walk(tree):
         if isinstance(n, (ast.Import, ast.ImportFrom)):
             block("import")
@@ -83,6 +90,96 @@ def check_code(code):
                 block(".format() (hãy dùng f-string)")
         elif isinstance(n, ast.arg) and n.arg.startswith("__"):
             block(n.arg)
+
+
+# ------------------------------------------------------------ sửa trước các lỗi AI hay mắc --
+def _base(name):
+    n = str(name).replace("\\", "/").rsplit("/", 1)[-1]
+    return re.sub(r"\.(csv|tsv|txt|xlsx|xlsm|xls)$", "", n, flags=re.I)
+
+
+def _match_table(name, files):
+    """Tên tệp AI viết trong code ('chi_tieu.csv') -> khóa bảng thật trong dfs (không phân biệt hoa/thường, bỏ đuôi tệp, chấp nhận 'tệp::sheet')."""
+    if name in files:
+        return name
+    want = lb.fold(_base(name))
+    for f in files:
+        if lb.fold(_base(f)) == want or lb.fold(_base(str(f).split("::")[0])) == want:
+            return f
+    return None
+
+
+def _guess_table(code, dfs):
+    """Bảng có nhiều cột được nhắc trong code nhất (chuỗi 'Tên cột'). Không có cột nào khớp thì None, không đoán."""
+    quoted = set(re.findall(r"""['"]([^'"\n]{1,80})['"]""", code))
+    best, score = None, 0
+    for n, d in dfs.items():
+        k = sum(str(c) in quoted for c in d.columns)
+        if k > score:
+            best, score = n, k
+    return best
+
+
+def autofix_code(code, dfs):
+    """Sửa tất định hai lỗi AI viết code phân tích rất hay mắc, để người dùng không phải thấy lỗi khó hiểu:
+      1) `pd.read_csv('x.csv')` / `read_excel(...)`: không có tệp nào để đọc -> thay bằng `dfs['x.csv']`.
+      2) dùng `df` mà chưa gán -> thêm dòng `df = dfs['bảng']` (bảng có nhiều cột được nhắc trong code nhất).
+    Chỉ sửa khi chắc chắn; giữ nguyên chú thích và định dạng; không sửa được thì trả nguyên code (sandbox vẫn chặn/báo lỗi như cũ)."""
+    if not code or not dfs:
+        return code
+    code = code.replace("\r\n", "\n").replace("\r", "\n")
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code
+    files = list(dfs)
+    stored, loaded, edits = set(), set(), []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Name):
+            (stored if isinstance(n.ctx, (ast.Store, ast.Del)) else loaded).add(n.id)
+        elif isinstance(n, ast.arg):
+            stored.add(n.arg)
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr.startswith("read_") and n.args and getattr(n, "end_lineno", None):
+            a0 = n.args[0]
+            tgt = _match_table(a0.value, files) if isinstance(a0, ast.Constant) and isinstance(a0.value, str) else None
+            if tgt is None and len(files) == 1:
+                tgt = files[0]
+            if tgt is not None:
+                edits.append((n.lineno, n.col_offset, n.end_lineno, n.end_col_offset, f"dfs[{tgt!r}]"))
+    if edits:
+        rows = [ln.encode("utf-8") for ln in code.split("\n")]            # col_offset của ast tính theo byte UTF-8
+        last = None
+        for l1, c1, l2, c2, rep in sorted(edits, reverse=True):
+            if last is not None and (l2, c2) > last:                      # hai lệnh đọc lồng nhau: bỏ lệnh trong
+                continue
+            rows[l1 - 1:l2] = [rows[l1 - 1][:c1] + rep.encode("utf-8") + rows[l2 - 1][c2:]]
+            last = (l1, c1)
+        code = "\n".join(r.decode("utf-8") for r in rows)
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return code
+        stored = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del))} | \
+                 {n.arg for n in ast.walk(tree) if isinstance(n, ast.arg)}
+        loaded = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+    if "df" in loaded and "df" not in stored:
+        tgt = files[0] if len(files) == 1 else _guess_table(code, dfs)
+        if tgt is not None:
+            code = f"df = dfs[{tgt!r}]\n" + code
+    return code
+
+
+def _hint(etype, msg):
+    """Câu hướng dẫn thêm sau lỗi pandas/Python, vừa cho người dùng đọc hiểu vừa để AI tự sửa đúng."""
+    m = re.search(r"name '(\w+)' is not defined", msg)
+    if etype == "NameError" and m:
+        v = m.group(1)
+        if v == "df":
+            return " Code dùng `df` nhưng chưa tạo nó: hãy viết df = dfs['tên bảng'] ở đầu code."
+        return f" Code dùng tên `{v}` chưa được tạo. Chỉ có sẵn pd, np và dfs (từ điển tên bảng -> DataFrame)."
+    if etype == "KeyError":
+        return " Cột hoặc bảng này không có trong dữ liệu: kiểm tra đúng tên, dấu và chữ hoa/thường (xem danh sách cột)."
+    return ""
 
 
 # ------------------------------------------------------------ Lớp 2: tiến trình con --
@@ -250,7 +347,7 @@ def _collect(work, rc, why, err, timeout, mem):
             raise CodeError(f"Code dùng quá nhiều bộ nhớ (giới hạn {mem + 1536} MB bộ nhớ ảo). Hãy xử lý gọn hơn.")
         if et == "PermissionError" and msg.startswith("Sandbox:"):
             raise CodeError("Code bị chặn: " + msg[len("Sandbox: "):])
-        raise CodeError(f"{et}: {msg}")
+        raise CodeError(f"{et}: {msg}" + _hint(et, msg))
     if rc is not None and rc < 0:
         sig = -rc
         if sig == signal.SIGXCPU or sig == signal.SIGKILL and not err:

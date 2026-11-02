@@ -323,12 +323,16 @@ def accept(i):
             d["actions"] = [x for k, x in enumerate(d["actions"]) if (p.get("act") or [])[k:k + 1] != [False]]
         elif i == 5:
             tabs = A["d"][3]["result"]["tables"]
-            ch = valid_charts(p.get("charts", []), tabs)
-            if not ch:
-                return bad("Hãy chọn ít nhất 1 biểu đồ")
+            ch = valid_charts(p.get("charts", []), tabs)             # biểu đồ của BÁO CÁO/SLIDE: lấy từ các bảng kết quả ở bước 4
             d5 = A["d"][5]
             dash = (d5.get("dash") or {})
             plan = dash_plan.validate(p["dash"], dash.get("catalog") or dash_plan.catalog(A["clean"])) if isinstance(p.get("dash"), list) else dash.get("ai")
+            # Biểu đồ của BẢNG ĐIỀU KHIỂN tính thẳng từ dữ liệu sạch, không phụ thuộc bảng kết quả bước 4. Có ít nhất một trong hai là đủ để duyệt:
+            # trước đây chỉ kiểm tra biểu đồ báo cáo nên bước 4 lỗi (bảng rỗng) thì dù đã chọn biểu đồ bảng điều khiển vẫn bị chặn.
+            if not ch and not any(x.get("on", True) for x in (plan or [])):
+                if any(x for x in (plan or [])):
+                    return bad("Đang tắt hết biểu đồ. Hãy bật ít nhất 1 biểu đồ ở tab Bảng điều khiển tương tác.")
+                return bad("Chưa có biểu đồ nào để đưa vào báo cáo: các phân tích ở bước 4 chưa có bảng số liệu hợp lệ. Hãy quay lại bước 4 để xem lỗi và chạy lại.")
             d5["final"] = {"title": (p.get("title") or d5["title"]).strip(), "charts": ch, "kpis": [int(k) for k in p.get("kpis", [])], "dash": plan}
         elif i == 6:
             publish()
