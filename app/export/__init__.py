@@ -49,7 +49,7 @@ def live_meta(title=None):
 
 def snapshot():
     """Toàn bộ các bước đã thực hiện, để xem lại ở chế độ chỉ đọc."""
-    keys = ("id", "question", "ctx", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
+    keys = ("id", "question", "ctx", "brief", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
     s = {k: A[k] for k in keys}
     s["st"] = ["done"] * 7
     s["approved"] = True

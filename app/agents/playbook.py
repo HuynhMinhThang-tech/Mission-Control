@@ -9,7 +9,8 @@ CODE_RULES = (
     "(3) ĐỐI CHIẾU: tổng các phần phải bằng tổng chung; nếu lệch hãy tìm nguyên nhân thay vì bỏ qua. "
     "(4) MỌI CON SỐ CÓ MỐC SO SÁNH (kỳ trước, trung bình nhiều kỳ, hoặc mục tiêu), nêu cả chênh lệch tuyệt đối và tương đối; nhóm dưới 30 quan sát chỉ là định hướng. "
     "(5) KHÔNG dùng cột thiếu từ 50% làm cơ cấu hoặc xếp hạng. "
-    "(6) Nếu câu hỏi có MỤC TIÊU định lượng (tăng/giảm thêm X), thêm một bảng 'khoảng cách tới mục tiêu': cơ sở, mức thay đổi hợp lý theo dữ liệu, tác động ước tính. ")
+    "(6) Nếu câu hỏi có MỤC TIÊU định lượng (tăng/giảm thêm X), thêm một bảng 'khoảng cách tới mục tiêu': cơ sở (số hiện có), mục tiêu, khoảng cách; "
+    "KHÔNG tự đặt 'mức thay đổi hợp lý' khi dữ liệu không cho căn cứ, chỉ tính tác động từ phép so sánh có thật trong dữ liệu (vd đưa nhóm yếu lên bằng trung vị các nhóm còn lại). ")
 
 SUM_RULES = (
     "\nKPI: giá trị phải khớp một ô hoặc tổng của bảng, nêu phạm vi tính (vd 'chỉ đơn hoàn thành') và delta so với mốc nào; KPI không tính được thì BỎ, tuyệt đối không để value rỗng. "
@@ -17,9 +18,11 @@ SUM_RULES = (
 
 INSIGHT_RULES = (
     "\nQUY TẮC NGHỀ: "
-    "(a) summary: câu đầu TRẢ LỜI THẲNG câu hỏi kèm MỘT con số then chốt có mốc so sánh. "
-    "(b) Mỗi phát hiện gồm: sự kiện + so sánh + ý nghĩa với quyết định. 'Cao' chỉ khi bằng chứng là số trực tiếp từ bảng, kỳ đủ, nhóm đủ lớn; kỳ chưa đủ hoặc suy diễn thì 'Thấp'. "
-    "(c) Khuyến nghị chỉ xét thứ NGƯỜI DÙNG KIỂM SOÁT ĐƯỢC; tác động ước tính = cơ sở trong bảng × mức thay đổi hợp lý (nêu giả định), xếp ưu tiên theo tác động và độ dễ làm; mỗi hành động kèm chỉ số theo dõi. "
-    "Nếu câu hỏi có mục tiêu định lượng: tính khoảng cách tới mục tiêu và đưa 2-3 phương án (thận trọng / cân bằng / quyết liệt) với tổng tác động so với mục tiêu. "
-    "(d) risks: nêu kỳ chưa đủ, cột thiếu nhiều, mẫu nhỏ, phạm vi chỉ số còn mơ hồ. "
-    "(e) Mọi con số PHẢI sao chép từ bảng, không tự cộng trừ nhẩm.")
+    "(a) summary: câu đầu TRẢ LỜI THẲNG câu hỏi kèm MỘT con số then chốt có mốc so sánh; nếu dữ liệu chưa đủ để trả lời thì nói rõ là chưa đủ và thiếu gì. "
+    "(b) Mỗi phát hiện gồm: sự kiện + so sánh + ý nghĩa với quyết định. Chưa có mốc so sánh thì ghi rõ 'chưa có mốc so sánh', KHÔNG tự đặt mốc. "
+    "'Cao' chỉ khi bằng chứng là số trực tiếp từ bảng, kỳ đủ, nhóm đủ lớn; kỳ chưa đủ hoặc suy diễn thì 'Thấp'. Có ít phát hiện thật còn hơn đủ số lượng: được phép KHÔNG có phát hiện nào. "
+    "(c) Khuyến nghị chỉ đưa khi gắn với một phát hiện đã nêu và chỉ xét thứ NGƯỜI DÙNG KIỂM SOÁT ĐƯỢC (xem bối cảnh; bối cảnh không nêu họ thay đổi được gì thì chỉ ghi dạng 'hướng cần cân nhắc', không viết như mệnh lệnh); được phép để trống. "
+    "Tác động CHỈ nêu bằng số có sẵn trong bảng (vd chênh lệch giữa nhóm yếu và mức trung vị các nhóm còn lại, nếu bảng đã có); bảng không có sẵn phép so sánh đó thì ghi 'chưa ước tính được', KHÔNG tự đặt mức thay đổi. "
+    "Nếu câu hỏi có mục tiêu định lượng: nêu khoảng cách tới mục tiêu bằng số có trong bảng; chỉ đưa phương án khi mỗi phương án dựa trên phép so sánh có trong bảng. "
+    "(d) risks: nêu kỳ chưa đủ, cột thiếu nhiều, mẫu nhỏ, phạm vi chỉ số còn mơ hồ; điều gì suy đoán mà dữ liệu không có thì viết dạng 'Giả thuyết cần kiểm chứng: ... Dữ liệu cần thu thêm: ...'. "
+    "(e) Mọi con số PHẢI sao chép từ bảng, không tự cộng trừ nhẩm; không viết phép tính trong bằng chứng.")

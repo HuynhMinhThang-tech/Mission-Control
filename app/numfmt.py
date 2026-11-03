@@ -40,13 +40,15 @@ class Known:
     def __init__(self, values=()):
         arr = np.asarray([float(v) for v in values if v is not None and np.isfinite(v)], dtype=float)
         self.a = np.unique(np.abs(arr)) if arr.size else arr
+        self.frames = []                         # các bảng kết quả (DataFrame) để đối chiếu từng ô được trích, xem check_cells
 
     @classmethod
     def from_dfs(cls, dfs):
-        vals = []
+        vals, frames = [], []
         for df in (dfs.values() if isinstance(dfs, dict) else dfs or []):
             if df is None or not hasattr(df, "columns"):
                 continue
+            frames.append(df)
             for c in df.columns:
                 s = pd.to_numeric(df[c], errors="coerce").dropna()
                 if s.empty or pd.api.types.is_bool_dtype(df[c]):
@@ -57,7 +59,9 @@ class Known:
                     a = s.to_numpy(dtype=float)
                     vals.extend((a[:, None] - a[None, :]).ravel().tolist())
                     vals.extend((a[:, None] + a[None, :]).ravel().tolist())
-        return cls(vals)
+        k = cls(vals)
+        k.frames = frames
+        return k
 
     def has(self, x, tol=None):
         """Có giá trị nào trong bảng khớp x (sai số tol, tối thiểu nửa đơn vị làm tròn)? Dung sai CHẶT: lệch cả một chữ số là phải bị bắt."""
@@ -255,17 +259,258 @@ def audit(text, known):
     return [s for s, v, tol in big_numbers(text) if not known.has(v, tol)]
 
 
+# ---- tính lại phép tính AI viết trong bằng chứng ("a + b + c = d", "a / b = 31,09%") ----
+# AI hay viết phép tính sai (cộng bảy số ra 3.064,28 nhưng ghi 2.152,25). Ở đây CODE tính lại; chỉ nhận số, + - × / và ngoặc,
+# KHÔNG dùng eval. Biểu thức không phân tích được thì bỏ qua (kết luận là "chưa kiểm được", không phải "sai").
+_CN = r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?"
+_CALC_TOK = re.compile(
+    rf"(?P<num>(?<![\w.,])(?:{_CN})(?:\s*(?:nghìn tỷ|tỷ|triệu|nghìn)(?!\w))?(?:\s*(?:%|đồng(?!\w)|đ(?!\w)))?)"
+    r"|(?P<op>(?<=\s)[-−–](?=\s)|(?<=[=≈])\s?[-−–](?=\d)|\s[xX]\s(?=\d)|[+×*/÷])"
+    r"|(?P<lp>\()|(?P<rp>\))|(?P<eq>[=≈])|(?P<sp>\s+)|(?P<other>.)", re.S)
+_CALC_SCALE = {"nghìn tỷ": 1e12, "tỷ": 1e9, "triệu": 1e6, "nghìn": 1e3}
+_CALC_MAX = 60                                   # tối đa số phép tính kiểm trong một đoạn (tránh chạy lâu với đoạn dị dạng)
+
+
+def _calc_num(tok, alt):
+    """'2.152,25 tỷ' -> (giá trị, số chữ số thập phân, hệ số đơn vị, có %). alt=True: hiểu '2.240' là 2,24 và '1,234' là 1234 (kiểu Anh)."""
+    m = re.match(rf"\s*({_CN})", tok)
+    raw = m.group(1)
+    pct = "%" in tok
+    sc = next((v for k, v in _CALC_SCALE.items() if re.search(rf"\b{k}\b", tok)), 1.0)
+    if re.fullmatch(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?", raw) and not (alt and re.fullmatch(r"\d{1,3}\.\d{3}", raw)):
+        ip, _, fp = raw.partition(",")
+        return float(ip.replace(".", "") + ("." + fp if fp else "")), len(fp), sc, pct
+    if alt and re.fullmatch(r"\d{1,3}(?:,\d{3})+", raw):
+        return float(raw.replace(",", "")), 0, sc, pct
+    raw2 = raw.replace(",", ".")
+    return float(raw2), (len(raw2.split(".")[1]) if "." in raw2 else 0), sc, pct
+
+
+def _calc_eval(toks, alt):
+    """Phân tích cú pháp expr := term (('+'|'-') term)* ; term := factor (('*'|'/') factor)* ; factor := số | '(' expr ')'.
+    Tính bằng SỐ HỌC KHOẢNG: mỗi số hạng mang sai số làm tròn của nó (2,5 nghĩa là 2,45 đến 2,55), nên kết quả là một khoảng [thấp, cao].
+    Trả về (thấp, cao) hoặc None nếu sai cú pháp / chia cho khoảng chứa 0."""
+    pos = [0]
+
+    def peek():
+        return toks[pos[0]] if pos[0] < len(toks) else (None, None)
+
+    def factor():
+        k, v = peek()
+        if k == "num":
+            pos[0] += 1
+            x, dec, sc, _ = _calc_num(v, alt)
+            t = 0 if (dec == 0 and sc == 1.0) else 0.5 * 10 ** -dec          # số nguyên trơn (3 người, chia 3, nhân 100) là chính xác; số thập phân / có tỷ, triệu thì đã làm tròn
+            return ((x - t) * sc, (x + t) * sc)
+        if k == "lp":
+            pos[0] += 1
+            r = expr()
+            if peek()[0] != "rp":
+                raise ValueError
+            pos[0] += 1
+            return r
+        raise ValueError
+
+    def mul(a, b):
+        ps = [a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1]]
+        return (min(ps), max(ps))
+
+    def term():
+        x = factor()
+        while peek()[0] == "op" and peek()[1].strip() in ("*", "×", "x", "X", "/", "÷"):
+            o = toks[pos[0]][1].strip()
+            pos[0] += 1
+            y = factor()
+            if o in ("/", "÷"):
+                if y[0] <= 0 <= y[1]:
+                    raise ZeroDivisionError
+                x = mul(x, (1 / y[1], 1 / y[0]))
+            else:
+                x = mul(x, y)
+        return x
+
+    def expr():
+        x = term()
+        while peek()[0] == "op" and peek()[1].strip() in ("+", "-", "−", "–"):
+            o = toks[pos[0]][1].strip()
+            pos[0] += 1
+            y = term()
+            x = (x[0] + y[0], x[1] + y[1]) if o == "+" else (x[0] - y[1], x[1] - y[0])
+        return x
+
+    try:
+        r = expr()
+        return r if pos[0] == len(toks) else None
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+
+def calc_check(text, rel=0.005):
+    """Tìm các phép tính dạng `biểu thức = kết quả` trong `text`, tính lại bằng code.
+    Trả về {"checked": số phép tính kiểm được, "bad": [{"text": 'a + b = c', "calc": giá trị tính lại (chữ), "stated": giá trị AI ghi}]}.
+    Sai khi khoảng tính lại và khoảng của số AI ghi KHÔNG chạm nhau, kể cả sau khi nới thêm `rel` (0,5%): lệch do làm tròn không bị coi là sai.
+    Ô nguồn dạng `[bảng, hàng, cột] = giá trị` không phải phép tính nên không bị xét."""
+    out = {"checked": 0, "bad": []}
+    if not isinstance(text, str) or ("=" not in text and "≈" not in text):
+        return out
+    toks = [(m.lastgroup, m.group(m.lastgroup)) for m in _CALC_TOK.finditer(text) if m.lastgroup != "sp"]
+    chains, cur = [], [[]]
+    for k, v in toks:
+        if k == "eq":
+            cur.append([])
+        elif k == "other":
+            chains.append(cur)
+            cur = [[]]                           # chữ xen giữa phá vỡ chuỗi: không đoán nghĩa
+        else:
+            cur[-1].append((k, v))
+    chains.append(cur)
+    n = 0
+    for items in chains:
+        for left, right in zip(items, items[1:]):
+            if n >= _CALC_MAX or not left or not any(k == "op" for k, _ in left) or any(k == "num" and re.match(r"\s*0\d", v) for k, v in left):
+                continue                         # không có phép tính (chỉ một ô), hoặc dạng ngày 03-04
+            neg = len(right) == 2 and right[0][0] == "op" and right[0][1].strip() in ("-", "−", "–")
+            rt = right[1:] if neg else right
+            if len(rt) != 1 or rt[0][0] != "num":
+                continue
+            ok, shown, evaluated = False, None, False
+            for alt in (False, True):            # '2.240' hiểu là hai nghìn hai trăm bốn mươi (kiểu Việt) hoặc 2,24 (kiểu Anh): khớp một trong hai là không sai
+                r = _calc_eval(left, alt)
+                if r is None:
+                    break
+                evaluated = True
+                sv, sdec, ssc, spct = _calc_num(rt[0][1], alt)
+                sv, st = (-sv if neg else sv) * ssc, 0.5 * 10 ** -sdec * ssc
+                s_lo, s_hi = sv - st, sv + st
+                for k_ in ((1, 100) if spct else (1,)):          # kết quả ghi bằng % thì tỷ lệ 0,3109 tương ứng 31,09%
+                    lo, hi = r[0] * k_, r[1] * k_
+                    slack = rel * max(abs(lo), abs(hi))
+                    if lo - slack <= s_hi and s_lo <= hi + slack:
+                        ok = True
+                if shown is None:
+                    shown = ((r[0] + r[1]) / 2, sv)
+                if ok:
+                    break
+            if not evaluated:
+                continue
+            n += 1
+            out["checked"] += 1
+            if not ok:
+                expr_txt = re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", " ".join(v.strip() for _, v in left)))
+                out["bad"].append({"text": f"{expr_txt} = {('-' if neg else '') + rt[0][1].strip()}", "calc": vn(shown[0], 2), "stated": vn(shown[1], 2)})
+    return out
+
+
+_CITE = re.compile(rf"\[([^\[\]]+)\]\s*=\s*(-?(?:{_CN})(?:\s*(?:nghìn tỷ|tỷ|triệu|nghìn)(?!\w))?)")
+
+
+def check_cells(text, known):
+    """Đối chiếu các ô AI trích dạng `[bảng, hàng, cột] = giá trị` với bảng kết quả thật.
+    Trả về {"ok": số ô khớp, "bad": [ô lệch giá trị], "unlocated": số ô không tìm thấy hàng/cột}.
+    CHỈ coi là sai khi ô định vị được (có cột đó, có hàng đó) mà giá trị lệch; AI viết lệch tên hàng/cột thì là 'chưa kiểm được', không báo sai oan."""
+    out = {"ok": 0, "bad": [], "unlocated": 0}
+    frames = getattr(known, "frames", None)
+    if not isinstance(text, str) or not frames:
+        return out
+    from . import labels as lb
+    for ref, val in _CITE.findall(text)[:_CALC_MAX]:
+        parts = [p.strip() for p in ref.split(",")]
+        if len(parts) < 3:
+            out["unlocated"] += 1
+            continue
+        row_key, col = lb.fold(parts[-2]), lb.fold(parts[-1])
+        cands = []
+        for df in frames:
+            cmap = {lb.fold(str(c)): c for c in df.columns}
+            if col not in cmap:
+                continue
+            labels = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])]
+            if not labels:
+                continue
+            hit = np.zeros(len(df), dtype=bool)
+            for c in labels:
+                hit |= df[c].astype(str).map(lb.fold).to_numpy() == row_key
+            cands += pd.to_numeric(df.loc[hit, cmap[col]], errors="coerce").dropna().tolist()
+        if not cands:
+            out["unlocated"] += 1
+            continue
+        good = False
+        for alt in (False, True):
+            v, dec, sc, _ = _calc_num(val, alt)
+            v, tol = v * sc, 0.5 * 10 ** -dec * sc * 1.001 + 1e-9
+            good |= any(abs(c - v) <= max(tol, 1e-6 * abs(v)) for c in cands)
+        if good:
+            out["ok"] += 1
+        else:
+            out["bad"].append(f"[{ref}] = {val.strip()} (bảng ghi {vn(cands[0], 2)})")
+    return out
+
+
 def audit_insights(insights, known):
-    """Gắn cờ các phát hiện có số lớn không khớp bảng kết quả nào: thêm `check` và hạ độ tin cậy xuống 'Thấp'. Trả về danh sách mới."""
+    """Kiểm từng phát hiện và gắn nhãn kết quả, hạ độ tin cậy xuống 'Thấp' nếu có sai sót. Trả về danh sách mới. Thêm các khóa:
+    `check` (số lớn không có trong bảng kết quả nào), `calc_mismatch` (phép tính AI ghi không khớp khi tính lại), `cell_mismatch` (ô được trích lệch giá trị so với bảng), và `verify`:
+    'ok' (đã kiểm được ít nhất một điều và không có sai sót) · 'mismatch' (có sai sót) · 'unverified' (chưa kiểm được gì, KHÔNG phải là đúng)."""
     out = []
     for x in insights or []:
         if isinstance(x, dict):
             x = dict(x)
-            bad = audit(f"{x.get('title', '')} {x.get('evidence', '')}", known)
+            text = f"{x.get('title', '')} ; {x.get('evidence', '')}"
+            bad = audit(text, known)
+            cc = calc_check(text)
+            cells = check_cells(text, known)
             if bad:
                 x["check"], x["confidence"] = bad, "Thấp"
+            if cc["bad"]:
+                x["calc_mismatch"], x["confidence"] = [f"{b['text']} (tính lại ra {b['calc']})" for b in cc["bad"]], "Thấp"
+            if cells["bad"]:
+                x["cell_mismatch"], x["confidence"] = cells["bad"], "Thấp"
+            big = big_numbers(text)
+            if bad or cc["bad"] or cells["bad"]:
+                x["verify"] = "mismatch"
+            elif cc["checked"] or cells["ok"] or (big and known):
+                x["verify"] = "ok"
+            else:
+                x["verify"] = "unverified"
         out.append(x)
     return out
+
+
+def verify_counts(insights):
+    """(số phát hiện đã kiểm được và không sai sót, tổng số phát hiện)."""
+    ins = [x for x in insights or [] if isinstance(x, dict)]
+    return sum(1 for x in ins if x.get("verify") == "ok"), len(ins)
+
+
+def all_verified(insights):
+    ok, n = verify_counts(insights)
+    return n > 0 and ok == n
+
+
+def verify_label(x):
+    """(lớp hiển thị 'ok'|'un'|'bad', nhãn) của trạng thái kiểm tra một phát hiện; None nếu chưa có thông tin kiểm tra (bản lưu cũ)."""
+    v = x.get("verify") if isinstance(x, dict) else None
+    if v == "ok":
+        return "ok", "Đã kiểm số liệu"
+    if v == "mismatch":
+        return "bad", "Phép tính không khớp" if x.get("calc_mismatch") else "Số liệu chưa khớp bảng"
+    if v == "unverified":
+        return "un", "Chưa kiểm được"
+    return None
+
+
+def verify_note(x):
+    """Một câu ngắn nói rõ phát hiện này chưa qua kiểm tra vì sao; rỗng nếu đã kiểm được (hoặc chưa có thông tin kiểm tra, vd bản lưu cũ)."""
+    if not isinstance(x, dict):
+        return ""
+    if x.get("calc_mismatch"):
+        return "Phép tính không khớp: " + "; ".join(x["calc_mismatch"])
+    if x.get("cell_mismatch"):
+        return "Số trích không khớp bảng kết quả: " + "; ".join(x["cell_mismatch"])
+    if x.get("check"):
+        return "Cần kiểm tra số liệu: số " + ", ".join(x["check"]) + " chưa khớp bảng kết quả nào"
+    if x.get("verify") == "unverified":
+        return "Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)"
+    return ""
 
 
 # ------------------------------------------------------------------ tiêu đề biểu đồ tính từ dữ liệu --

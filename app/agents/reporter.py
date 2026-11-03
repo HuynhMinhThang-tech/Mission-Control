@@ -5,6 +5,7 @@ from ..llm import llm_json
 from ..state import A, put, tick
 from ..utils import J
 from .base import SYS, ctx_txt, prev
+from ..data.scope import data_card
 from ..export import dash_plan
 from ..export.common import refine_charts
 from .charts import valid_charts
@@ -30,7 +31,7 @@ def run(fb=""):
     cat = dash_plan.catalog(A["clean"])                      # danh mục biểu đồ KHẢ DỤNG của bảng điều khiển (chiều, chỉ số thật của dữ liệu)
     cat_txt = J([{"ds": c["name"], "dims": [f"{d['label']} ({d['n']} nhóm)" for d in c["dims"]], "thoi_gian": bool(c["time"]),
                   "chi_so": [m["label"] + (" (trung bình)" if m["avg"] else "") for m in c["meas"]] + ["Số bản ghi"]} for c in cat], 3000)
-    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\nDANH MỤC DASHBOARD: {cat_txt}\n\n" + PROMPT + DASH_RULE)
+    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\nDANH MỤC DASHBOARD: {cat_txt}\n\n" + data_card(A["clean"]) + PROMPT + DASH_RULE)
     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
     tick(1)
     known = numfmt.Known.from_dfs(A["x"][3])

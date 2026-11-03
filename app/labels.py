@@ -64,7 +64,7 @@ RATE_PHRASES = ("gia", "don gia", "gia von", "gia ban", "gia niem yet", "gia nha
                 "danh gia", "rating", "score", "price", "trong luong", "kich thuoc", "tuoi", "nhiet do", "do tuoi", "thoi gian giao")
 HEAD_LAST = {"id": "mã", "name": "tên", "date": "ngày", "code": "mã", "count": "số lượng", "type": "loại", "status": "trạng thái", "rate": "tỷ lệ"}
 ID_WORDS = {"id", "ma", "code", "stt", "sdt", "phone", "email", "sku", "uuid", "guid"}
-_NOT_MONEY_BEFORE = {"so", "san", "trong"}                 # "số lượng", "sản lượng", "trọng lượng" không phải lương/tiền
+_NOT_MONEY_BEFORE = {"so", "san", "trong", "khoi", "thoi"}   # "số lượng", "sản lượng", "trọng lượng", "khối lượng", "thời lượng" không phải lương/tiền
 
 
 def fold(s):
@@ -170,6 +170,29 @@ def is_rate(col):
     """Cột kiểu đơn giá/tỷ lệ/điểm/trọng lượng: tổng gộp không có nghĩa, nên dùng trung bình."""
     joined = " ".join(tokens(col))
     return any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in RATE_PHRASES) and not re.search(r"(^| )(tong|so luong)( |$)", joined)
+
+
+# Chỉ số được coi là CỘNG ĐƯỢC khi có dấu hiệu rõ (tên bắt đầu bằng "Tổng", đơn vị tiền, hoặc từ chỉ số lượng/khối lượng/thời lượng).
+# Không nhận ra thì KHÔNG cộng: dùng trung bình (an toàn). Cộng nhầm tuổi, điểm, đơn giá cho ra con số vô nghĩa; trung bình nhầm thì vẫn đọc được.
+ADD_FIRST = {"tong", "total", "sum"}
+ADD_PHRASES = ("so luong", "san luong", "khoi luong", "thoi luong", "so don", "so don hang", "so lan", "so luot", "luot", "so tien", "chi tieu", "tieu dung",
+               "qty", "quantity", "volume", "count", "sl")
+
+
+def is_additive(col):
+    """Cột có nghĩa khi CỘNG (tiền, số lượng, khối lượng, thời lượng, hoặc tên bắt đầu bằng 'Tổng')? Không chắc thì False (dùng trung bình).
+    Tạm thời dựa vào tên cột; sẽ được thay bằng lớp ngữ nghĩa cột (kế hoạch HM-03)."""
+    if is_id(col) or is_rate(col):
+        return False
+    toks = tokens(col)
+    if not toks:
+        return False
+    if toks[0] in ADD_FIRST:
+        return True
+    if unit(col) in ("đ", "USD"):
+        return True
+    joined = " ".join(toks)
+    return any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in ADD_PHRASES)
 
 
 def is_id(col):

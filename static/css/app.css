@@ -306,3 +306,6 @@ button.vc{cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-fam
 .dpi{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;margin-bottom:6px}.dpi.on{border-color:var(--pri);background:var(--soft)}.dpi label{display:flex;gap:10px;align-items:flex-start;flex:1;cursor:pointer}.dpi small{display:block;color:var(--sub)}
 .dpb{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px;padding:8px;border:1px dashed var(--line);border-radius:10px}.dpb label{display:flex;flex-direction:column;gap:2px;font-size:11.5px;font-weight:700;color:var(--sub)}
 .rm{border:0;background:transparent;color:var(--sub);cursor:pointer;padding:4px;border-radius:6px}.rm:hover{color:var(--bad);background:var(--badb)}
+.vf{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:1px}
+.vf.ok{background:var(--okb);color:var(--ok)}.vf.un{background:var(--p2);color:var(--sub)}.vf.bad{background:var(--badb);color:var(--bad)}
+.vfn{margin:6px 0 0;color:var(--bad);font-size:12.5px}.vfn.un{color:var(--sub)}

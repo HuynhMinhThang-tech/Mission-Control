@@ -2,6 +2,7 @@
 """Dashboard HTML độc lập (1 file, mở offline): dùng để XEM, TRA CỨU và TRẢ LỜI câu hỏi."""
 from pathlib import Path
 
+from .. import numfmt
 from ..utils import E, vn
 from .common import PRI_ORDER, chart_rows, facts, trunc
 from .svg import chart_svg
@@ -18,6 +19,12 @@ def _badge(conf):
     c = str(conf or "").strip()
     key = "Trung" if c.startswith("Trung") else c
     return f'<span class="badge b-{E(key)}">Độ tin cậy: {E(c)}</span>' if c else ""
+
+
+def _vbadge(x):
+    """Trạng thái kiểm tra bằng chứng của một phát hiện (đã kiểm / chưa kiểm được / không khớp)."""
+    v = numfmt.verify_label(x)
+    return f'<span class="badge vf-{v[0]}">{E(v[1])}</span>' if v else ""
 
 
 def _kpis(F):
@@ -44,9 +51,9 @@ def _charts(F):
 def _insights(F):
     if not F["insights"]:
         return ""
-    items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}</h3>'
+    items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}{_vbadge(x)}</h3>'
                     f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p>'
-                    + (f'<p class="ev"><b>Cần kiểm tra số liệu:</b> số {E(", ".join(x["check"]))} chưa khớp bảng kết quả nào.</p>' if x.get("check") else "") + '</div></div>'
+                    + (f'<p class="ev"><b>Lưu ý kiểm tra:</b> {E(numfmt.verify_note(x))}</p>' if numfmt.verify_note(x) else "") + '</div></div>'
                     for i, x in enumerate(F["insights"]))
     return f'<section id="insights"><h2 class="hs ins">Phát hiện chính</h2><div class="ins">{items}</div></section>'
 
@@ -92,6 +99,11 @@ def _tbl(t):
     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
+def _verify_foot(F):
+    ok, n = numfmt.verify_counts(F["insights"])
+    return f" {ok}/{n} phát hiện đã được đối chiếu số liệu với bảng kết quả." if n else ""
+
+
 def build_html(F):
     chips = "".join(f'<span class="chip">{E(x)}</span>' for x in [F.get("period"), f"{len(F['files'])} tệp dữ liệu", f"{len(F['insights'])} phát hiện"] if x)
     narrative = "".join(f"<p>{E(p)}</p>" for p in str(F["narrative"]).split("\n") if p.strip())
@@ -105,5 +117,5 @@ def build_html(F):
             f'<nav class="tabs"><div class="wrap">{nav}</div></nav><main class="wrap">'
             f'<section id="answer"><h2>Câu trả lời ngắn</h2><div class="card answer"><p class="big">{E(F["summary"])}</p>{narrative}</div></section>'
             f'{_kpis(F)}{_charts(F)}{_insights(F)}{_actions(F)}{_risks(F)}{_method(F)}'
-            f'<footer class="ft">Tạo bởi Mission Control · {E(F["date"])} · Mọi con số được tính từ dữ liệu đã làm sạch, bằng chứng truy ngược được ở mục Phương pháp.</footer>'
+            f'<footer class="ft">Tạo bởi Mission Control · {E(F["date"])} · Số liệu tính từ dữ liệu đã làm sạch; bảng số liệu và phương pháp ở mục Phương pháp.{_verify_foot(F)}</footer>'
             f'</main></body></html>')

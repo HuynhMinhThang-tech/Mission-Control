@@ -40,7 +40,7 @@ def index():
 @bp.get("/api/state")
 def api_state():
     with LOCK:
-        o = {k: A[k] for k in ("id", "question", "ctx", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
+        o = {k: A[k] for k in ("id", "question", "ctx", "brief", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
         o["hist"] = db.list_history(current_user_id())
         return jsonify(clean_json(o))
 
@@ -209,7 +209,13 @@ def start():
             return bad(f"Tệp '{n}'{more} chưa phù hợp để phân tích: " + "; ".join(m["issues"][:2]) +
                        ". Hãy dùng bản đã chuẩn hóa, sửa/xóa tệp, hoặc bấm 'Vẫn dùng file này' nếu bạn chắc chắn.")
         A["question"] = q
-        A["ctx"] = (p.get("ctx") or "").strip()
+        # Bối cảnh tối thiểu để khuyến nghị bám vào quyết định thật (đều tùy chọn): "ctx" là chữ AI đọc (đã nối đủ), "brief" giữ riêng từng phần để hiện lại đúng ô.
+        base = str(p.get("ctx") or "").strip()[:2000]
+        decision = str(p.get("decision") or "").strip()[:500]
+        levers = str(p.get("levers") or "").strip()[:500]
+        A["brief"] = {"ctx": base, "decision": decision, "levers": levers}
+        A["ctx"] = " | ".join(x for x in (base, f"Quyết định cần đưa ra từ kết quả này: {decision}" if decision else "",
+                                          f"Những thứ người dùng có thể thay đổi: {levers}" if levers else "") if x)
         A["st"][0] = "done"
         A["started"] = A["started"] or now_iso()
         bump()

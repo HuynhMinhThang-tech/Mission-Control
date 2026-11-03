@@ -31,11 +31,12 @@
     if (ds.time) { C.t = ds.time.codes; V.t = ds.time.vals; L.t = ds.time.label; NA.t = -1 }
     ds.meas.forEach(m => M[m.k] = m.vals);
     P = makePlan();
-    st = { sel: {}, from: 0, to: ds.time ? V.t.length - 1 : 0, m: ds.meas[0] ? ds.meas[0].k : '', tb: { by: P.tableBy, sort: '', dir: -1 } };
+    st = { sel: {}, from: 0, to: ds.time ? V.t.length - 1 : 0, m: ds.meas[0] ? ds.meas[0].k : '', ag: {}, tb: { by: P.tableBy, sort: '', dir: -1 } };
     resetSort(); render();
   }
   const cm = () => ds.meas.find(m => m.k === st.m) || null;
-  const agg = () => { const m = cm(); return m ? (m.avg ? 'avg' : 'sum') : 'count' };
+  const aggOf = m => (st.ag && st.ag[m.k]) || (m.avg ? 'avg' : 'sum');          // mặc định an toàn do máy chủ chọn; người xem đổi tay ở thẻ chỉ số
+  const agg = () => { const m = cm(); return m ? aggOf(m) : 'count' };
   const keys = () => Object.keys(L);
   const resetSort = () => { const t = st.tb; if (t.by === 't') { t.sort = 'l'; t.dir = 1 } else { t.sort = ds.meas[0] ? ds.meas[0].k : 'rows'; t.dir = -1 } };
 
@@ -185,8 +186,8 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
 
   function tableCard() {
     const t = st.tb, by = t.by; if (!by) return '';
-    const mc = ds.meas.slice(0, 4), head = [['l', L[by], false], ['rows', 'Số bản ghi', true], ...mc.map(m => [m.k, mName(m, m.avg ? 'avg' : 'sum'), true])];
-    const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, m.avg ? 'avg' : 'sum')); const base = groupBy(by, '', 'count');
+    const mc = ds.meas.slice(0, 4), head = [['l', L[by], false], ['rows', 'Số bản ghi', true], ...mc.map(m => [m.k, mName(m, aggOf(m)), true])];
+    const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, aggOf(m))); const base = groupBy(by, '', 'count');
     let rows = base.map(b => { const o = { l: b.l, rows: b.rows }; mc.forEach(m => { const x = by2[m.k].find(y => y.q === b.q); o[m.k] = x ? x.v : null }); return o });
     rows.sort((x, y) => (typeof x[t.sort] === 'string' ? x[t.sort].localeCompare(y[t.sort], 'vi', { numeric: true }) : (x[t.sort] ?? -Infinity) - (y[t.sort] ?? -Infinity)) * t.dir); rows = rows.slice(0, 60);
     const cell = (v, k) => k === 'l' ? esc(by === 't' ? ml(v) : v) : k === 'rows' ? f0.format(v) : esc(full(v, mc.find(m => m.k === k)));
@@ -208,15 +209,18 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
   }
   function kpiHTML() {
     const k = kpiData(), m = cm(), j = m ? ds.meas.indexOf(m) : -1, a = agg(), cards = [];
-    if (m) cards.push([mName(m, a), val(a === 'avg' ? (k.Cn[j] ? k.S[j] / k.Cn[j] : null) : k.S[j], m.unit), '', true]);
+    const agt = `<div class="agt" role="group" aria-label="Cách tổng hợp">${[['sum', 'Tổng'], ['avg', 'Trung bình']].map(([q, t]) => `<button data-ag="${q}" class="${a === q ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+    if (m) cards.push([mName(m, a), val(a === 'avg' ? (k.Cn[j] ? k.S[j] / k.Cn[j] : null) : k.S[j], m.unit), m.add || a !== 'sum' ? '' : 'Chỉ số này thường không cộng được; cân nhắc dùng Trung bình', true, agt]);
     cards.push(['Số bản ghi', f0.format(k.rows), '']);
     if (m && a !== 'avg') cards.push(['Trung bình mỗi bản ghi', val(k.Cn[j] ? k.S[j] / k.Cn[j] : null, m.unit), esc(lc(stripTong(m.label)))]);
-    const o = ds.meas.findIndex((x, i) => i !== j); if (o >= 0 && cards.length < 4) { const mo = ds.meas[o], ao = mo.avg ? 'avg' : 'sum'; cards.push([mName(mo, ao), val(ao === 'avg' ? (k.Cn[o] ? k.S[o] / k.Cn[o] : null) : k.S[o], mo.unit), '']) }
-    return `<div class="kpis" style="--n:${cards.length}">${cards.map(([l, v, s, h]) => `<div class="kpi ${h ? 'hero' : ''}"><span title="${esc(l)}">${esc(l)}</span><b>${esc(v)}</b>${s ? `<small>${s}</small>` : ''}</div>`).join('')}</div>`;
+    const o = ds.meas.findIndex((x, i) => i !== j); if (o >= 0 && cards.length < 4) { const mo = ds.meas[o], ao = aggOf(mo); cards.push([mName(mo, ao), val(ao === 'avg' ? (k.Cn[o] ? k.S[o] / k.Cn[o] : null) : k.S[o], mo.unit), '']) }
+    return `<div class="kpis" style="--n:${cards.length}">${cards.map(([l, v, s, h, x]) => `<div class="kpi ${h ? 'hero' : ''}"><span title="${esc(l)}">${esc(l)}</span><b>${esc(v)}</b>${s ? `<small>${s}</small>` : ''}${x || ''}</div>`).join('')}</div>`;
   }
   function narrative() {
     const first = c => String(c || '').split(' ')[0], order = { Cao: 0, 'Trung bình': 1, 'Thấp': 2 };
-    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(x.check || []).length ? `<span class="tag Thấp" title="Số ${esc(x.check.join(', '))} chưa khớp bảng kết quả nào">Cần kiểm tra số liệu</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
+    const vf = x => ({ ok: ['ok', 'Đã kiểm số liệu'], mismatch: ['Bad', (x.calc_mismatch || []).length ? 'Phép tính không khớp' : 'Số liệu chưa khớp bảng'], unverified: ['Thấp', 'Chưa kiểm được'] })[x.verify];
+    const vn = x => (x.calc_mismatch || []).length ? 'Phép tính không khớp: ' + x.calc_mismatch.join('; ') : (x.cell_mismatch || []).length ? 'Số trích không khớp bảng kết quả: ' + x.cell_mismatch.join('; ') : (x.check || []).length ? 'Cần kiểm tra số liệu: số ' + x.check.join(', ') + ' chưa khớp bảng kết quả nào' : x.verify === 'unverified' ? 'Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)' : '';
+    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(b => b ? `<span class="tag ${b[0]}">${esc(b[1])}</span>` : '')(vf(x))}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p>${vn(x) ? `<p class="vnote ${x.verify === 'unverified' ? 'un' : ''}">${x.verify === 'unverified' ? 'ⓘ' : '⚠'} ${esc(vn(x))}</p>` : ''}</div></div>`).join('');
     const acts = [...D.actions].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9)).map(a => `<div class="act"><span class="pr ${esc(first(a.priority))}">${esc(a.priority || '')}</span><b>${esc(a.text)}</b><span class="im">${esc(a.impact || '')}</span></div>`).join('');
     return (ins ? `<h2 class="sec">Phát hiện chính</h2><div class="ins">${ins}</div>` : '') + (acts ? `<h2 class="sec">Khuyến nghị hành động</h2><div class="acts">${acts}</div>` : '') +
       (D.risks.length ? `<h2 class="sec">Rủi ro cần lưu ý</h2><div class="card"><ul class="risks">${D.risks.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>` : '');
@@ -236,10 +240,11 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) 
 
   /* ---- sự kiện ---- */
   document.addEventListener('click', e => {
-    const t = e.target, rs = t.closest('[data-reset]'), cl = t.closest('[data-clr]'), q = t.closest('[data-q][data-k]'), so = t.closest('[data-sort]'), mm = t.closest('[data-m]');
+    const t = e.target, rs = t.closest('[data-reset]'), cl = t.closest('[data-clr]'), q = t.closest('[data-q][data-k]'), so = t.closest('[data-sort]'), mm = t.closest('[data-m]'), ag = t.closest('[data-ag]');
     if (rs) { st.sel = {}; st.from = 0; st.to = ds.time ? V.t.length - 1 : 0; render() }
     else if (cl) { delete st.sel[cl.dataset.clr]; render() }
     else if (mm) { st.m = mm.dataset.m; render() }
+    else if (ag) { const m = cm(); if (m) { st.ag[m.k] = ag.dataset.ag; render() } }
     else if (so) { const k = so.dataset.sort; st.tb.dir = st.tb.sort === k ? -st.tb.dir : (k === 'l' ? 1 : -1); st.tb.sort = k; render() }
     else if (q && !t.closest('input')) { const k = q.dataset.k, v = +q.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); s.has(v) ? s.delete(v) : s.add(v); render() }
     else if (t.closest('[data-ds]')) { openK.clear(); init(+t.closest('[data-ds]').dataset.ds) }

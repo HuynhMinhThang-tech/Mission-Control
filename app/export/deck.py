@@ -14,6 +14,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+from .. import numfmt
 from ..utils import compact, vn
 from .common import PRI_ORDER, chart_rows, facts, pp, scale, trunc
 
@@ -295,10 +296,12 @@ def chart_slides(d):
 
 def insight_slides(d):
     ins = d.F["insights"]
+    ok_all = numfmt.all_verified(ins)             # chỉ khẳng định "có bằng chứng truy ngược" khi MỌI phát hiện đã qua kiểm tra; còn không thì tiêu đề trung tính
     for k in range(0, len(ins), 3):
         part = ins[k:k + 3]
-        s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Phát hiện")
-        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", "") + (f"  ⚠ Cần kiểm tra số liệu: {', '.join(x['check'])}" if x.get("check") else ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
+        head = (f"{len(ins)} phát hiện chính, mỗi phát hiện đều có số liệu đã đối chiếu với bảng kết quả" if ok_all else "Các phát hiện chính") if k == 0 else "Các phát hiện chính (tiếp)"
+        s = d.slide(head, "Phát hiện")
+        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", ""), 150 if numfmt.verify_note(x) else 260) + (f"  ⚠ {trunc(numfmt.verify_note(x), 110)}" if numfmt.verify_note(x) else ""), x.get("confidence", "")] for i, x in enumerate(part)]
         conf = {"Cao": OK, "Trung bình": WARN, "Thấp": BAD}
 
         def st(i, j, v):
@@ -364,7 +367,7 @@ def appendix(d):
         rect(s, x, 1.85, colw, 3.9, fill=BG, line=LINE)
         text(s, x + .15, 1.95, colw - .3, .35, h, size=11, bold=True, color=PRI)
         text(s, x + .15, 2.35, colw - .3, 4.0, [f"▸ {x_}" for x_ in lines], size=12, color=INK, after=6)
-    d.source(s, "Mission Control; bằng chứng đầy đủ trong dashboard.html")
+    d.source(s, "Mission Control; số liệu chi tiết trong dashboard.html")
 
 
 def build_pptx(F):

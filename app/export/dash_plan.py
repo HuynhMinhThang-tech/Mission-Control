@@ -27,7 +27,7 @@ def catalog(dfs):
                          "len": round(sum(len(v) for v in d["vals"]) / max(1, len(d["vals"])), 1), "sample": d["vals"][:3]})
         out.append({"name": s["name"], "title": s["title"], "n": s["n_src"], "dims": dims,
                     "time": {"label": s["time"]["label"], "n": len(s["time"]["vals"])} if s.get("time") else None,
-                    "meas": [{"k": m["k"], "label": m["label"], "unit": m["unit"], "avg": bool(m["avg"])} for m in s["meas"]]})
+                    "meas": [{"k": m["k"], "label": m["label"], "unit": m["unit"], "avg": bool(m["avg"]), "add": bool(m.get("add", not m["avg"]))} for m in s["meas"]]})
     return out
 
 
@@ -68,6 +68,10 @@ def validate(plan, cat, src_default="user"):
             agg = "*"
         else:
             agg = it.get("agg") if it.get("agg") in ("sum", "avg") else ("avg" if meas[m]["avg"] else "sum")
+            src = it.get("src") if it.get("src") in ("ai", "user") else src_default
+            if agg == "sum" and src == "ai" and not meas[m].get("add", not meas[m]["avg"]):
+                agg = "avg"            # AI tự chọn "tổng" cho chỉ số không cộng được (tuổi, điểm, đơn giá...) -> đổi sang trung bình; người dùng tự chọn thì giữ
+                it = dict(it, title=None)   # tiêu đề AI viết theo phép "tổng" ("Tổng tuổi theo phòng ban") không còn đúng: dùng tiêu đề tự tính theo phép tổng hợp thật
         kind = it.get("kind") if it.get("kind") in KINDS else ("trend" if by == "t" else "bars")
         if by == "t":
             kind = "trend" if kind == "trend" else "cols"

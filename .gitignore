@@ -3,3 +3,4 @@ workspace/
 __pycache__/
 *.pyc
 .venv/
+tests/eval/private/

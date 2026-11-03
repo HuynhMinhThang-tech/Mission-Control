@@ -1,0 +1,1953 @@
+diff --git a/.gitignore b/.gitignore
+index b9275ea..5a16fc4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -3,3 +3,4 @@ workspace/
+ __pycache__/
+ *.pyc
+ .venv/
++tests/eval/private/
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 994a6dc..3463d84 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,18 @@
+ # Changelog
+ 
++## 0.1.7-dev
++Thực hiện HM-01 (Q1 đến Q7) và khung HM-02 của `ke-hoach-nang-cap-mission-control.md`: bớt các lỗi làm người dùng mất lòng tin, chưa đụng tới kiến trúc.
++- **Q1/Q1b: bằng chứng không còn phép tính tự do, và phép tính còn sót bị code tính lại** (`app/agents/insight.py`, `app/numfmt.py: calc_check, check_cells`): AI chỉ được chép các ô nguồn dạng `[bảng, hàng, cột] = giá trị`. Phép tính AI vẫn viết (vd cộng bảy số ra 3.064,28 nhưng ghi 2.152,25) được CODE tính lại bằng bộ phân tích biểu thức an toàn (không `eval`; số học khoảng nên lệch do làm tròn không bị coi là sai); lệch quá 0,5% thì hạ độ tin cậy xuống Thấp và gắn `calc_mismatch`. **Thêm so với kế hoạch**: vì Q1 cấm viết phép tính, bằng chứng chỉ còn là ô trích, mà kiểm số cũ chỉ áp cho số từ 1 triệu; không có thêm bước này thì gần như mọi phát hiện đều "chưa kiểm được". Nay từng ô trích được đối chiếu với đúng ô trong bảng kết quả (kể cả số nhỏ): lệch giá trị thì gắn `cell_mismatch`; không tìm thấy hàng/cột (AI viết lệch tên) thì chỉ là "chưa kiểm được", không báo sai oan. Mỗi phát hiện có `verify` = `ok` | `mismatch` | `unverified` (chưa kiểm được KHÔNG được coi là đúng).
++- **Q2: prompt không còn ép AI bịa** (`insight.py`, `playbook.py`): bỏ "3-5 phát hiện" (nay tối đa 5, được phép 0), hành động chỉ đưa khi gắn một phát hiện và được phép bỏ trống, bỏ "mức thay đổi hợp lý" (tác động chỉ bằng số có sẵn trong bảng, không thì "chưa ước tính được"), thêm câu đóng: yếu tố không có trong dữ liệu chỉ là giả thuyết cần kiểm chứng, đưa vào `risks` kèm dữ liệu cần thu thêm. Cũng sửa `CODE_RULES` (6) có cùng cụm "mức thay đổi hợp lý" (kế hoạch chỉ nêu `INSIGHT_RULES`). Luồng và mọi tệp xuất chạy được với 0 phát hiện, 0 hành động.
++- **Q3: bỏ các câu tự khẳng định cứng** (`export/deck.py`, `export/markdown.py`, `export/dashboard.py`, `agents/reviewer.py`): tiêu đề slide "mỗi phát hiện đều có ..." chỉ hiện khi MỌI phát hiện đã kiểm được, còn không là "Các phát hiện chính"; bước 7 nói "N/M phát hiện đã kiểm được số liệu" (dòng có ⚠ khi chưa đủ); chân trang báo cáo HTML không còn "Mọi con số được tính từ dữ liệu đã làm sạch, bằng chứng truy ngược được" (cùng loại câu, ngoài danh sách của kế hoạch).
++- **Q4: KPI không còn mặc định cộng** (`app/labels.py: is_additive`, `export/interactive.py`, `export/dash_plan.py`, `export/assets/live.js`): chỉ cộng khi tên cột bắt đầu bằng "Tổng", có đơn vị tiền, hoặc là số lượng/sản lượng/khối lượng/thời lượng; không chắc thì trung bình. Thẻ chỉ số chính có nút **Tổng | Trung bình** để đổi tay. AI đề xuất biểu đồ "tổng" cho chỉ số không cộng được thì bị đổi sang trung bình và bỏ tiêu đề AI đã viết (để không còn "Tổng tuổi" trên số trung bình); người dùng tự chọn thì giữ. Tách riêng hai đường dẫn tới "Tổng tuổi": cột tên ngoài danh sách từ khóa (vd `Age`) trước đây mặc định cộng; cột "Tuổi" vốn đã trung bình nhưng AI có thể tự chọn `agg=sum`. Sửa kèm `labels.unit`: "Khối lượng", "Thời lượng" không còn bị gắn đơn vị tiền (đ).
++- **Q5: trạng thái kiểm tra hiện ở mọi nơi** (`static/js/app.js`, `app.css`, `live.js`, `live.css`, `dashboard.py`, `markdown.py`, `deck.py`): mỗi phát hiện có nhãn *Đã kiểm số liệu* / *Chưa kiểm được* / *Phép tính không khớp* / *Số liệu chưa khớp bảng* kèm dòng giải thích; phát hiện sai tự mở phần bằng chứng ở bước 5.
++- **Q6: thẻ dữ liệu do code lập** (`app/data/scope.py: data_card`): liệt kê bảng, cột (kèm kiểu nhận theo thống kê, không theo từ khóa ngành), kỳ thời gian thật và câu giới hạn "chỉ dựa vào đây", đưa vào prompt Agent Phát hiện và Agent Thiết kế. Sửa kèm lỗi có sẵn: `dayfirst=True` làm pandas đọc chuỗi ISO `2026-01-02` thành 1/2/2026 nên gợi ý "kỳ cuối thiếu ngày" của `scope_hints` có thể sai hoặc im lặng; nay `scope._parse_dates` không đảo ngày/tháng với ISO.
++- **Q7: hai ô bối cảnh tùy chọn ở bước 1** (`routes.py`, `state.py`, `app.js`): "Bạn cần ra quyết định gì từ kết quả này?" và "Bạn có thể thay đổi những gì?", nối vào `ctx` (để trống thì y hệt cũ), lưu riêng ở `A["brief"]`. Chỉ là bản tối thiểu; HM-08 sẽ thay bằng bản kê khai bối cảnh đầy đủ.
++- **Khung đánh giá HM-02** (`tests/eval/`, mới): 3 bộ dữ liệu mô phỏng có seed (chi tiêu cá nhân, nhân sự, sản xuất 3 bảng) cài lỗi thực tế; 11 bất biến không phụ thuộc lĩnh vực; 13 ca đối chứng (cố ý làm hỏng, bất biến phải bắt); `python tests/eval/run_eval.py --mock` chạy trọn luồng với LLM giả trong khoảng 10 giây và cài sẵn một phép tính sai để xác nhận nó bị bắt. Chế độ `--model` (AI thật, cần `EVAL_API_KEY`) đã viết nhưng **chưa được thử với mô hình thật**. Bộ dữ liệu riêng để ở `tests/eval/private/` (được `.gitignore`).
++- Test mới: `tests/quickfix_test.py` (64 kiểm tra, gồm trình duyệt thật cho nút Tổng/Trung bình). Đã kiểm tra đột biến: cố ý làm hỏng từng sửa chữa ở một bản sao, test phải bắt được (13/13 đột biến bị bắt).
++- **Chưa làm / hạn chế**: `analysis_spec.columns_meta` (ô ghép biến ở bước 4) vẫn dùng `is_rate` cũ vì người dùng tự chọn phép tổng hợp ở đó; `is_additive` dựa vào tên cột (tạm, chờ lớp ngữ nghĩa cột HM-03); chưa có kiểm "tổng các phần = tổng chung" và "cùng độ chi tiết thời gian" (HM-04); Phụ lục A đến D mà kế hoạch viện dẫn không có trong tệp kế hoạch được cung cấp.
++
+ ## 0.1.6-dev
+ - **Sửa chữ bị tách rời ("Lo ại", "Danh m ục", "Số ti ền đ", "Ng ày")** (`app/labels.py`): nguyên nhân KHÔNG phải do phông chữ. Hai biểu thức chính quy dùng dải `[À-Ỹ]` để nhận chữ hoa, nhưng dải đó chứa cả chữ **thường** có dấu (ạ, ụ, ề, ứ, à, ế...), nên mọi chữ thường có dấu đứng sau một chữ cái đều bị tưởng là đầu từ mới và bị chèn dấu cách. Nay nhận chữ hoa/thường theo Unicode (`_camel_cut`, `has_camel`). Tên cột đẹp sẵn như `Số tiền (đ)` được giữ nguyên (trước đây mất cả dấu ngoặc). Ảnh hưởng mọi chỗ hiện tên cột: chip biến, tiêu đề biểu đồ, bảng điều khiển xuất ra.
+ - **Chuẩn hóa dấu tiếng Việt về NFC ngay lúc nạp tệp** (`app/data/loader.py: nfc_frame`, `labels.nfc`): tệp xuất từ macOS/Excel hay có dấu dạng tổ hợp (a + dấu rời). Trước đây dấu rời bị coi là ký tự ngăn cách (nhãn thành "Loa i"), và lọc `df['Loại'] == 'Chi tiêu'` không khớp nên ra **0 dòng** mà không báo lỗi.
+diff --git a/README.md b/README.md
+index 3d7bffb..25066f3 100644
+--- a/README.md
++++ b/README.md
+@@ -32,4 +32,4 @@ Code pandas do AI viết (hoặc người dùng sửa) KHÔNG chạy trong tiế
+ Hạn chế còn lại (chưa phải cô lập mức container): tiến trình con vẫn cùng người dùng hệ điều hành, cùng nhân và cùng container với máy chủ web; chặn mạng và chặn đọc tệp chỉ ở tầng Python (mã gốc/lỗ hổng trong thư viện C vẫn là rủi ro); không có hạn mức theo người dùng; Windows/macOS chỉ có timeout, không có giới hạn RAM/CPU của hệ điều hành. Dùng cho nhóm nhỏ quen biết; trước khi cho người lạ dùng nên chuyển sang dịch vụ sandbox riêng không có mạng.
+ 
+ ## Kiểm thử
+-`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py` · `python tests/sandbox_test.py` (cần Linux) · `python tests/analysis_test.py` · `python tests/flow_test.py` · `python tests/regression_test.py` · `python tests/ui_test.py` (cần `pip install playwright && playwright install chromium`)
++`python tests/smoke_test.py` (SQLite) · `TEST_DATABASE_URL=postgresql://... python tests/smoke_test.py` (PostgreSQL, tự áp dụng `sql/schema.sql`) · `python tests/publish_test.py` · `python tests/sandbox_test.py` (cần Linux) · `python tests/analysis_test.py` · `python tests/flow_test.py` · `python tests/regression_test.py` · `python tests/quickfix_test.py` · `python tests/eval/run_eval.py --mock` (khung đánh giá, xem docstring) · `python tests/ui_test.py` (cần `pip install playwright && playwright install chromium`)
+diff --git a/app/agents/insight.py b/app/agents/insight.py
+index a53245d..67534dd 100644
+--- a/app/agents/insight.py
++++ b/app/agents/insight.py
+@@ -1,7 +1,7 @@
+ # -*- coding: utf-8 -*-
+ """AGENT 4 · Insight và tư vấn kinh doanh (bước 5)."""
+ from .. import numfmt
+-from ..data.scope import scope_block
++from ..data.scope import data_card, scope_block
+ from .playbook import INSIGHT_RULES
+ from ..state import A, put, tick
+ from ..llm import llm_json
+@@ -12,9 +12,13 @@ ROLE = "Agent Phát hiện và tư vấn kinh doanh"
+ 
+ PROMPT = (
+     'Trả về DUY NHẤT JSON: {"summary":"tóm tắt điều hành 2-3 câu, câu đầu TRẢ LỜI THẲNG câu hỏi kinh doanh",'
+-    '"insights":[{"title":"câu khẳng định đầy đủ, có số","confidence":"Cao|Trung bình|Thấp","evidence":"phép tính cụ thể bằng số có trong bảng","source":"bảng/biểu đồ nguồn"}],'
+-    '"actions":[{"text":"hành động cụ thể, bắt đầu bằng động từ","priority":"Cao|Trung bình|Thấp","impact":"tác động kỳ vọng, nêu theo số liệu nếu có"}],"risks":["..."]}\n'
+-    "3-5 phát hiện; mỗi phát hiện PHẢI có bằng chứng truy ngược được về bảng kết quả." + INSIGHT_RULES)
++    '"insights":[{"title":"câu khẳng định đầy đủ, có số","confidence":"Cao|Trung bình|Thấp",'
++    '"evidence":"CHỈ chép các ô nguồn dạng [bảng, hàng, cột] = giá trị (bảng = tiêu đề bảng; hàng = giá trị nhóm ở cột đầu; cột = tên cột; chép ĐÚNG như trong bảng), ngăn cách bằng dấu chấm phẩy; KHÔNG viết phép tính","source":"bảng/biểu đồ nguồn"}],'
++    '"actions":[{"text":"hành động cụ thể, bắt đầu bằng động từ","priority":"Cao|Trung bình|Thấp","impact":"tác động theo số có sẵn trong bảng, hoặc chưa ước tính được"}],"risks":["..."]}\n'
++    "Tối đa 5 phát hiện, ÍT HƠN nếu dữ liệu không đủ (được phép 0); mỗi phát hiện phải truy ngược được về ô trong bảng kết quả. "
++    "Hành động chỉ đưa khi gắn với một phát hiện đã nêu; được phép bỏ trống. "
++    "Chỉ khẳng định điều suy ra được từ các cột và bảng được cung cấp. Yếu tố nào không có trong dữ liệu (vd nguyên nhân, chi phí, thiết bị) "
++    "chỉ được nêu như giả thuyết cần kiểm chứng, kèm dữ liệu cần thu thêm (đưa vào risks)." + INSIGHT_RULES)
+ 
+ 
+ def run(fb=""):
+@@ -23,7 +27,7 @@ def run(fb=""):
+     txt = "\n\n".join(f"### [{i}] {t['title']}\n{A['x'][3][i].head(30).to_csv(index=False)}"
+                       for i, t in enumerate(r3["tables"]) if A["x"][3][i] is not None)
+     tick(1)
+-    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + scope_block(A["clean"]) + PROMPT)
++    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + data_card(A["clean"]) + scope_block(A["clean"]) + PROMPT)
+     known = numfmt.Known.from_dfs(A["x"][3])
+     r = numfmt.fix_payload(r, known)
+     ins = numfmt.audit_insights(r.get("insights", []), known)                     # số lớn không có trong bảng nào -> không để "Độ tin cậy: Cao"
+diff --git a/app/agents/playbook.py b/app/agents/playbook.py
+index 9578b57..f470b1c 100644
+--- a/app/agents/playbook.py
++++ b/app/agents/playbook.py
+@@ -9,7 +9,8 @@ CODE_RULES = (
+     "(3) ĐỐI CHIẾU: tổng các phần phải bằng tổng chung; nếu lệch hãy tìm nguyên nhân thay vì bỏ qua. "
+     "(4) MỌI CON SỐ CÓ MỐC SO SÁNH (kỳ trước, trung bình nhiều kỳ, hoặc mục tiêu), nêu cả chênh lệch tuyệt đối và tương đối; nhóm dưới 30 quan sát chỉ là định hướng. "
+     "(5) KHÔNG dùng cột thiếu từ 50% làm cơ cấu hoặc xếp hạng. "
+-    "(6) Nếu câu hỏi có MỤC TIÊU định lượng (tăng/giảm thêm X), thêm một bảng 'khoảng cách tới mục tiêu': cơ sở, mức thay đổi hợp lý theo dữ liệu, tác động ước tính. ")
++    "(6) Nếu câu hỏi có MỤC TIÊU định lượng (tăng/giảm thêm X), thêm một bảng 'khoảng cách tới mục tiêu': cơ sở (số hiện có), mục tiêu, khoảng cách; "
++    "KHÔNG tự đặt 'mức thay đổi hợp lý' khi dữ liệu không cho căn cứ, chỉ tính tác động từ phép so sánh có thật trong dữ liệu (vd đưa nhóm yếu lên bằng trung vị các nhóm còn lại). ")
+ 
+ SUM_RULES = (
+     "\nKPI: giá trị phải khớp một ô hoặc tổng của bảng, nêu phạm vi tính (vd 'chỉ đơn hoàn thành') và delta so với mốc nào; KPI không tính được thì BỎ, tuyệt đối không để value rỗng. "
+@@ -17,9 +18,11 @@ SUM_RULES = (
+ 
+ INSIGHT_RULES = (
+     "\nQUY TẮC NGHỀ: "
+-    "(a) summary: câu đầu TRẢ LỜI THẲNG câu hỏi kèm MỘT con số then chốt có mốc so sánh. "
+-    "(b) Mỗi phát hiện gồm: sự kiện + so sánh + ý nghĩa với quyết định. 'Cao' chỉ khi bằng chứng là số trực tiếp từ bảng, kỳ đủ, nhóm đủ lớn; kỳ chưa đủ hoặc suy diễn thì 'Thấp'. "
+-    "(c) Khuyến nghị chỉ xét thứ NGƯỜI DÙNG KIỂM SOÁT ĐƯỢC; tác động ước tính = cơ sở trong bảng × mức thay đổi hợp lý (nêu giả định), xếp ưu tiên theo tác động và độ dễ làm; mỗi hành động kèm chỉ số theo dõi. "
+-    "Nếu câu hỏi có mục tiêu định lượng: tính khoảng cách tới mục tiêu và đưa 2-3 phương án (thận trọng / cân bằng / quyết liệt) với tổng tác động so với mục tiêu. "
+-    "(d) risks: nêu kỳ chưa đủ, cột thiếu nhiều, mẫu nhỏ, phạm vi chỉ số còn mơ hồ. "
+-    "(e) Mọi con số PHẢI sao chép từ bảng, không tự cộng trừ nhẩm.")
++    "(a) summary: câu đầu TRẢ LỜI THẲNG câu hỏi kèm MỘT con số then chốt có mốc so sánh; nếu dữ liệu chưa đủ để trả lời thì nói rõ là chưa đủ và thiếu gì. "
++    "(b) Mỗi phát hiện gồm: sự kiện + so sánh + ý nghĩa với quyết định. Chưa có mốc so sánh thì ghi rõ 'chưa có mốc so sánh', KHÔNG tự đặt mốc. "
++    "'Cao' chỉ khi bằng chứng là số trực tiếp từ bảng, kỳ đủ, nhóm đủ lớn; kỳ chưa đủ hoặc suy diễn thì 'Thấp'. Có ít phát hiện thật còn hơn đủ số lượng: được phép KHÔNG có phát hiện nào. "
++    "(c) Khuyến nghị chỉ đưa khi gắn với một phát hiện đã nêu và chỉ xét thứ NGƯỜI DÙNG KIỂM SOÁT ĐƯỢC (xem bối cảnh; bối cảnh không nêu họ thay đổi được gì thì chỉ ghi dạng 'hướng cần cân nhắc', không viết như mệnh lệnh); được phép để trống. "
++    "Tác động CHỈ nêu bằng số có sẵn trong bảng (vd chênh lệch giữa nhóm yếu và mức trung vị các nhóm còn lại, nếu bảng đã có); bảng không có sẵn phép so sánh đó thì ghi 'chưa ước tính được', KHÔNG tự đặt mức thay đổi. "
++    "Nếu câu hỏi có mục tiêu định lượng: nêu khoảng cách tới mục tiêu bằng số có trong bảng; chỉ đưa phương án khi mỗi phương án dựa trên phép so sánh có trong bảng. "
++    "(d) risks: nêu kỳ chưa đủ, cột thiếu nhiều, mẫu nhỏ, phạm vi chỉ số còn mơ hồ; điều gì suy đoán mà dữ liệu không có thì viết dạng 'Giả thuyết cần kiểm chứng: ... Dữ liệu cần thu thêm: ...'. "
++    "(e) Mọi con số PHẢI sao chép từ bảng, không tự cộng trừ nhẩm; không viết phép tính trong bằng chứng.")
+diff --git a/app/agents/reporter.py b/app/agents/reporter.py
+index 7055837..1ba6627 100644
+--- a/app/agents/reporter.py
++++ b/app/agents/reporter.py
+@@ -5,6 +5,7 @@ from ..llm import llm_json
+ from ..state import A, put, tick
+ from ..utils import J
+ from .base import SYS, ctx_txt, prev
++from ..data.scope import data_card
+ from ..export import dash_plan
+ from ..export.common import refine_charts
+ from .charts import valid_charts
+@@ -30,7 +31,7 @@ def run(fb=""):
+     cat = dash_plan.catalog(A["clean"])                      # danh mục biểu đồ KHẢ DỤNG của bảng điều khiển (chiều, chỉ số thật của dữ liệu)
+     cat_txt = J([{"ds": c["name"], "dims": [f"{d['label']} ({d['n']} nhóm)" for d in c["dims"]], "thoi_gian": bool(c["time"]),
+                   "chi_so": [m["label"] + (" (trung bình)" if m["avg"] else "") for m in c["meas"]] + ["Số bản ghi"]} for c in cat], 3000)
+-    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\nDANH MỤC DASHBOARD: {cat_txt}\n\n" + PROMPT + DASH_RULE)
++    r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\nDANH MỤC DASHBOARD: {cat_txt}\n\n" + data_card(A["clean"]) + PROMPT + DASH_RULE)
+     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
+     tick(1)
+     known = numfmt.Known.from_dfs(A["x"][3])
+diff --git a/app/agents/reviewer.py b/app/agents/reviewer.py
+index 548532e..e5a26f5 100644
+--- a/app/agents/reviewer.py
++++ b/app/agents/reviewer.py
+@@ -1,12 +1,22 @@
+ # -*- coding: utf-8 -*-
+ """AGENT 6 · Rà soát cuối trước khi người dùng duyệt (bước 7)."""
++from .. import numfmt
+ from ..state import A, put, tick
+ 
+ 
++def _insight_line(ins):
++    """Chỉ nói số phát hiện ĐÃ KIỂM ĐƯỢC trên tổng số; dòng bắt đầu bằng ⚠ khi còn phát hiện chưa kiểm được (giao diện không thêm dấu ✓ cho dòng này)."""
++    ins = numfmt.audit_insights(ins, numfmt.Known.from_dfs(A["x"].get(3) or {}))
++    ok, n = numfmt.verify_counts(ins)
++    if not n:
++        return "Chưa có phát hiện nào đủ chắc để nêu từ dữ liệu này"
++    return f"{ok}/{n} phát hiện đã kiểm được số liệu" if ok == n else f"⚠ Chỉ {ok}/{n} phát hiện đã kiểm được số liệu; phần còn lại cần bạn tự đối chiếu"
++
++
+ def run(fb=""):
+     tick(0)
+     a = A["d"]
+     ap = A.get("applied", [])
+     put(6, {"checks": ["Câu hỏi và bối cảnh", f"Cách làm sạch dữ liệu ({len(ap)} thao tác)",
+-                       f"Phân tích và dự báo ({len(a[3]['tasks'])} phân tích)", f"{len(a[4]['insights'])} phát hiện kèm bằng chứng",
++                       f"Phân tích và dự báo ({len(a[3]['tasks'])} phân tích)", _insight_line(a[4]["insights"]),
+                        f"Bảng điều khiển ({len(a[5]['final']['charts'])} biểu đồ), báo cáo, slide"]})
+diff --git a/app/data/scope.py b/app/data/scope.py
+index edeaebc..5b68be0 100644
+--- a/app/data/scope.py
++++ b/app/data/scope.py
+@@ -6,6 +6,7 @@ dòng tổng với dòng chi tiết...), hoặc so một kỳ chưa đủ ngày
+ cần quyết định*, không áp đặt quyết định: agent phải chọn có lý do và ghi rõ phạm vi vào `goal`. Không gắn với lĩnh vực hay tên cột nào.
+ """
+ import calendar
++import warnings
+ 
+ import pandas as pd
+ 
+@@ -20,6 +21,18 @@ def _is_time(name, s):
+     return pd.api.types.is_datetime64_any_dtype(s) or (bool(TIME_WORDS & set(labels.tokens(name))) and not pd.api.types.is_numeric_dtype(s))
+ 
+ 
++def _parse_dates(s):
++    """Đọc cột chữ thành ngày. Chuỗi dạng năm-tháng-ngày (ISO) thì KHÔNG đảo ngày/tháng; dạng khác ưu tiên ngày trước (dd/mm/yyyy, kiểu Việt Nam).
++    (dayfirst=True áp lên chuỗi ISO làm pandas đọc 2026-01-02 thành 1/2/2026.)"""
++    iso = s.astype(str).str.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}").mean() >= 0.9
++    with warnings.catch_warnings():
++        warnings.simplefilter("ignore")
++        try:
++            return pd.to_datetime(s, errors="coerce", format="mixed", dayfirst=not iso)
++        except (TypeError, ValueError):
++            return pd.to_datetime(s, errors="coerce")
++
++
+ def _pct(x):
+     return f"{x * 100:.0f}%".replace(".", ",")
+ 
+@@ -48,8 +61,7 @@ def scope_hints(dfs, max_per_table=6):
+                     notes.append(f"Cột số «{c}» có cả giá trị âm ({int((v < 0).sum())} dòng) và dương → xác nhận quy ước dấu; đừng cộng gộp nếu âm/dương thuộc hai nhóm khác nhau (vd hoàn tiền, điều chỉnh).")
+         for c in df.columns:
+             if _is_time(c, df[c]):
+-                d = pd.to_datetime(df[c].head(20000), errors="coerce", dayfirst=True)
+-                d = d.dropna()
++                d = _parse_dates(df[c].head(20000)).dropna()
+                 if len(d) >= max(5, n * 0.5):
+                     last = d.max()
+                     dim = calendar.monthrange(last.year, last.month)[1]
+@@ -69,3 +81,46 @@ def scope_block(dfs):
+     """Khối chữ sẵn sàng ghép vào prompt; rỗng nếu không có điểm nào cần lưu ý."""
+     t = scope_hints(dfs)
+     return ("TÍN HIỆU PHẠM VI & CHẤT LƯỢNG DỮ LIỆU (do máy tính từ dữ liệu thật, bạn phải xử lý từng điểm):\n" + t + "\n\n") if t else ""
++
++
++# ---------------------------------------------------------------- thẻ dữ liệu: ranh giới những gì AI được phép nói tới --
++def _col_kind(s):
++    """Phân loại cột THEO THỐNG KÊ (không dựa vào từ khóa trong tên): thời gian · số · phân loại · văn bản."""
++    if pd.api.types.is_bool_dtype(s):
++        return "đúng/sai"
++    if pd.api.types.is_datetime64_any_dtype(s):
++        return "thời gian"
++    if pd.api.types.is_numeric_dtype(s):
++        return "số"
++    v = s.dropna().astype(str).head(200)
++    if len(v) >= 5 and v.str.contains(r"[-/.]", regex=True).mean() >= 0.9:          # trông như ngày tháng thì thử đọc
++        if _parse_dates(v).notna().mean() >= 0.9:
++            return "thời gian"
++    return "phân loại" if s.nunique(dropna=True) <= max(20, 0.05 * max(len(s), 1)) else "văn bản"
++
++
++def _time_range(s):
++    if pd.api.types.is_datetime64_any_dtype(s):
++        d = s.dropna()
++    else:
++        d = _parse_dates(s.head(50000)).dropna()
++    return (d.min(), d.max()) if len(d) else None
++
++
++def data_card(dfs, max_tables=6, max_cols=40):
++    """Đoạn ngắn do CODE tạo, liệt kê bảng/cột/kỳ thời gian thật của dữ liệu, kèm câu giới hạn: AI chỉ được dựa vào đây (không bịa cột, thực thể, nguyên nhân).
++    Trung lập lĩnh vực: không dùng từ khóa theo ngành. Rỗng nếu không có bảng nào."""
++    out = []
++    for name, df in list((dfs or {}).items())[:max_tables]:
++        if df is None or not hasattr(df, "columns") or not len(df.columns):
++            continue
++        cols = [f"{c} ({_col_kind(df[c])})" for c in list(df.columns)[:max_cols]]
++        more = f" … và {len(df.columns) - max_cols} cột khác" if len(df.columns) > max_cols else ""
++        rng = next((r for r in (_time_range(df[c]) for c in df.columns[:max_cols] if _col_kind(df[c]) == "thời gian") if r), None)
++        kỳ = f" Kỳ thời gian: {rng[0]:%d/%m/%Y} đến {rng[1]:%d/%m/%Y}." if rng else ""
++        out.append(f"- [{name}] {len(df):,} dòng.{kỳ} Cột: ".replace(",", ".") + "; ".join(cols) + more)
++    if not out:
++        return ""
++    return ("THẺ DỮ LIỆU (do máy lập từ dữ liệu thật):\n" + "\n".join(out) + "\n"
++            "Chỉ được dựa vào những bảng, cột và kỳ thời gian nêu trên. Điều gì không có ở đây (vd nguyên nhân, chi phí, thiết bị, con người) KHÔNG được khẳng định; "
++            "chỉ nêu như giả thuyết cần kiểm chứng kèm dữ liệu cần thu thêm.\n\n")
+diff --git a/app/export/__init__.py b/app/export/__init__.py
+index e26b0b9..ec44190 100644
+--- a/app/export/__init__.py
++++ b/app/export/__init__.py
+@@ -49,7 +49,7 @@ def live_meta(title=None):
+ 
+ def snapshot():
+     """Toàn bộ các bước đã thực hiện, để xem lại ở chế độ chỉ đọc."""
+-    keys = ("id", "question", "ctx", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
++    keys = ("id", "question", "ctx", "brief", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
+     s = {k: A[k] for k in keys}
+     s["st"] = ["done"] * 7
+     s["approved"] = True
+diff --git a/app/export/assets/dashboard.css b/app/export/assets/dashboard.css
+index 48bb719..e878f88 100644
+--- a/app/export/assets/dashboard.css
++++ b/app/export/assets/dashboard.css
+@@ -53,6 +53,7 @@ svg .area{fill:var(--soft);opacity:.8}svg .ln{fill:none;stroke:var(--pri);stroke
+ .in .n{width:32px;height:32px;border-radius:10px;background:var(--soft);color:var(--pri-ink);display:grid;place-items:center;font-weight:700;font-size:14px}
+ .in h3{margin:0 0 6px;font-size:16px;line-height:1.45;font-weight:600}.ev{font-size:13.5px;color:var(--sub);margin:0}.ev b{color:var(--ink);font-weight:600}
+ .badge{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 10px;border-radius:999px;margin-left:8px;vertical-align:1px}
++.vf-ok{background:var(--okb);color:var(--ok)}.vf-un{background:var(--p2);color:var(--sub)}.vf-bad{background:var(--badb);color:var(--bad)}
+ .b-Cao{background:var(--okb);color:var(--ok)}.b-Trung{background:var(--warnb);color:var(--warn)}.b-Thấp{background:var(--p2);color:var(--sub)}
+ 
+ /* bảng */
+diff --git a/app/export/assets/live.css b/app/export/assets/live.css
+index 6ee68f6..c6e0446 100644
+--- a/app/export/assets/live.css
++++ b/app/export/assets/live.css
+@@ -75,6 +75,10 @@ details.sl.act>summary{background:var(--acc-soft);border-color:transparent;color
+ .kpi b{display:block;margin-top:8px;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+ .kpi small{display:block;margin-top:6px;font-size:12.5px;color:var(--mute)}
+ .kpi.hero{background:var(--acc);border-color:var(--acc);color:#fff}.kpi.hero span,.kpi.hero small{color:rgba(255,255,255,.78)}
++.kpi .agt{display:inline-flex;margin-top:10px;padding:2px;border-radius:8px;background:rgba(255,255,255,.18);gap:2px}
++.kpi .agt button{border:0;background:none;height:24px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;color:inherit;opacity:.75;cursor:pointer}
++.kpi .agt button.on{background:rgba(255,255,255,.95);color:var(--acc-ink);opacity:1}
++:root[data-theme=dark] .kpi.hero .agt{background:rgba(10,15,31,.18)}:root[data-theme=dark] .kpi.hero .agt button.on{background:rgba(10,15,31,.9);color:var(--acc-ink)}
+ :root[data-theme=dark] .kpi.hero{color:#0A0F1F}:root[data-theme=dark] .kpi.hero span,:root[data-theme=dark] .kpi.hero small{color:rgba(10,15,31,.7)}
+ 
+ /* ---- Lưới biểu đồ ---- */
+@@ -128,6 +132,7 @@ h2.sec{margin:36px 0 14px;font-size:18px;font-weight:700;letter-spacing:-.01em}
+ .in{display:flex;gap:14px;align-items:flex-start}.in .n{flex:none;width:30px;height:30px;border-radius:10px;background:var(--acc-soft);color:var(--acc-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+ .in h4{margin:0 0 6px;font-size:14.5px;line-height:1.4;font-weight:600}.in p{margin:0;color:var(--sub);font-size:13px;line-height:1.5}.in p b{color:var(--ink);font-weight:600}
+ .tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;vertical-align:1px;background:var(--line2);color:var(--sub)}
++.tag.ok{background:var(--ok-bg);color:var(--ok)}.tag.Bad{background:var(--bad-bg);color:var(--bad)}.vnote{color:var(--bad)!important;font-size:12.5px}.vnote.un{color:var(--sub)!important}
+ .tag.Cao{background:var(--ok-bg);color:var(--ok)}.tag.Trung{background:var(--warn-bg);color:var(--warn)}.tag.Thấp{background:var(--line2);color:var(--sub)}
+ .acts{display:flex;flex-direction:column;gap:10px}
+ .act{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px}
+diff --git a/app/export/assets/live.js b/app/export/assets/live.js
+index 040a376..a3b468a 100644
+--- a/app/export/assets/live.js
++++ b/app/export/assets/live.js
+@@ -31,11 +31,12 @@
+     if (ds.time) { C.t = ds.time.codes; V.t = ds.time.vals; L.t = ds.time.label; NA.t = -1 }
+     ds.meas.forEach(m => M[m.k] = m.vals);
+     P = makePlan();
+-    st = { sel: {}, from: 0, to: ds.time ? V.t.length - 1 : 0, m: ds.meas[0] ? ds.meas[0].k : '', tb: { by: P.tableBy, sort: '', dir: -1 } };
++    st = { sel: {}, from: 0, to: ds.time ? V.t.length - 1 : 0, m: ds.meas[0] ? ds.meas[0].k : '', ag: {}, tb: { by: P.tableBy, sort: '', dir: -1 } };
+     resetSort(); render();
+   }
+   const cm = () => ds.meas.find(m => m.k === st.m) || null;
+-  const agg = () => { const m = cm(); return m ? (m.avg ? 'avg' : 'sum') : 'count' };
++  const aggOf = m => (st.ag && st.ag[m.k]) || (m.avg ? 'avg' : 'sum');          // mặc định an toàn do máy chủ chọn; người xem đổi tay ở thẻ chỉ số
++  const agg = () => { const m = cm(); return m ? aggOf(m) : 'count' };
+   const keys = () => Object.keys(L);
+   const resetSort = () => { const t = st.tb; if (t.by === 't') { t.sort = 'l'; t.dir = 1 } else { t.sort = ds.meas[0] ? ds.meas[0].k : 'rows'; t.dir = -1 } };
+ 
+@@ -185,8 +186,8 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
+ 
+   function tableCard() {
+     const t = st.tb, by = t.by; if (!by) return '';
+-    const mc = ds.meas.slice(0, 4), head = [['l', L[by], false], ['rows', 'Số bản ghi', true], ...mc.map(m => [m.k, mName(m, m.avg ? 'avg' : 'sum'), true])];
+-    const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, m.avg ? 'avg' : 'sum')); const base = groupBy(by, '', 'count');
++    const mc = ds.meas.slice(0, 4), head = [['l', L[by], false], ['rows', 'Số bản ghi', true], ...mc.map(m => [m.k, mName(m, aggOf(m)), true])];
++    const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, aggOf(m))); const base = groupBy(by, '', 'count');
+     let rows = base.map(b => { const o = { l: b.l, rows: b.rows }; mc.forEach(m => { const x = by2[m.k].find(y => y.q === b.q); o[m.k] = x ? x.v : null }); return o });
+     rows.sort((x, y) => (typeof x[t.sort] === 'string' ? x[t.sort].localeCompare(y[t.sort], 'vi', { numeric: true }) : (x[t.sort] ?? -Infinity) - (y[t.sort] ?? -Infinity)) * t.dir); rows = rows.slice(0, 60);
+     const cell = (v, k) => k === 'l' ? esc(by === 't' ? ml(v) : v) : k === 'rows' ? f0.format(v) : esc(full(v, mc.find(m => m.k === k)));
+@@ -208,15 +209,18 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
+   }
+   function kpiHTML() {
+     const k = kpiData(), m = cm(), j = m ? ds.meas.indexOf(m) : -1, a = agg(), cards = [];
+-    if (m) cards.push([mName(m, a), val(a === 'avg' ? (k.Cn[j] ? k.S[j] / k.Cn[j] : null) : k.S[j], m.unit), '', true]);
++    const agt = `<div class="agt" role="group" aria-label="Cách tổng hợp">${[['sum', 'Tổng'], ['avg', 'Trung bình']].map(([q, t]) => `<button data-ag="${q}" class="${a === q ? 'on' : ''}">${t}</button>`).join('')}</div>`;
++    if (m) cards.push([mName(m, a), val(a === 'avg' ? (k.Cn[j] ? k.S[j] / k.Cn[j] : null) : k.S[j], m.unit), m.add || a !== 'sum' ? '' : 'Chỉ số này thường không cộng được; cân nhắc dùng Trung bình', true, agt]);
+     cards.push(['Số bản ghi', f0.format(k.rows), '']);
+     if (m && a !== 'avg') cards.push(['Trung bình mỗi bản ghi', val(k.Cn[j] ? k.S[j] / k.Cn[j] : null, m.unit), esc(lc(stripTong(m.label)))]);
+-    const o = ds.meas.findIndex((x, i) => i !== j); if (o >= 0 && cards.length < 4) { const mo = ds.meas[o], ao = mo.avg ? 'avg' : 'sum'; cards.push([mName(mo, ao), val(ao === 'avg' ? (k.Cn[o] ? k.S[o] / k.Cn[o] : null) : k.S[o], mo.unit), '']) }
+-    return `<div class="kpis" style="--n:${cards.length}">${cards.map(([l, v, s, h]) => `<div class="kpi ${h ? 'hero' : ''}"><span title="${esc(l)}">${esc(l)}</span><b>${esc(v)}</b>${s ? `<small>${s}</small>` : ''}</div>`).join('')}</div>`;
++    const o = ds.meas.findIndex((x, i) => i !== j); if (o >= 0 && cards.length < 4) { const mo = ds.meas[o], ao = aggOf(mo); cards.push([mName(mo, ao), val(ao === 'avg' ? (k.Cn[o] ? k.S[o] / k.Cn[o] : null) : k.S[o], mo.unit), '']) }
++    return `<div class="kpis" style="--n:${cards.length}">${cards.map(([l, v, s, h, x]) => `<div class="kpi ${h ? 'hero' : ''}"><span title="${esc(l)}">${esc(l)}</span><b>${esc(v)}</b>${s ? `<small>${s}</small>` : ''}${x || ''}</div>`).join('')}</div>`;
+   }
+   function narrative() {
+     const first = c => String(c || '').split(' ')[0], order = { Cao: 0, 'Trung bình': 1, 'Thấp': 2 };
+-    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(x.check || []).length ? `<span class="tag Thấp" title="Số ${esc(x.check.join(', '))} chưa khớp bảng kết quả nào">Cần kiểm tra số liệu</span>` : ''}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p></div></div>`).join('');
++    const vf = x => ({ ok: ['ok', 'Đã kiểm số liệu'], mismatch: ['Bad', (x.calc_mismatch || []).length ? 'Phép tính không khớp' : 'Số liệu chưa khớp bảng'], unverified: ['Thấp', 'Chưa kiểm được'] })[x.verify];
++    const vn = x => (x.calc_mismatch || []).length ? 'Phép tính không khớp: ' + x.calc_mismatch.join('; ') : (x.cell_mismatch || []).length ? 'Số trích không khớp bảng kết quả: ' + x.cell_mismatch.join('; ') : (x.check || []).length ? 'Cần kiểm tra số liệu: số ' + x.check.join(', ') + ' chưa khớp bảng kết quả nào' : x.verify === 'unverified' ? 'Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)' : '';
++    const ins = D.insights.map((x, i) => `<div class="card in"><div class="n">${i + 1}</div><div><h4>${esc(x.title)}${x.confidence ? `<span class="tag ${esc(first(x.confidence))}">Độ tin cậy: ${esc(x.confidence)}</span>` : ''}${(b => b ? `<span class="tag ${b[0]}">${esc(b[1])}</span>` : '')(vf(x))}</h4><p><b>Bằng chứng:</b> ${esc(x.evidence || '')}</p>${vn(x) ? `<p class="vnote ${x.verify === 'unverified' ? 'un' : ''}">${x.verify === 'unverified' ? 'ⓘ' : '⚠'} ${esc(vn(x))}</p>` : ''}</div></div>`).join('');
+     const acts = [...D.actions].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9)).map(a => `<div class="act"><span class="pr ${esc(first(a.priority))}">${esc(a.priority || '')}</span><b>${esc(a.text)}</b><span class="im">${esc(a.impact || '')}</span></div>`).join('');
+     return (ins ? `<h2 class="sec">Phát hiện chính</h2><div class="ins">${ins}</div>` : '') + (acts ? `<h2 class="sec">Khuyến nghị hành động</h2><div class="acts">${acts}</div>` : '') +
+       (D.risks.length ? `<h2 class="sec">Rủi ro cần lưu ý</h2><div class="card"><ul class="risks">${D.risks.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>` : '');
+@@ -236,10 +240,11 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng)
+ 
+   /* ---- sự kiện ---- */
+   document.addEventListener('click', e => {
+-    const t = e.target, rs = t.closest('[data-reset]'), cl = t.closest('[data-clr]'), q = t.closest('[data-q][data-k]'), so = t.closest('[data-sort]'), mm = t.closest('[data-m]');
++    const t = e.target, rs = t.closest('[data-reset]'), cl = t.closest('[data-clr]'), q = t.closest('[data-q][data-k]'), so = t.closest('[data-sort]'), mm = t.closest('[data-m]'), ag = t.closest('[data-ag]');
+     if (rs) { st.sel = {}; st.from = 0; st.to = ds.time ? V.t.length - 1 : 0; render() }
+     else if (cl) { delete st.sel[cl.dataset.clr]; render() }
+     else if (mm) { st.m = mm.dataset.m; render() }
++    else if (ag) { const m = cm(); if (m) { st.ag[m.k] = ag.dataset.ag; render() } }
+     else if (so) { const k = so.dataset.sort; st.tb.dir = st.tb.sort === k ? -st.tb.dir : (k === 'l' ? 1 : -1); st.tb.sort = k; render() }
+     else if (q && !t.closest('input')) { const k = q.dataset.k, v = +q.dataset.q, s = st.sel[k] = st.sel[k] || new Set(); s.has(v) ? s.delete(v) : s.add(v); render() }
+     else if (t.closest('[data-ds]')) { openK.clear(); init(+t.closest('[data-ds]').dataset.ds) }
+diff --git a/app/export/dash_plan.py b/app/export/dash_plan.py
+index 5601907..3290e5f 100644
+--- a/app/export/dash_plan.py
++++ b/app/export/dash_plan.py
+@@ -27,7 +27,7 @@ def catalog(dfs):
+                          "len": round(sum(len(v) for v in d["vals"]) / max(1, len(d["vals"])), 1), "sample": d["vals"][:3]})
+         out.append({"name": s["name"], "title": s["title"], "n": s["n_src"], "dims": dims,
+                     "time": {"label": s["time"]["label"], "n": len(s["time"]["vals"])} if s.get("time") else None,
+-                    "meas": [{"k": m["k"], "label": m["label"], "unit": m["unit"], "avg": bool(m["avg"])} for m in s["meas"]]})
++                    "meas": [{"k": m["k"], "label": m["label"], "unit": m["unit"], "avg": bool(m["avg"]), "add": bool(m.get("add", not m["avg"]))} for m in s["meas"]]})
+     return out
+ 
+ 
+@@ -68,6 +68,10 @@ def validate(plan, cat, src_default="user"):
+             agg = "*"
+         else:
+             agg = it.get("agg") if it.get("agg") in ("sum", "avg") else ("avg" if meas[m]["avg"] else "sum")
++            src = it.get("src") if it.get("src") in ("ai", "user") else src_default
++            if agg == "sum" and src == "ai" and not meas[m].get("add", not meas[m]["avg"]):
++                agg = "avg"            # AI tự chọn "tổng" cho chỉ số không cộng được (tuổi, điểm, đơn giá...) -> đổi sang trung bình; người dùng tự chọn thì giữ
++                it = dict(it, title=None)   # tiêu đề AI viết theo phép "tổng" ("Tổng tuổi theo phòng ban") không còn đúng: dùng tiêu đề tự tính theo phép tổng hợp thật
+         kind = it.get("kind") if it.get("kind") in KINDS else ("trend" if by == "t" else "bars")
+         if by == "t":
+             kind = "trend" if kind == "trend" else "cols"
+diff --git a/app/export/dashboard.py b/app/export/dashboard.py
+index 6c714e6..3a04824 100644
+--- a/app/export/dashboard.py
++++ b/app/export/dashboard.py
+@@ -2,6 +2,7 @@
+ """Dashboard HTML độc lập (1 file, mở offline): dùng để XEM, TRA CỨU và TRẢ LỜI câu hỏi."""
+ from pathlib import Path
+ 
++from .. import numfmt
+ from ..utils import E, vn
+ from .common import PRI_ORDER, chart_rows, facts, trunc
+ from .svg import chart_svg
+@@ -20,6 +21,12 @@ def _badge(conf):
+     return f'<span class="badge b-{E(key)}">Độ tin cậy: {E(c)}</span>' if c else ""
+ 
+ 
++def _vbadge(x):
++    """Trạng thái kiểm tra bằng chứng của một phát hiện (đã kiểm / chưa kiểm được / không khớp)."""
++    v = numfmt.verify_label(x)
++    return f'<span class="badge vf-{v[0]}">{E(v[1])}</span>' if v else ""
++
++
+ def _kpis(F):
+     if not F["kpis"]:
+         return ""
+@@ -44,9 +51,9 @@ def _charts(F):
+ def _insights(F):
+     if not F["insights"]:
+         return ""
+-    items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}</h3>'
++    items = "".join(f'<div class="in"><div class="n">{i + 1}</div><div><h3>{E(x["title"])}{_badge(x.get("confidence"))}{_vbadge(x)}</h3>'
+                     f'<p class="ev"><b>Bằng chứng ({E(x.get("source", ""))}):</b> {E(x.get("evidence", ""))}</p>'
+-                    + (f'<p class="ev"><b>Cần kiểm tra số liệu:</b> số {E(", ".join(x["check"]))} chưa khớp bảng kết quả nào.</p>' if x.get("check") else "") + '</div></div>'
++                    + (f'<p class="ev"><b>Lưu ý kiểm tra:</b> {E(numfmt.verify_note(x))}</p>' if numfmt.verify_note(x) else "") + '</div></div>'
+                     for i, x in enumerate(F["insights"]))
+     return f'<section id="insights"><h2 class="hs ins">Phát hiện chính</h2><div class="ins">{items}</div></section>'
+ 
+@@ -92,6 +99,11 @@ def _tbl(t):
+     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+ 
+ 
++def _verify_foot(F):
++    ok, n = numfmt.verify_counts(F["insights"])
++    return f" {ok}/{n} phát hiện đã được đối chiếu số liệu với bảng kết quả." if n else ""
++
++
+ def build_html(F):
+     chips = "".join(f'<span class="chip">{E(x)}</span>' for x in [F.get("period"), f"{len(F['files'])} tệp dữ liệu", f"{len(F['insights'])} phát hiện"] if x)
+     narrative = "".join(f"<p>{E(p)}</p>" for p in str(F["narrative"]).split("\n") if p.strip())
+@@ -105,5 +117,5 @@ def build_html(F):
+             f'<nav class="tabs"><div class="wrap">{nav}</div></nav><main class="wrap">'
+             f'<section id="answer"><h2>Câu trả lời ngắn</h2><div class="card answer"><p class="big">{E(F["summary"])}</p>{narrative}</div></section>'
+             f'{_kpis(F)}{_charts(F)}{_insights(F)}{_actions(F)}{_risks(F)}{_method(F)}'
+-            f'<footer class="ft">Tạo bởi Mission Control · {E(F["date"])} · Mọi con số được tính từ dữ liệu đã làm sạch, bằng chứng truy ngược được ở mục Phương pháp.</footer>'
++            f'<footer class="ft">Tạo bởi Mission Control · {E(F["date"])} · Số liệu tính từ dữ liệu đã làm sạch; bảng số liệu và phương pháp ở mục Phương pháp.{_verify_foot(F)}</footer>'
+             f'</main></body></html>')
+\ No newline at end of file
+diff --git a/app/export/deck.py b/app/export/deck.py
+index 1803409..fef5bae 100644
+--- a/app/export/deck.py
++++ b/app/export/deck.py
+@@ -14,6 +14,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+ from pptx.oxml.ns import qn
+ from pptx.util import Inches, Pt
+ 
++from .. import numfmt
+ from ..utils import compact, vn
+ from .common import PRI_ORDER, chart_rows, facts, pp, scale, trunc
+ 
+@@ -295,10 +296,12 @@ def chart_slides(d):
+ 
+ def insight_slides(d):
+     ins = d.F["insights"]
++    ok_all = numfmt.all_verified(ins)             # chỉ khẳng định "có bằng chứng truy ngược" khi MỌI phát hiện đã qua kiểm tra; còn không thì tiêu đề trung tính
+     for k in range(0, len(ins), 3):
+         part = ins[k:k + 3]
+-        s = d.slide(f"{len(ins)} phát hiện chính, mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu" if k == 0 else "Các phát hiện chính (tiếp)", "Phát hiện")
+-        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", "") + (f"  ⚠ Cần kiểm tra số liệu: {', '.join(x['check'])}" if x.get("check") else ""), 260), x.get("confidence", "")] for i, x in enumerate(part)]
++        head = (f"{len(ins)} phát hiện chính, mỗi phát hiện đều có số liệu đã đối chiếu với bảng kết quả" if ok_all else "Các phát hiện chính") if k == 0 else "Các phát hiện chính (tiếp)"
++        s = d.slide(head, "Phát hiện")
++        rows = [[f"{k + i + 1}", trunc(x["title"], 190), trunc(x.get("evidence", ""), 150 if numfmt.verify_note(x) else 260) + (f"  ⚠ {trunc(numfmt.verify_note(x), 110)}" if numfmt.verify_note(x) else ""), x.get("confidence", "")] for i, x in enumerate(part)]
+         conf = {"Cao": OK, "Trung bình": WARN, "Thấp": BAD}
+ 
+         def st(i, j, v):
+@@ -364,7 +367,7 @@ def appendix(d):
+         rect(s, x, 1.85, colw, 3.9, fill=BG, line=LINE)
+         text(s, x + .15, 1.95, colw - .3, .35, h, size=11, bold=True, color=PRI)
+         text(s, x + .15, 2.35, colw - .3, 4.0, [f"▸ {x_}" for x_ in lines], size=12, color=INK, after=6)
+-    d.source(s, "Mission Control; bằng chứng đầy đủ trong dashboard.html")
++    d.source(s, "Mission Control; số liệu chi tiết trong dashboard.html")
+ 
+ 
+ def build_pptx(F):
+diff --git a/app/export/interactive.py b/app/export/interactive.py
+index 106a394..aa6a8ed 100644
+--- a/app/export/interactive.py
++++ b/app/export/interactive.py
+@@ -107,7 +107,9 @@ def _spec(name, df):
+     if not out_dims and time is None:
+         return None
+     mvals = {f"m{j}": s.astype(float) for j, (c, s) in enumerate(meas)}
+-    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": lb.is_rate(c),
++    # "avg" = cách tổng hợp MẶC ĐỊNH là trung bình. Chỉ cộng khi nhận ra rõ là cộng được (lb.is_additive); không chắc thì trung bình (an toàn).
++    # Người xem vẫn đổi tay được ngay trên thẻ chỉ số của bảng điều khiển.
++    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": not lb.is_additive(c), "add": lb.is_additive(c),
+                  "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
+ 
+     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều
+diff --git a/app/export/markdown.py b/app/export/markdown.py
+index 2540457..f409ac2 100644
+--- a/app/export/markdown.py
++++ b/app/export/markdown.py
+@@ -1,4 +1,5 @@
+ # -*- coding: utf-8 -*-
++from .. import numfmt
+ from .common import PRI_ORDER, chart_rows, facts
+ 
+ 
+@@ -14,9 +15,17 @@ def build_md(F):
+         L += ["", f"### {c.get('insight') or c['title']}", f"*{c['title']}* — nguồn: {F['table_titles'][c['task']]}"]
+         L += [f"- {x}" for x in facts(rows, c["kind"])]
+     L += ["", "## Phát hiện chính"]
+-    L += [f"{i + 1}. **{x['title']}** (độ tin cậy: {x.get('confidence', '')}) — bằng chứng: {x.get('evidence', '')}" for i, x in enumerate(F["insights"])]
+-    L += ["", "## Khuyến nghị hành động", "", "| Ưu tiên | Hành động | Tác động |", "|---|---|---|"]
+-    L += [f"| {a.get('priority', '')} | {a['text']} | {a.get('impact', '')} |" for a in sorted(F["actions"], key=lambda a: PRI_ORDER.get(a.get("priority"), 9))]
++    ok, n = numfmt.verify_counts(F["insights"])
++    if n:
++        L += ["", f"*{ok}/{n} phát hiện đã được đối chiếu số liệu với bảng kết quả; phát hiện chưa kiểm được có ghi chú riêng.*", ""]
++    else:
++        L += ["", "*Chưa có phát hiện nào đủ chắc để nêu từ dữ liệu này.*"]
++    for i, x in enumerate(F["insights"]):
++        vl, note = numfmt.verify_label(x), numfmt.verify_note(x)
++        L.append(f"{i + 1}. **{x['title']}** (độ tin cậy: {x.get('confidence', '')}{'; ' + vl[1].lower() if vl else ''}) — bằng chứng: {x.get('evidence', '')}" + (f" ⚠ {note}" if note else ""))
++    if F["actions"]:
++        L += ["", "## Khuyến nghị hành động", "", "| Ưu tiên | Hành động | Tác động |", "|---|---|---|"]
++        L += [f"| {a.get('priority', '')} | {a['text']} | {a.get('impact', '')} |" for a in sorted(F["actions"], key=lambda a: PRI_ORDER.get(a.get("priority"), 9))]
+     if F["risks"]:
+         L += ["", "## Rủi ro"] + [f"- {r}" for r in F["risks"]]
+     L += ["", "## Phương pháp", F["method"]]
+diff --git a/app/labels.py b/app/labels.py
+index 5b96c17..b3feef5 100644
+--- a/app/labels.py
++++ b/app/labels.py
+@@ -64,7 +64,7 @@ RATE_PHRASES = ("gia", "don gia", "gia von", "gia ban", "gia niem yet", "gia nha
+                 "danh gia", "rating", "score", "price", "trong luong", "kich thuoc", "tuoi", "nhiet do", "do tuoi", "thoi gian giao")
+ HEAD_LAST = {"id": "mã", "name": "tên", "date": "ngày", "code": "mã", "count": "số lượng", "type": "loại", "status": "trạng thái", "rate": "tỷ lệ"}
+ ID_WORDS = {"id", "ma", "code", "stt", "sdt", "phone", "email", "sku", "uuid", "guid"}
+-_NOT_MONEY_BEFORE = {"so", "san", "trong"}                 # "số lượng", "sản lượng", "trọng lượng" không phải lương/tiền
++_NOT_MONEY_BEFORE = {"so", "san", "trong", "khoi", "thoi"}   # "số lượng", "sản lượng", "trọng lượng", "khối lượng", "thời lượng" không phải lương/tiền
+ 
+ 
+ def fold(s):
+@@ -172,6 +172,29 @@ def is_rate(col):
+     return any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in RATE_PHRASES) and not re.search(r"(^| )(tong|so luong)( |$)", joined)
+ 
+ 
++# Chỉ số được coi là CỘNG ĐƯỢC khi có dấu hiệu rõ (tên bắt đầu bằng "Tổng", đơn vị tiền, hoặc từ chỉ số lượng/khối lượng/thời lượng).
++# Không nhận ra thì KHÔNG cộng: dùng trung bình (an toàn). Cộng nhầm tuổi, điểm, đơn giá cho ra con số vô nghĩa; trung bình nhầm thì vẫn đọc được.
++ADD_FIRST = {"tong", "total", "sum"}
++ADD_PHRASES = ("so luong", "san luong", "khoi luong", "thoi luong", "so don", "so don hang", "so lan", "so luot", "luot", "so tien", "chi tieu", "tieu dung",
++               "qty", "quantity", "volume", "count", "sl")
++
++
++def is_additive(col):
++    """Cột có nghĩa khi CỘNG (tiền, số lượng, khối lượng, thời lượng, hoặc tên bắt đầu bằng 'Tổng')? Không chắc thì False (dùng trung bình).
++    Tạm thời dựa vào tên cột; sẽ được thay bằng lớp ngữ nghĩa cột (kế hoạch HM-03)."""
++    if is_id(col) or is_rate(col):
++        return False
++    toks = tokens(col)
++    if not toks:
++        return False
++    if toks[0] in ADD_FIRST:
++        return True
++    if unit(col) in ("đ", "USD"):
++        return True
++    joined = " ".join(toks)
++    return any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in ADD_PHRASES)
++
++
+ def is_id(col):
+     toks = tokens(col)
+     return bool(toks) and (toks[0] in ID_WORDS or toks[-1] in ID_WORDS or _phrase_key(toks[:2]) in ("ma so",))
+diff --git a/app/numfmt.py b/app/numfmt.py
+index 072cf27..e240013 100644
+--- a/app/numfmt.py
++++ b/app/numfmt.py
+@@ -40,13 +40,15 @@ class Known:
+     def __init__(self, values=()):
+         arr = np.asarray([float(v) for v in values if v is not None and np.isfinite(v)], dtype=float)
+         self.a = np.unique(np.abs(arr)) if arr.size else arr
++        self.frames = []                         # các bảng kết quả (DataFrame) để đối chiếu từng ô được trích, xem check_cells
+ 
+     @classmethod
+     def from_dfs(cls, dfs):
+-        vals = []
++        vals, frames = [], []
+         for df in (dfs.values() if isinstance(dfs, dict) else dfs or []):
+             if df is None or not hasattr(df, "columns"):
+                 continue
++            frames.append(df)
+             for c in df.columns:
+                 s = pd.to_numeric(df[c], errors="coerce").dropna()
+                 if s.empty or pd.api.types.is_bool_dtype(df[c]):
+@@ -57,7 +59,9 @@ class Known:
+                     a = s.to_numpy(dtype=float)
+                     vals.extend((a[:, None] - a[None, :]).ravel().tolist())
+                     vals.extend((a[:, None] + a[None, :]).ravel().tolist())
+-        return cls(vals)
++        k = cls(vals)
++        k.frames = frames
++        return k
+ 
+     def has(self, x, tol=None):
+         """Có giá trị nào trong bảng khớp x (sai số tol, tối thiểu nửa đơn vị làm tròn)? Dung sai CHẶT: lệch cả một chữ số là phải bị bắt."""
+@@ -255,19 +259,260 @@ def audit(text, known):
+     return [s for s, v, tol in big_numbers(text) if not known.has(v, tol)]
+ 
+ 
++# ---- tính lại phép tính AI viết trong bằng chứng ("a + b + c = d", "a / b = 31,09%") ----
++# AI hay viết phép tính sai (cộng bảy số ra 3.064,28 nhưng ghi 2.152,25). Ở đây CODE tính lại; chỉ nhận số, + - × / và ngoặc,
++# KHÔNG dùng eval. Biểu thức không phân tích được thì bỏ qua (kết luận là "chưa kiểm được", không phải "sai").
++_CN = r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?"
++_CALC_TOK = re.compile(
++    rf"(?P<num>(?<![\w.,])(?:{_CN})(?:\s*(?:nghìn tỷ|tỷ|triệu|nghìn)(?!\w))?(?:\s*(?:%|đồng(?!\w)|đ(?!\w)))?)"
++    r"|(?P<op>(?<=\s)[-−–](?=\s)|(?<=[=≈])\s?[-−–](?=\d)|\s[xX]\s(?=\d)|[+×*/÷])"
++    r"|(?P<lp>\()|(?P<rp>\))|(?P<eq>[=≈])|(?P<sp>\s+)|(?P<other>.)", re.S)
++_CALC_SCALE = {"nghìn tỷ": 1e12, "tỷ": 1e9, "triệu": 1e6, "nghìn": 1e3}
++_CALC_MAX = 60                                   # tối đa số phép tính kiểm trong một đoạn (tránh chạy lâu với đoạn dị dạng)
++
++
++def _calc_num(tok, alt):
++    """'2.152,25 tỷ' -> (giá trị, số chữ số thập phân, hệ số đơn vị, có %). alt=True: hiểu '2.240' là 2,24 và '1,234' là 1234 (kiểu Anh)."""
++    m = re.match(rf"\s*({_CN})", tok)
++    raw = m.group(1)
++    pct = "%" in tok
++    sc = next((v for k, v in _CALC_SCALE.items() if re.search(rf"\b{k}\b", tok)), 1.0)
++    if re.fullmatch(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?", raw) and not (alt and re.fullmatch(r"\d{1,3}\.\d{3}", raw)):
++        ip, _, fp = raw.partition(",")
++        return float(ip.replace(".", "") + ("." + fp if fp else "")), len(fp), sc, pct
++    if alt and re.fullmatch(r"\d{1,3}(?:,\d{3})+", raw):
++        return float(raw.replace(",", "")), 0, sc, pct
++    raw2 = raw.replace(",", ".")
++    return float(raw2), (len(raw2.split(".")[1]) if "." in raw2 else 0), sc, pct
++
++
++def _calc_eval(toks, alt):
++    """Phân tích cú pháp expr := term (('+'|'-') term)* ; term := factor (('*'|'/') factor)* ; factor := số | '(' expr ')'.
++    Tính bằng SỐ HỌC KHOẢNG: mỗi số hạng mang sai số làm tròn của nó (2,5 nghĩa là 2,45 đến 2,55), nên kết quả là một khoảng [thấp, cao].
++    Trả về (thấp, cao) hoặc None nếu sai cú pháp / chia cho khoảng chứa 0."""
++    pos = [0]
++
++    def peek():
++        return toks[pos[0]] if pos[0] < len(toks) else (None, None)
++
++    def factor():
++        k, v = peek()
++        if k == "num":
++            pos[0] += 1
++            x, dec, sc, _ = _calc_num(v, alt)
++            t = 0 if (dec == 0 and sc == 1.0) else 0.5 * 10 ** -dec          # số nguyên trơn (3 người, chia 3, nhân 100) là chính xác; số thập phân / có tỷ, triệu thì đã làm tròn
++            return ((x - t) * sc, (x + t) * sc)
++        if k == "lp":
++            pos[0] += 1
++            r = expr()
++            if peek()[0] != "rp":
++                raise ValueError
++            pos[0] += 1
++            return r
++        raise ValueError
++
++    def mul(a, b):
++        ps = [a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1]]
++        return (min(ps), max(ps))
++
++    def term():
++        x = factor()
++        while peek()[0] == "op" and peek()[1].strip() in ("*", "×", "x", "X", "/", "÷"):
++            o = toks[pos[0]][1].strip()
++            pos[0] += 1
++            y = factor()
++            if o in ("/", "÷"):
++                if y[0] <= 0 <= y[1]:
++                    raise ZeroDivisionError
++                x = mul(x, (1 / y[1], 1 / y[0]))
++            else:
++                x = mul(x, y)
++        return x
++
++    def expr():
++        x = term()
++        while peek()[0] == "op" and peek()[1].strip() in ("+", "-", "−", "–"):
++            o = toks[pos[0]][1].strip()
++            pos[0] += 1
++            y = term()
++            x = (x[0] + y[0], x[1] + y[1]) if o == "+" else (x[0] - y[1], x[1] - y[0])
++        return x
++
++    try:
++        r = expr()
++        return r if pos[0] == len(toks) else None
++    except (ValueError, ZeroDivisionError, OverflowError):
++        return None
++
++
++def calc_check(text, rel=0.005):
++    """Tìm các phép tính dạng `biểu thức = kết quả` trong `text`, tính lại bằng code.
++    Trả về {"checked": số phép tính kiểm được, "bad": [{"text": 'a + b = c', "calc": giá trị tính lại (chữ), "stated": giá trị AI ghi}]}.
++    Sai khi khoảng tính lại và khoảng của số AI ghi KHÔNG chạm nhau, kể cả sau khi nới thêm `rel` (0,5%): lệch do làm tròn không bị coi là sai.
++    Ô nguồn dạng `[bảng, hàng, cột] = giá trị` không phải phép tính nên không bị xét."""
++    out = {"checked": 0, "bad": []}
++    if not isinstance(text, str) or ("=" not in text and "≈" not in text):
++        return out
++    toks = [(m.lastgroup, m.group(m.lastgroup)) for m in _CALC_TOK.finditer(text) if m.lastgroup != "sp"]
++    chains, cur = [], [[]]
++    for k, v in toks:
++        if k == "eq":
++            cur.append([])
++        elif k == "other":
++            chains.append(cur)
++            cur = [[]]                           # chữ xen giữa phá vỡ chuỗi: không đoán nghĩa
++        else:
++            cur[-1].append((k, v))
++    chains.append(cur)
++    n = 0
++    for items in chains:
++        for left, right in zip(items, items[1:]):
++            if n >= _CALC_MAX or not left or not any(k == "op" for k, _ in left) or any(k == "num" and re.match(r"\s*0\d", v) for k, v in left):
++                continue                         # không có phép tính (chỉ một ô), hoặc dạng ngày 03-04
++            neg = len(right) == 2 and right[0][0] == "op" and right[0][1].strip() in ("-", "−", "–")
++            rt = right[1:] if neg else right
++            if len(rt) != 1 or rt[0][0] != "num":
++                continue
++            ok, shown, evaluated = False, None, False
++            for alt in (False, True):            # '2.240' hiểu là hai nghìn hai trăm bốn mươi (kiểu Việt) hoặc 2,24 (kiểu Anh): khớp một trong hai là không sai
++                r = _calc_eval(left, alt)
++                if r is None:
++                    break
++                evaluated = True
++                sv, sdec, ssc, spct = _calc_num(rt[0][1], alt)
++                sv, st = (-sv if neg else sv) * ssc, 0.5 * 10 ** -sdec * ssc
++                s_lo, s_hi = sv - st, sv + st
++                for k_ in ((1, 100) if spct else (1,)):          # kết quả ghi bằng % thì tỷ lệ 0,3109 tương ứng 31,09%
++                    lo, hi = r[0] * k_, r[1] * k_
++                    slack = rel * max(abs(lo), abs(hi))
++                    if lo - slack <= s_hi and s_lo <= hi + slack:
++                        ok = True
++                if shown is None:
++                    shown = ((r[0] + r[1]) / 2, sv)
++                if ok:
++                    break
++            if not evaluated:
++                continue
++            n += 1
++            out["checked"] += 1
++            if not ok:
++                expr_txt = re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", " ".join(v.strip() for _, v in left)))
++                out["bad"].append({"text": f"{expr_txt} = {('-' if neg else '') + rt[0][1].strip()}", "calc": vn(shown[0], 2), "stated": vn(shown[1], 2)})
++    return out
++
++
++_CITE = re.compile(rf"\[([^\[\]]+)\]\s*=\s*(-?(?:{_CN})(?:\s*(?:nghìn tỷ|tỷ|triệu|nghìn)(?!\w))?)")
++
++
++def check_cells(text, known):
++    """Đối chiếu các ô AI trích dạng `[bảng, hàng, cột] = giá trị` với bảng kết quả thật.
++    Trả về {"ok": số ô khớp, "bad": [ô lệch giá trị], "unlocated": số ô không tìm thấy hàng/cột}.
++    CHỈ coi là sai khi ô định vị được (có cột đó, có hàng đó) mà giá trị lệch; AI viết lệch tên hàng/cột thì là 'chưa kiểm được', không báo sai oan."""
++    out = {"ok": 0, "bad": [], "unlocated": 0}
++    frames = getattr(known, "frames", None)
++    if not isinstance(text, str) or not frames:
++        return out
++    from . import labels as lb
++    for ref, val in _CITE.findall(text)[:_CALC_MAX]:
++        parts = [p.strip() for p in ref.split(",")]
++        if len(parts) < 3:
++            out["unlocated"] += 1
++            continue
++        row_key, col = lb.fold(parts[-2]), lb.fold(parts[-1])
++        cands = []
++        for df in frames:
++            cmap = {lb.fold(str(c)): c for c in df.columns}
++            if col not in cmap:
++                continue
++            labels = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])]
++            if not labels:
++                continue
++            hit = np.zeros(len(df), dtype=bool)
++            for c in labels:
++                hit |= df[c].astype(str).map(lb.fold).to_numpy() == row_key
++            cands += pd.to_numeric(df.loc[hit, cmap[col]], errors="coerce").dropna().tolist()
++        if not cands:
++            out["unlocated"] += 1
++            continue
++        good = False
++        for alt in (False, True):
++            v, dec, sc, _ = _calc_num(val, alt)
++            v, tol = v * sc, 0.5 * 10 ** -dec * sc * 1.001 + 1e-9
++            good |= any(abs(c - v) <= max(tol, 1e-6 * abs(v)) for c in cands)
++        if good:
++            out["ok"] += 1
++        else:
++            out["bad"].append(f"[{ref}] = {val.strip()} (bảng ghi {vn(cands[0], 2)})")
++    return out
++
++
+ def audit_insights(insights, known):
+-    """Gắn cờ các phát hiện có số lớn không khớp bảng kết quả nào: thêm `check` và hạ độ tin cậy xuống 'Thấp'. Trả về danh sách mới."""
++    """Kiểm từng phát hiện và gắn nhãn kết quả, hạ độ tin cậy xuống 'Thấp' nếu có sai sót. Trả về danh sách mới. Thêm các khóa:
++    `check` (số lớn không có trong bảng kết quả nào), `calc_mismatch` (phép tính AI ghi không khớp khi tính lại), `cell_mismatch` (ô được trích lệch giá trị so với bảng), và `verify`:
++    'ok' (đã kiểm được ít nhất một điều và không có sai sót) · 'mismatch' (có sai sót) · 'unverified' (chưa kiểm được gì, KHÔNG phải là đúng)."""
+     out = []
+     for x in insights or []:
+         if isinstance(x, dict):
+             x = dict(x)
+-            bad = audit(f"{x.get('title', '')} {x.get('evidence', '')}", known)
++            text = f"{x.get('title', '')} ; {x.get('evidence', '')}"
++            bad = audit(text, known)
++            cc = calc_check(text)
++            cells = check_cells(text, known)
+             if bad:
+                 x["check"], x["confidence"] = bad, "Thấp"
++            if cc["bad"]:
++                x["calc_mismatch"], x["confidence"] = [f"{b['text']} (tính lại ra {b['calc']})" for b in cc["bad"]], "Thấp"
++            if cells["bad"]:
++                x["cell_mismatch"], x["confidence"] = cells["bad"], "Thấp"
++            big = big_numbers(text)
++            if bad or cc["bad"] or cells["bad"]:
++                x["verify"] = "mismatch"
++            elif cc["checked"] or cells["ok"] or (big and known):
++                x["verify"] = "ok"
++            else:
++                x["verify"] = "unverified"
+         out.append(x)
+     return out
+ 
+ 
++def verify_counts(insights):
++    """(số phát hiện đã kiểm được và không sai sót, tổng số phát hiện)."""
++    ins = [x for x in insights or [] if isinstance(x, dict)]
++    return sum(1 for x in ins if x.get("verify") == "ok"), len(ins)
++
++
++def all_verified(insights):
++    ok, n = verify_counts(insights)
++    return n > 0 and ok == n
++
++
++def verify_label(x):
++    """(lớp hiển thị 'ok'|'un'|'bad', nhãn) của trạng thái kiểm tra một phát hiện; None nếu chưa có thông tin kiểm tra (bản lưu cũ)."""
++    v = x.get("verify") if isinstance(x, dict) else None
++    if v == "ok":
++        return "ok", "Đã kiểm số liệu"
++    if v == "mismatch":
++        return "bad", "Phép tính không khớp" if x.get("calc_mismatch") else "Số liệu chưa khớp bảng"
++    if v == "unverified":
++        return "un", "Chưa kiểm được"
++    return None
++
++
++def verify_note(x):
++    """Một câu ngắn nói rõ phát hiện này chưa qua kiểm tra vì sao; rỗng nếu đã kiểm được (hoặc chưa có thông tin kiểm tra, vd bản lưu cũ)."""
++    if not isinstance(x, dict):
++        return ""
++    if x.get("calc_mismatch"):
++        return "Phép tính không khớp: " + "; ".join(x["calc_mismatch"])
++    if x.get("cell_mismatch"):
++        return "Số trích không khớp bảng kết quả: " + "; ".join(x["cell_mismatch"])
++    if x.get("check"):
++        return "Cần kiểm tra số liệu: số " + ", ".join(x["check"]) + " chưa khớp bảng kết quả nào"
++    if x.get("verify") == "unverified":
++        return "Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)"
++    return ""
++
++
+ # ------------------------------------------------------------------ tiêu đề biểu đồ tính từ dữ liệu --
+ def pretty_period(label):
+     """2026-03-01 -> T3/2026 · 2026-03 -> T3/2026 · giữ nguyên nếu không phải ngày."""
+diff --git a/app/routes.py b/app/routes.py
+index 3eecd4d..9f6c4fe 100644
+--- a/app/routes.py
++++ b/app/routes.py
+@@ -40,7 +40,7 @@ def index():
+ @bp.get("/api/state")
+ def api_state():
+     with LOCK:
+-        o = {k: A[k] for k in ("id", "question", "ctx", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
++        o = {k: A[k] for k in ("id", "question", "ctx", "brief", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
+         o["hist"] = db.list_history(current_user_id())
+         return jsonify(clean_json(o))
+ 
+@@ -209,7 +209,13 @@ def start():
+             return bad(f"Tệp '{n}'{more} chưa phù hợp để phân tích: " + "; ".join(m["issues"][:2]) +
+                        ". Hãy dùng bản đã chuẩn hóa, sửa/xóa tệp, hoặc bấm 'Vẫn dùng file này' nếu bạn chắc chắn.")
+         A["question"] = q
+-        A["ctx"] = (p.get("ctx") or "").strip()
++        # Bối cảnh tối thiểu để khuyến nghị bám vào quyết định thật (đều tùy chọn): "ctx" là chữ AI đọc (đã nối đủ), "brief" giữ riêng từng phần để hiện lại đúng ô.
++        base = str(p.get("ctx") or "").strip()[:2000]
++        decision = str(p.get("decision") or "").strip()[:500]
++        levers = str(p.get("levers") or "").strip()[:500]
++        A["brief"] = {"ctx": base, "decision": decision, "levers": levers}
++        A["ctx"] = " | ".join(x for x in (base, f"Quyết định cần đưa ra từ kết quả này: {decision}" if decision else "",
++                                          f"Những thứ người dùng có thể thay đổi: {levers}" if levers else "") if x)
+         A["st"][0] = "done"
+         A["started"] = A["started"] or now_iso()
+         bump()
+diff --git a/app/state.py b/app/state.py
+index 0a62d93..cbfc534 100644
+--- a/app/state.py
++++ b/app/state.py
+@@ -22,7 +22,7 @@ _GEN = itertools.count(1)
+ 
+ def fresh():
+     return {"id": uuid.uuid4().hex[:12], "created": datetime.now().isoformat(timespec="seconds"), "started": None, "finished": None,
+-            "question": "", "ctx": "", "files": [], "dirty": [], "raw": {}, "struct": {}, "alt": {}, "clean": None, "st": ["pending"] * 7, "d": {}, "x": {},
++            "question": "", "ctx": "", "brief": {}, "files": [], "dirty": [], "raw": {}, "struct": {}, "alt": {}, "clean": None, "st": ["pending"] * 7, "d": {}, "x": {},
+             "ag": dict(AG), "approved": False, "job": {"running": False, "step": None, "k": -1}, "err": None, "log": [],
+             "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}}
+ 
+diff --git a/static/css/app.css b/static/css/app.css
+index 2ae872b..c0f8ddb 100644
+--- a/static/css/app.css
++++ b/static/css/app.css
+@@ -306,3 +306,6 @@ button.vc{cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-fam
+ .dpi{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;margin-bottom:6px}.dpi.on{border-color:var(--pri);background:var(--soft)}.dpi label{display:flex;gap:10px;align-items:flex-start;flex:1;cursor:pointer}.dpi small{display:block;color:var(--sub)}
+ .dpb{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px;padding:8px;border:1px dashed var(--line);border-radius:10px}.dpb label{display:flex;flex-direction:column;gap:2px;font-size:11.5px;font-weight:700;color:var(--sub)}
+ .rm{border:0;background:transparent;color:var(--sub);cursor:pointer;padding:4px;border-radius:6px}.rm:hover{color:var(--bad);background:var(--badb)}
++.vf{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:1px}
++.vf.ok{background:var(--okb);color:var(--ok)}.vf.un{background:var(--p2);color:var(--sub)}.vf.bad{background:var(--badb);color:var(--bad)}
++.vfn{margin:6px 0 0;color:var(--bad);font-size:12.5px}.vfn.un{color:var(--sub)}
+diff --git a/static/js/app.js b/static/js/app.js
+index e9e09d2..19c0736 100644
+--- a/static/js/app.js
++++ b/static/js/app.js
+@@ -9,7 +9,7 @@ const fmtTime = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.ge
+ const fmtDur = (a, b) => { if (!a || !b) return '—'; let s = Math.max(0, Math.round((b - a) / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); s %= 60; return h ? `${h} giờ ${m} phút` : m ? `${m} phút ${s} giây` : `${s} giây` };
+ 
+ let ST = null, R = null, SAVEV = 0, V = 0, NAV = 'flow', TAB = 'dash', FB = false, BUSY = false, UPL = false, SEL = {}, T0 = {};
+-const U = { ctx: '', fbt: '' };
++const U = { ctx: '', fbt: '', dec: '', lev: '' };
+ const S_ = () => R || ST, RO = () => !!R;
+ const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : { g }; return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
+ 
+@@ -23,6 +23,12 @@ const kp = a => `<div class="kpis">${a.filter(x => String(x[1] ?? '').trim()).ma
+ const kpo = a => kp(a.map(k => [k.label, k.value, k.delta]));
+ const tbl = (h, r) => `<div class="tw"><table><thead><tr>${h.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${r.map(x => `<tr>${x.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ const fnd = (t, s, c = '') => `<div class="f ${c}"><span class="tg">${esc(s || 'Phát hiện')}</span>${t}</div>`;
++/* trạng thái kiểm tra bằng chứng của một phát hiện (do máy chủ tính lại: numfmt.audit_insights). Bản lưu cũ chưa có `verify` thì không hiện gì. */
++const vfBadge = x => ({ ok: ['ok', '✔ Đã kiểm số liệu'], mismatch: ['bad', x.calc_mismatch && x.calc_mismatch.length ? '✘ Phép tính không khớp' : '✘ Số liệu chưa khớp bảng'], unverified: ['un', '⚠ Chưa kiểm được'] })[x.verify];
++const vfNote = x => (x.calc_mismatch || []).length ? 'Phép tính không khớp: ' + x.calc_mismatch.join('; ')
++  : (x.cell_mismatch || []).length ? 'Số trích không khớp bảng kết quả: ' + x.cell_mismatch.join('; ')
++  : (x.check || []).length ? 'Cần kiểm tra số liệu: số ' + x.check.join(', ') + ' chưa khớp bảng kết quả nào'
++  : x.verify === 'unverified' ? 'Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)' : '';
+ const ISOD = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$/;
+ const fdt = s => { const m = ISOD.exec(s); return m ? (m[4] + m[5] + m[6] === '000000' ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`) : s };   // 2026-01-01T00:00:00.000 -> 01/01/2026
+ const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : fdt(String(c)));
+@@ -166,12 +172,14 @@ ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ?
+ 
+ /* ---------- 7 bước ---------- */
+ const VIEW = [
+-  () => { const S = S_(), d = S.st[0] === 'done', F = S.files, ctx = d ? S.ctx : U.ctx;
++  () => { const S = S_(), d = S.st[0] === 'done', F = S.files, br = S.brief || {}, ctx = d ? (br.ctx ?? S.ctx) : U.ctx, dec = d ? (br.decision || '') : U.dec, lev = d ? (br.levers || '') : U.lev;
+     const drop = d ? '' : `<label class="drop ${F.length ? 'has' : ''} ${UPL ? 'busy' : ''}" id="dz" for="file">${UPL ? '<span class="spin lg"></span><span><b>Đang đọc tệp…</b></span>' : ico('upload', 24) + `<span><b>${F.length ? 'Đã có ' + F.length + ' tệp · bấm để thêm' : 'Kéo thả hoặc bấm để chọn tệp'}</b><small>CSV, XLSX, XLS</small></span>`}</label><input type="file" id="file" multiple hidden accept=".csv,.xlsx,.xls,.xlsm">`;
+     const none = !d && !F.length ? `<div class="hint">Chưa có tệp? <button class="lnk" data-a="sample">Dùng dữ liệu mẫu</button></div>` : '';
+     return `<h2>Dữ liệu và bối cảnh</h2>
+ <div class="frm"><label>Tệp dữ liệu</label>${drop}${none}${F.length ? fileList(S) : ''}
+-<label for="ctx">Bối cảnh doanh nghiệp (không bắt buộc)</label><textarea id="ctx" data-i="ctx" ${d ? 'disabled' : ''} placeholder="Mô tả ngắn về doanh nghiệp">${esc(ctx)}</textarea></div>
++<label for="ctx">Bối cảnh doanh nghiệp (không bắt buộc)</label><textarea id="ctx" data-i="ctx" ${d ? 'disabled' : ''} placeholder="Mô tả ngắn về doanh nghiệp">${esc(ctx)}</textarea>
++<label for="dec">Bạn cần ra quyết định gì từ kết quả này? (không bắt buộc)</label><textarea id="dec" data-i="dec" rows="2" ${d ? 'disabled' : ''} placeholder="Ví dụ: có tăng ngân sách quảng cáo tháng sau không?">${esc(dec)}</textarea>
++<label for="lev">Bạn có thể thay đổi những gì? (không bắt buộc)</label><textarea id="lev" data-i="lev" rows="2" ${d ? 'disabled' : ''} placeholder="Ví dụ: giá bán, ngân sách quảng cáo, lịch làm việc">${esc(lev)}</textarea></div>
+ ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 16) + 'Bắt đầu phân tích</button></div>'}` },
+   () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
+ ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
+@@ -190,7 +198,7 @@ ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.
+     return d.phase === 'menu' ? a3Menu(d, s) : d.phase === 'code' ? a3Code(d, s) : a3Result(d, s) },
+   () => { const S = S_(), d = S.d[4], s = sel(4), aw = S.st[4] === 'await' && !RO(), ck = (k, i) => aw ? `<label style="float:right;font-size:12px;color:var(--sub)"><input type="checkbox" data-s="4" data-k="${k}${i}" ${(s[k + i] ?? true) ? 'checked' : ''}> Đưa vào báo cáo</label>` : '';
+     return `<h2>Phát hiện và hành động</h2>${adjBanner(d)}${d.summary ? fnd(esc(d.summary), 'Tóm tắt', 'sum') : ''}
+-${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Phát hiện ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small><details><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}</details></div>`).join('')}
++${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Phát hiện ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small>${(b => b ? `<span class="vf ${b[0]}">${esc(b[1])}</span>` : '')(vfBadge(x))}<details ${x.verify === 'mismatch' ? 'open' : ''}><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}${vfNote(x) ? `<p class="vfn ${x.verify === 'unverified' ? 'un' : ''}">${x.verify === 'unverified' ? 'ⓘ' : '⚠'} ${esc(vfNote(x))}</p>` : ''}</details></div>`).join('') || fnd('Chưa có phát hiện nào đủ chắc để nêu từ dữ liệu này. Xem các lưu ý và dữ liệu cần thu thêm bên dưới.', 'Lưu ý', 'risk')}
+ ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
+   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
+     const panel = aw ? `<details open><summary>Chọn biểu đồ và chỉ số đưa lên báo cáo và slide</summary><div class="ask" style="padding-top:10px"><label>Tiêu đề báo cáo</label><input data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
+@@ -204,7 +212,7 @@ ${TAB === 'dash' ? `${aw && d.dash ? dashPick(d, s) : ''}<div class="dashw"><div
+       : `<div class="slides">${outline(S, sc).map((x, i) => `<div class="sl">${i + 1}. ${esc(i === 0 ? title : x[0])}<small>${esc(x[1])}</small></div>`).join('')}</div>`}` },
+   () => { const S = S_(), d = S.d[6], ap = S.approved;
+     const dl = ap ? `<div class="dl"><a class="btn" href="/api/view/${S.id}/bao_cao.html" target="_blank" rel="noopener" title="Báo cáo đầy đủ: câu trả lời, phát hiện, bằng chứng, khuyến nghị">${ico('file', 16)}Báo cáo</a><a class="btn" href="/api/view/${S.id}/dashboard.html" target="_blank" rel="noopener" title="Bảng điều khiển tương tác: bộ lọc, lọc chéo, biểu đồ">${ico('dash', 16)}Bảng điều khiển</a><a class="btn" href="/api/download/${S.id}/bao_cao.pptx" title="Tải file PowerPoint">${ico('slides', 16)}PPT</a><a class="btn" href="/api/download/${S.id}/share.zip" title="Gói chia sẻ: báo cáo, dashboard, PPT, dữ liệu sạch">${ico('archive', 16)}ZIP</a></div>` : '<div class="note">Xuất và chia sẻ bị khóa cho đến khi bạn duyệt.</div>';
+-    return `<h2>Duyệt và xuất file</h2>${d.checks.map(x => fnd('✓ ' + esc(x), 'Đã xong')).join('')}${dl}` }];
++    return `<h2>Duyệt và xuất file</h2>${d.checks.map(x => /^⚠/.test(x) ? fnd(esc(x.replace(/^⚠\s*/, '')), 'Lưu ý', 'risk') : fnd('✓ ' + esc(x), 'Đã xong')).join('')}${dl}` }];
+ 
+ function payload(i) { const s = sel(i), S = S_();
+   if (i === 2) { const d = S.d[2]; return { manual: Object.entries(s.mm || {}).map(([k, m]) => { const [file, column] = k.split('\u0001'); return { file, column, mapping: m } }).filter(x => Object.keys(x.mapping).length), sel: Object.fromEntries(d.ops.map(o => [o.id, s['c' + o.id] ?? o.recommended])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
+@@ -345,7 +353,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
+   else if (a === 'new') {
+     if (ST.job.running) { notify('Đang có tác vụ chạy, hãy chờ xong rồi tạo phân tích mới.', 'warn'); return }
+     if (!R && ST.st[0] === 'done' && !ST.approved && !(await askConfirm('Phân tích hiện tại chưa được duyệt sẽ bị bỏ. Tiếp tục?', 'Tạo phân tích mới'))) return;
+-    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; $('q').value = ''; all(); toTop() } }
++    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; U.dec = ''; U.lev = ''; $('q').value = ''; all(); toTop() } }
+   else if (a === 'pv') { const o = PV[v] = PV[v] || { src: 'current' }; o.open = !o.open; stage(); if (o.open) { await pvLoad(v, o.src); stage() } }
+   else if (a === 'pvsrc') { PV[v].src = b.dataset.x; stage(); await pvLoad(v, b.dataset.x); stage() }
+   else if (a === 'sample') { await post('/api/sample') }
+@@ -354,7 +362,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
+   else if (a === 'sack') { await post('/api/struct/ack', { name: v }) }
+   else if (a === 'rmfile') { delete PV[v]; await post('/api/remove_file', { name: v }) }
+   else if (a === 'clearfiles') { if (await askConfirm('Xóa tất cả tệp đã tải lên?', 'Xóa tất cả')) await post('/api/remove_file', {}) }
+-  else if (a === 'start') { const q = $('q').value.trim(); if (!q) { $('q').focus(); return } if (await post('/api/start', { question: q, ctx: U.ctx })) { V = 1; all() } }
++  else if (a === 'start') { const q = $('q').value.trim(); if (!q) { $('q').focus(); return } if (await post('/api/start', { question: q, ctx: U.ctx, decision: U.dec, levers: U.lev })) { V = 1; all() } }
+   else if (a === 'go') { V = +v; FB = false; all() }
+   else if (a === 'tab') { TAB = v; stage() }
+   else if (a === 'rerender') { stage() }
+diff --git a/templates/index.html b/templates/index.html
+index e522c4d..7028c26 100644
+--- a/templates/index.html
++++ b/templates/index.html
+@@ -37,6 +37,6 @@
+ <script src="/static/js/icons.js"></script>
+ <script src="/static/js/account.js"></script>
+ <script src="/static/js/analysis.js?v=2"></script>
+-<script src="/static/js/app.js?v=2"></script>
++<script src="/static/js/app.js?v=3"></script>
+ <script src="/static/js/settings.js"></script>
+ </body></html>
+diff --git a/tests/eval/datasets/__init__.py b/tests/eval/datasets/__init__.py
+new file mode 100644
+index 0000000..984452d
+--- /dev/null
++++ b/tests/eval/datasets/__init__.py
+@@ -0,0 +1,12 @@
++# -*- coding: utf-8 -*-
++"""Các bộ dữ liệu MÔ PHỎNG cho bộ đánh giá (có seed cố định, tái lập được). Mỗi bộ thuộc một lĩnh vực khác hẳn nhau và cố ý cài lỗi thực tế
++(kỳ cuối thiếu ngày, cột thiếu nhiều, nhóm rất nhỏ, cột không cộng được, dấu tiếng Việt dạng tổ hợp).
++
++Mỗi bộ là một dict:
++  id, title, tables {tên tệp: DataFrame}, nfd (True = ghi CSV với dấu dạng tổ hợp NFD), question (mặc định; xem questions.json),
++  truth  : {"additive": [cột cộng được], "non_additive": [cột KHÔNG được cộng], "absent_terms": [từ chỉ thứ KHÔNG có trong dữ liệu]}
++  mock   : {"table", "by", "measure", "agg", "title"}  cách LLM giả phân tích (dùng cho chế độ --mock)
++Thêm bộ mới = thêm một tệp và một dòng trong ALL; không cần sửa chỗ nào khác."""
++from . import chi_tieu, nhan_su, san_xuat
++
++ALL = {m.build()["id"]: m.build for m in (chi_tieu, nhan_su, san_xuat)}
+diff --git a/tests/eval/datasets/chi_tieu.py b/tests/eval/datasets/chi_tieu.py
+new file mode 100644
+index 0000000..0ab99ee
+--- /dev/null
++++ b/tests/eval/datasets/chi_tieu.py
+@@ -0,0 +1,23 @@
++# -*- coding: utf-8 -*-
++"""Chi tiêu cá nhân: thu và chi lẫn trong một cột số tiền, số dư là chỉ số không cộng được, nhóm 'Từ thiện' chỉ vài dòng, ghi chú thiếu ~60%, tháng cuối thiếu ngày."""
++import numpy as np
++import pandas as pd
++
++
++def build(seed=11):
++    rng = np.random.default_rng(seed)
++    days = pd.date_range("2026-08-01", "2026-10-19")                      # tháng 10 mới có 19/31 ngày
++    rows = []
++    for d in days:
++        for _ in range(rng.integers(1, 4)):
++            chi = rng.random() < 0.8
++            cat = rng.choice(["Sinh hoạt", "Di chuyển", "Giải trí", "Ăn uống"], p=[.4, .2, .15, .25]) if chi else "Lương"
++            rows.append({"Ngày": d.strftime("%Y-%m-%d"), "Loại": "Chi tiêu" if chi else "Thu nhập", "Danh mục": cat,
++                         "Số tiền (đ)": int(rng.integers(20, 600) * 1000 if chi else rng.integers(5, 15) * 1_000_000)})
++    df = pd.DataFrame(rows)
++    df.loc[df.sample(3, random_state=seed).index, ["Loại", "Danh mục"]] = ["Chi tiêu", "Từ thiện"]      # nhóm rất nhỏ (3 dòng)
++    df["Số dư sau giao dịch"] = (8_000_000 + np.cumsum(np.where(df["Loại"] == "Chi tiêu", -df["Số tiền (đ)"], df["Số tiền (đ)"]))).astype(int)
++    df["Ghi chú"] = np.where(rng.random(len(df)) < 0.4, "có ghi chú", None)                              # thiếu ~60%
++    return {"id": "chi_tieu", "title": "Chi tiêu cá nhân", "tables": {"chi_tieu.csv": df}, "nfd": True,
++            "truth": {"additive": ["Số tiền (đ)"], "non_additive": ["Số dư sau giao dịch"], "absent_terms": ["đầu tư", "bảo hiểm", "cổ phiếu", "tiết kiệm lãi suất"]},
++            "mock": {"table": "chi_tieu.csv", "by": "Danh mục", "measure": "Số tiền (đ)", "agg": "sum", "title": "Số tiền theo danh mục"}}
+diff --git a/tests/eval/datasets/nhan_su.py b/tests/eval/datasets/nhan_su.py
+new file mode 100644
+index 0000000..8260085
+--- /dev/null
++++ b/tests/eval/datasets/nhan_su.py
+@@ -0,0 +1,19 @@
++# -*- coding: utf-8 -*-
++"""Nhân sự: toàn cột KHÔNG cộng được (tuổi, thâm niên, điểm đánh giá), chỉ lương cộng được; mã nhân viên là số nguyên gần như duy nhất."""
++import numpy as np
++import pandas as pd
++
++
++def build(seed=23):
++    rng = np.random.default_rng(seed)
++    n = 420
++    dept = rng.choice(["Kinh doanh", "Kỹ thuật", "Vận hành", "Nhân sự", "Kế toán"], n, p=[.3, .3, .2, .1, .1])
++    tuoi = rng.integers(22, 58, n)
++    tn = np.clip(tuoi - 22 - rng.integers(0, 8, n), 0, None)
++    luong = (9 + tn * 0.6 + rng.normal(0, 2, n)).round(1) * 1_000_000
++    df = pd.DataFrame({"Mã nhân viên": np.arange(1001, 1001 + n), "Phòng ban": dept, "Giới tính": rng.choice(["Nam", "Nữ"], n),
++                       "Tuổi": tuoi, "Thâm niên (năm)": tn, "Lương (đ)": luong.astype(int), "Điểm đánh giá": rng.integers(1, 6, n),
++                       "Ngày vào làm": (pd.Timestamp("2026-06-30") - pd.to_timedelta(tn * 365 + rng.integers(0, 300, n), unit="D")).strftime("%Y-%m-%d")})
++    return {"id": "nhan_su", "title": "Nhân sự", "tables": {"nhan_su.csv": df}, "nfd": False,
++            "truth": {"additive": ["Lương (đ)"], "non_additive": ["Tuổi", "Thâm niên (năm)", "Điểm đánh giá", "Mã nhân viên"], "absent_terms": ["nghỉ việc", "tuyển dụng", "đào tạo", "phúc lợi"]},
++            "mock": {"table": "nhan_su.csv", "by": "Phòng ban", "measure": "Lương (đ)", "agg": "mean", "title": "Lương trung bình theo phòng ban"}}
+diff --git a/tests/eval/datasets/san_xuat.py b/tests/eval/datasets/san_xuat.py
+new file mode 100644
+index 0000000..54441c3
+--- /dev/null
++++ b/tests/eval/datasets/san_xuat.py
+@@ -0,0 +1,26 @@
++# -*- coding: utf-8 -*-
++"""Sản xuất theo 3 năm (3 bảng cùng cấu trúc, như tệp 2024/2025/2026 của người dùng): sản lượng cộng được, hiệu suất (%) và kế hoạch năm (lặp ở mọi dòng) thì không,
++bảng 2026 mới đến giữa tháng 9. Cố ý KHÔNG có cột bảo trì, máy móc, nguyên liệu: AI không được viết như thể có."""
++import numpy as np
++import pandas as pd
++
++
++def _year(y, end, rng, plan):
++    days = pd.date_range(f"{y}-01-01", end)
++    rows = []
++    for d in days:
++        for nm in ("NM1", "NM2", "NM3", "NM4", "NM5"):
++            base = {"NM1": 120, "NM2": 95, "NM3": 80, "NM4": 60, "NM5": 40}[nm]
++            rows.append({"Ngày": d.strftime("%Y-%m-%d"), "Nhà máy": nm, "Sản lượng (tấn)": round(base * (1 + 0.12 * np.sin(d.dayofyear / 58)) + rng.normal(0, 6), 1),
++                         "Hiệu suất (%)": round(float(np.clip(rng.normal(86 if nm != "NM5" else 71, 5), 40, 100)), 1), "Kế hoạch năm (tấn)": plan[nm]})
++    return pd.DataFrame(rows)
++
++
++def build(seed=37):
++    rng = np.random.default_rng(seed)
++    tables = {"san_xuat_2024.csv": _year(2024, "2024-12-31", rng, {"NM1": 41000, "NM2": 33000, "NM3": 28000, "NM4": 21000, "NM5": 14000}),
++              "san_xuat_2025.csv": _year(2025, "2025-12-31", rng, {"NM1": 43000, "NM2": 34000, "NM3": 29000, "NM4": 22000, "NM5": 15000}),
++              "san_xuat_2026.csv": _year(2026, "2026-09-14", rng, {"NM1": 45000, "NM2": 35500, "NM3": 30000, "NM4": 23000, "NM5": 16000})}
++    return {"id": "san_xuat", "title": "Sản xuất 2024-2026 (3 bảng)", "tables": tables, "nfd": False,
++            "truth": {"additive": ["Sản lượng (tấn)"], "non_additive": ["Hiệu suất (%)", "Kế hoạch năm (tấn)"], "absent_terms": ["bảo trì", "máy móc", "thiết bị", "nguyên liệu", "nhân công"]},
++            "mock": {"table": "san_xuat_2026.csv", "by": "Nhà máy", "measure": "Sản lượng (tấn)", "agg": "sum", "title": "Sản lượng theo nhà máy"}}
+diff --git a/tests/eval/invariants.py b/tests/eval/invariants.py
+new file mode 100644
+index 0000000..ef3cce4
+--- /dev/null
++++ b/tests/eval/invariants.py
+@@ -0,0 +1,251 @@
++# -*- coding: utf-8 -*-
++"""BẤT BIẾN không phụ thuộc lĩnh vực: những điều phải đúng với MỌI bộ dữ liệu và MỌI câu hỏi.
++
++Mỗi bất biến là một hàm nhận `Run` (kết quả một lần chạy trọn luồng) và trả về danh sách vi phạm (rỗng = đạt).
++Phần cuối có CA ĐỐI CHỨNG: cố ý làm hỏng một kết quả sạch theo từng cách, mỗi cách phải bị đúng bất biến tương ứng bắt.
++Bất biến mà tự nó không bắt được lỗi thì vô dụng; ca đối chứng chạy ngay cả khi không có LLM.
++
++Chưa làm (cần các hạng mục sau của kế hoạch): "mọi số truy ngược về sổ sự kiện" (HM-05; ở đây mới kiểm ô được trích và số lớn),
++"tổng các phần = tổng chung" (HM-04 R12), "không so khác độ chi tiết thời gian" (HM-04 R3), "không dùng cột thiếu nhiều làm cơ cấu" (HM-04 R8)."""
++import copy
++import json
++import os
++import re
++import sys
++from dataclasses import dataclass, field
++
++sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))      # gốc kho mã, để chạy trực tiếp tệp này
++
++from app import labels as lb, numfmt as nf
++
++# Từ vựng NGÔN NGỮ (không phải từ vựng ngành): cách nói chỉ quan hệ nhân quả. Phát hiện chỉ có tương quan thì không được dùng.
++CAUSAL = ("làm tăng", "làm giảm", "dẫn đến", "nhờ vào", "gây ra", "bởi vì", "là do ", "nguyên nhân là", "kéo theo")
++GAP = re.compile(r"[a-z] [àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ]")
++HARD_CLAIMS = ("mỗi phát hiện đều có bằng chứng truy ngược", "Mọi con số được tính từ dữ liệu đã làm sạch")
++CITE = re.compile(r"\[([^\[\]]+)\]\s*=\s*(-?\d[\d.,]*)")
++
++
++@dataclass
++class Run:
++    truth: dict                       # {"additive", "non_additive", "absent_terms"} của bộ dữ liệu
++    question: str = ""
++    summary: str = ""
++    insights: list = field(default_factory=list)      # sau kiểm tra (numfmt.audit_insights)
++    actions: list = field(default_factory=list)
++    risks: list = field(default_factory=list)
++    tables: list = field(default_factory=list)        # bảng kết quả bước 4: [{"title","cols","rows"}]
++    pptx: str = ""
++    md: str = ""
++    html: str = ""
++    dash: dict = field(default_factory=dict)          # dữ liệu nhúng trong dashboard.html (datasets, plan, insights...)
++    chart_titles: list = field(default_factory=list)
++
++
++def _texts(r, skip_flagged=False):
++    out = [r.summary] + [f"{x.get('title', '')} {x.get('evidence', '')}" for x in r.insights if not (skip_flagged and x.get("verify") == "mismatch")] \
++        + [f"{a.get('text', '')} {a.get('impact', '')}" for a in r.actions]
++    return [t for t in out if t]
++
++
++def _num(s):
++    s = s.strip().rstrip(".,")
++    if re.fullmatch(r"-?\d{1,3}(\.\d{3})+(,\d+)?", s):
++        return float(s.replace(".", "").replace(",", "."))
++    return float(s.replace(",", ".")) if re.fullmatch(r"-?\d+([.,]\d+)?", s) else None
++
++
++# ------------------------------------------------------------------ các bất biến --
++def i01_no_trusted_error(r):
++    """Phát hiện có phép tính/số liệu sai không được còn độ tin cậy 'Cao'."""
++    return [f"«{x.get('title', '')[:50]}» sai số liệu nhưng vẫn 'Cao'" for x in r.insights if x.get("verify") == "mismatch" and x.get("confidence") == "Cao"]
++
++
++def i02_cited_cells_exist(r):
++    """Ô được trích dạng [bảng, hàng, cột] = giá trị phải có thật trong một bảng kết quả, đúng hàng, đúng cột, đúng giá trị (bản nhỏ của 'sổ sự kiện')."""
++    bad = []
++    for x in r.insights:
++        for ref, val in CITE.findall(str(x.get("evidence", ""))):
++            parts = [p.strip() for p in ref.split(",")]
++            v = _num(val)
++            if len(parts) < 3 or v is None:
++                bad.append(f"không đọc được trích dẫn [{ref}]")
++                continue
++            row_key, col = parts[-2], parts[-1]
++            found = False
++            for t in r.tables:
++                cols = [lb.fold(c) for c in t.get("cols", [])]
++                if lb.fold(col) not in cols:
++                    continue
++                j = cols.index(lb.fold(col))
++                for row in t.get("rows", []):
++                    if any(lb.fold(str(c)) == lb.fold(row_key) for c in row) and isinstance(row[j], (int, float)) and abs(row[j] - v) <= max(0.5, abs(v) * 0.005):
++                        found = True
++            if not found:
++                bad.append(f"ô [{ref}] = {val} không có trong bảng kết quả nào")
++    return bad
++
++
++def i03_no_sum_of_non_additive(r):
++    """Chỉ số KHÔNG cộng được (tuổi, điểm, tỷ lệ, đơn giá...) không bao giờ mặc định 'tổng' ở bảng điều khiển, kể cả khi AI đề xuất 'tổng'."""
++    bad, non = [], {lb.label(c) for c in r.truth.get("non_additive", [])}
++    mk = {}
++    for ds in r.dash.get("datasets", []):
++        for m in ds.get("meas", []):
++            mk[(ds["name"], m["k"])] = m["label"]
++            if m["label"] in non and not m.get("avg", False):
++                bad.append(f"«{m['label']}» mặc định là tổng trong bảng «{ds['name']}»")
++    for p in r.dash.get("plan") or []:
++        lab = mk.get((p.get("ds"), p.get("m")))
++        if lab in non and p.get("agg") == "sum" and p.get("src") != "user":
++            bad.append(f"biểu đồ AI «{p.get('title') or lab}» dùng tổng cho «{lab}»")
++    for t in r.chart_titles:
++        if any(t.lower().startswith("tổng " + n.lower()) for n in non):
++            bad.append(f"tiêu đề «{t}» cộng chỉ số không cộng được")
++    return bad
++
++
++def i04_labels_clean(r):
++    """Nhãn hiển thị không có khoảng trắng chen giữa chữ có dấu ('Lo ại', 'Danh m ục')."""
++    labs = [x for ds in r.dash.get("datasets", []) for x in [ds.get("title", "")] + [d["label"] for d in ds.get("dims", [])] + [m["label"] for m in ds.get("meas", [])]]
++    labs += r.chart_titles + [c for t in r.tables for c in t.get("cols", [])]
++    return [f"nhãn «{x}» bị tách chữ" for x in labs if GAP.search(str(x))]
++
++
++def i05_no_forced_fill(r):
++    """Không ép số lượng: tối đa 5 phát hiện; hành động chỉ có khi có phát hiện để gắn vào."""
++    bad = []
++    if len(r.insights) > 5:
++        bad.append(f"{len(r.insights)} phát hiện (tối đa 5)")
++    if r.actions and not r.insights:
++        bad.append(f"{len(r.actions)} hành động nhưng không có phát hiện nào để gắn")
++    return bad
++
++
++def i06_no_absent_terms(r):
++    """Không nhắc yếu tố KHÔNG có trong dữ liệu như một điều đã biết; chỉ được nêu trong risks dưới dạng giả thuyết (trừ khi chính câu hỏi nhắc tới)."""
++    bad, q = [], (r.question or "").lower()
++    for term in r.truth.get("absent_terms", []):
++        t = term.lower()
++        if t in q:
++            continue
++        for txt in _texts(r):
++            if t in txt.lower():
++                bad.append(f"nhắc «{term}» (không có trong dữ liệu) như một điều đã biết: «{txt[:60]}»")
++        for rk in r.risks:
++            if t in str(rk).lower() and "giả thuyết" not in str(rk).lower():
++                bad.append(f"nhắc «{term}» trong rủi ro mà không gắn nhãn giả thuyết")
++    return bad
++
++
++def i07_no_causal_claims(r):
++    """Phát hiện (chỉ có dữ liệu mô tả) không dùng ngôn ngữ nhân quả; giả thuyết thì được, nhưng phải nằm ở risks."""
++    return [f"«{x.get('title', '')[:60]}» dùng từ nhân quả «{w.strip()}»" for x in r.insights for w in CAUSAL if w in (x.get("title", "") + " ").lower()]
++
++
++def i08_no_hard_claim_if_unverified(r):
++    """Còn phát hiện chưa kiểm được/sai thì không tệp xuất nào được khẳng định 'mỗi phát hiện đều có bằng chứng'."""
++    if nf.all_verified(r.insights):
++        return []
++    return [f"{name} vẫn có câu khẳng định «{c[:40]}…»" for name, txt in (("PPT", r.pptx), ("Markdown", r.md), ("báo cáo HTML", r.html)) for c in HARD_CLAIMS if c in txt]
++
++
++def i09_numbers_in_tables(r):
++    """Số lớn (từ 1 triệu) trong tóm tắt/phát hiện/hành động phải có trong một bảng kết quả (ô hoặc tổng cột). Phát hiện ĐÃ bị gắn cờ sai thì bỏ qua (hệ thống đã báo rồi)."""
++    vals = []
++    for t in r.tables:
++        for j in range(len(t.get("cols", []))):
++            col = [row[j] for row in t.get("rows", []) if j < len(row) and isinstance(row[j], (int, float)) and not isinstance(row[j], bool)]
++            vals += col + ([sum(col)] if col else [])
++    known = nf.Known(vals)
++    return [f"số {s} không có trong bảng kết quả nào" for txt in _texts(r, skip_flagged=True) for s in nf.audit(txt, known)] if known else []
++
++
++def i10_every_insight_checked(r):
++    """Mọi phát hiện đều đã qua kiểm tra (có `verify`), và 'ok' thì không kèm cờ sai."""
++    bad = [f"«{x.get('title', '')[:50]}» chưa qua kiểm tra" for x in r.insights if "verify" not in x]
++    return bad + [f"«{x.get('title', '')[:50]}» ok nhưng còn cờ sai" for x in r.insights if x.get("verify") == "ok" and (x.get("check") or x.get("calc_mismatch"))]
++
++
++def i11_exports_match(r):
++    """Cùng một số phát hiện ở mọi đầu ra (Markdown, báo cáo HTML, bảng điều khiển)."""
++    n = len(r.insights)
++    got = {"Markdown": len(re.findall(r"^\d+\. \*\*", r.md.split("## Phát hiện chính")[-1].split("## ")[0], re.M)) if "## Phát hiện chính" in r.md else 0,
++           "báo cáo HTML": r.html.count('<div class="in">'), "bảng điều khiển": len(r.dash.get("insights", []))}
++    return [f"{k} có {v} phát hiện, kết quả có {n}" for k, v in got.items() if v != n]
++
++
++INVARIANTS = [("I01", "phát hiện sai số liệu không còn 'Cao'", i01_no_trusted_error), ("I02", "ô được trích có thật trong bảng kết quả", i02_cited_cells_exist),
++              ("I03", "không cộng chỉ số không cộng được", i03_no_sum_of_non_additive), ("I04", "nhãn không bị tách chữ", i04_labels_clean),
++              ("I05", "không ép số lượng phát hiện/hành động", i05_no_forced_fill), ("I06", "không nhắc thứ không có trong dữ liệu", i06_no_absent_terms),
++              ("I07", "không ngôn ngữ nhân quả trong phát hiện", i07_no_causal_claims), ("I08", "không khẳng định cứng khi chưa kiểm hết", i08_no_hard_claim_if_unverified),
++              ("I09", "số lớn có trong bảng kết quả", i09_numbers_in_tables), ("I10", "mọi phát hiện đã qua kiểm tra", i10_every_insight_checked),
++              ("I11", "mọi đầu ra cùng số phát hiện", i11_exports_match)]
++
++
++def check_all(run, only=None):
++    """{mã: [vi phạm]} cho mọi bất biến (chỉ những bất biến có vi phạm nằm trong kết quả)."""
++    out = {}
++    for code, _, fn in INVARIANTS:
++        if only and code not in only:
++            continue
++        v = fn(run)
++        if v:
++            out[code] = v
++    return out
++
++
++# ------------------------------------------------------------------ ca đối chứng: cố ý làm hỏng, bất biến PHẢI bắt --
++def _bad_insight(**kw):
++    return {"title": "Một phát hiện", "confidence": "Cao", "evidence": "x", "source": "s", "verify": "ok", **kw}
++
++
++CONTROLS = [
++    ("I01", "sai số học nhưng vẫn Cao", lambda r: r.insights.append(_bad_insight(verify="mismatch"))),
++    ("I02", "trích ô không tồn tại", lambda r: r.insights.append(_bad_insight(evidence="[Phân tích 1, ZZZ, Cột không có] = 123"))),
++    ("I03", "chỉ số không cộng được mặc định là tổng", lambda r: r.dash["datasets"][0]["meas"].append({"k": "m99", "label": lb.label(r.truth["non_additive"][0]), "avg": False})),
++    ("I04", "nhãn bị tách chữ", lambda r: r.chart_titles.append("Số ti ền theo Lo ại")),
++    ("I05", "bảy phát hiện", lambda r: r.insights.extend(_bad_insight(title=f"p{k}") for k in range(7))),
++    ("I05", "hành động không gắn phát hiện", lambda r: (r.insights.clear(), r.actions.append({"text": "Làm A", "impact": "x"}))),
++    ("I06", "nhắc yếu tố không có trong dữ liệu", lambda r: setattr(r, "summary", f"Cần tăng ngân sách {r.truth['absent_terms'][0]} ngay.")),
++    ("I06", "yếu tố ngoài dữ liệu trong rủi ro nhưng không gắn giả thuyết", lambda r: r.risks.append(f"Có thể do {r.truth['absent_terms'][0]}.")),
++    ("I07", "ngôn ngữ nhân quả trong phát hiện", lambda r: r.insights.append(_bad_insight(title="Khuyến mãi dẫn đến tăng doanh thu"))),
++    ("I08", "khẳng định cứng khi còn phát hiện chưa kiểm được", lambda r: (r.insights.append(_bad_insight(verify="unverified")), setattr(r, "pptx", r.pptx + " mỗi phát hiện đều có bằng chứng truy ngược về dữ liệu"))),
++    ("I09", "số lớn không có trong bảng", lambda r: setattr(r, "summary", "Tổng cộng 9.876.543.210 đồng.")),
++    ("I10", "phát hiện chưa được kiểm tra", lambda r: r.insights.append({"title": "Chưa qua audit", "confidence": "Cao", "evidence": "x"})),
++    ("I11", "Markdown thiếu phát hiện", lambda r: setattr(r, "md", "## Phát hiện chính\n\n## Khuyến nghị")),
++]
++
++
++def run_controls(base):
++    """Với mỗi ca: bản sạch KHÔNG được vi phạm đúng bất biến đó, còn bản bị làm hỏng PHẢI bị bắt. Trả về (đạt, tổng, [ca trượt])."""
++    miss, ok = [], 0
++    for code, why, mutate in CONTROLS:
++        if code in check_all(base, only={code}):
++            miss.append(f"{code} «{why}»: bản sạch đã vi phạm sẵn, không dùng làm đối chứng được")
++            continue
++        broken = copy.deepcopy(base)
++        mutate(broken)
++        if code in check_all(broken, only={code}):
++            ok += 1
++        else:
++            miss.append(f"{code} «{why}»: bất biến KHÔNG bắt được")
++    return ok, len(CONTROLS), miss
++
++
++def clean_run(truth):
++    """Một kết quả sạch nhỏ để làm nền cho ca đối chứng (không cần chạy luồng thật)."""
++    nm = truth["non_additive"][0]
++    return Run(truth=truth, question="câu hỏi mẫu", summary="Nhóm A dẫn đầu.",
++               insights=[{"title": "A cao hơn B 2 lần", "confidence": "Cao", "evidence": "[Phân tích 1, A, Tổng] = 200; [Phân tích 1, B, Tổng] = 100; 200 / 100 = 2", "source": "s", "verify": "ok"}],
++               actions=[{"text": "Xem lại nhóm B", "priority": "Trung bình", "impact": "chưa ước tính được"}], risks=[f"Giả thuyết cần kiểm chứng: có thể liên quan {truth['absent_terms'][0]}."],
++               tables=[{"title": "Phân tích 1", "cols": ["Nhóm", "Tổng"], "rows": [["A", 200.0], ["B", 100.0]]}],
++               pptx="Các phát hiện chính", md="## Phát hiện chính\n\n1. **A cao hơn B 2 lần** (độ tin cậy: Cao)\n\n## Khuyến nghị", html='<div class="in"></div>',
++               dash={"datasets": [{"name": "t.csv", "title": "T", "dims": [{"label": "Nhóm"}], "meas": [{"k": "m0", "label": "Tổng", "avg": False}, {"k": "m1", "label": lb.label(nm), "avg": True}]}],
++                     "plan": [{"ds": "t.csv", "m": "m1", "agg": "avg", "src": "ai", "title": "Trung bình"}], "insights": [{"title": "A cao hơn B 2 lần"}]},
++               chart_titles=["Tổng theo nhóm"])
++
++
++if __name__ == "__main__":
++    ok, n, miss = run_controls(clean_run({"non_additive": ["Tuổi"], "absent_terms": ["bảo trì"]}))
++    print(f"{ok}/{n} ca đối chứng bị bắt", *miss, sep="\n  ")
++    print(json.dumps({c: d for c, d, _ in INVARIANTS}, ensure_ascii=False, indent=1))
+diff --git a/tests/eval/mock_llm.py b/tests/eval/mock_llm.py
+new file mode 100644
+index 0000000..1980590
+--- /dev/null
++++ b/tests/eval/mock_llm.py
+@@ -0,0 +1,92 @@
++# -*- coding: utf-8 -*-
++"""LLM giả cho chế độ --mock: chạy được trên MỌI bộ dữ liệu trong datasets/ (khác tests/_flow.py chỉ biết bộ bán hàng mẫu).
++
++Đóng vai một AI làm ĐÚNG những điều kế hoạch yêu cầu (chỉ chép ô nguồn, ít phát hiện, hành động gắn phát hiện, giả thuyết nằm ở risks),
++nhưng cố tình (1) đề xuất MỘT biểu đồ 'tổng' cho chỉ số không cộng được để kiểm tra lớp bảo vệ ở máy chủ (bất biến I03) và
++(2) cài sẵn MỘT phép tính sai trong một phát hiện để kiểm tra việc tính lại (Q1b) và để bất biến I08 có việc làm.
++Con số trong phát hiện được đọc từ chính bảng kết quả mà Agent Phát hiện nhận trong prompt, không lấy từ nguồn nào khác.
++Mục đích: kiểm HẠ TẦNG (luồng, tệp xuất, bất biến), không đo chất lượng AI thật (việc của chế độ --model)."""
++import io
++import json
++import re
++
++import pandas as pd
++
++from app import labels as lb
++from app.utils import vn
++
++
++def _out_col(mock):
++    base = mock["measure"].split(" (")[0].lower()
++    return ("Tổng " if mock["agg"] == "sum" else "Trung bình ") + base
++
++
++def make(ds, prompts=None):
++    mock, truth = ds["mock"], ds["truth"]
++    out = _out_col(mock)
++    raw = ds["tables"][mock["table"]]
++
++    def fake(system, user, max_tokens=8000, json_mode=False):
++        if prompts is not None:
++            prompts.append((system[:80], user))
++        if "Agent Thống kê" in system:
++            return json.dumps({"findings": [{"tag": "Chất lượng", "text": "Dữ liệu đọc được; xem điểm chất lượng ở bảng bên dưới."}]})
++        if "Agent Làm sạch" in system:
++            return json.dumps({"operations": [], "value_counts": {"overview": "ok", "columns": []}})
++        if "Agent Hoạch định" in system:
++            return json.dumps({"menu": [{"title": mock["title"], "goal": "so sánh các nhóm", "metrics": [out], "why": "trả lời câu hỏi", "recommended": True}]})
++        if "Agent Phân tích dữ liệu" in system or "lập trình viên pandas" in system:
++            code = (f"df = dfs['{mock['table']}']\nresult = df.groupby('{mock['by']}', as_index=False)['{mock['measure']}'].{mock['agg']}()\n"
++                    f"result.columns = ['Nhóm', '{out}']")
++            if "lập trình viên pandas" in system:
++                return code
++            return json.dumps({"tasks": [{"title": mock["title"], "goal": f"nhóm theo {mock['by']}", "code": code}]})
++        if "Biên tập viên" in system:
++            return json.dumps({"map": {}})
++        if "Agent Tổng hợp kết quả" in system:
++            v = raw[mock["measure"]].sum() if mock["agg"] == "sum" else raw[mock["measure"]].mean()
++            return json.dumps({"kpis": [{"label": out.capitalize(), "value": vn(v, 0), "delta": ""}],
++                               "charts": [{"task": 0, "x": "Nhóm", "y": out, "kind": "bars", "title": mock["title"], "unit": ""}],
++                               "findings": [{"tag": "Mô tả", "text": "Kết quả theo nhóm."}]})
++        if "Agent Phát hiện" in system:
++            return json.dumps(_insights(user, mock, truth, out))
++        if "Agent Nhận diện" in system:
++            return json.dumps({"specs": [], "unclear": ""})
++        if "Agent Kiểm tra" in system:
++            return json.dumps({"ok": True, "done": "Đã cập nhật theo góp ý.", "missing": ""})
++        if "Agent Thiết kế" in system:
++            non = lb.label(truth["non_additive"][0])
++            by, m = lb.label(mock["by"]), lb.label(mock["measure"])
++            return json.dumps({"title": "Báo cáo " + ds["title"], "narrative": "n",
++                               "charts": [{"task": 0, "x": "Nhóm", "y": out, "kind": "bars", "title": mock["title"], "unit": "", "insight": "i", "recommended": True}],
++                               "dash": [{"ds": mock["table"], "by": by, "measure": m, "agg": "avg" if mock["agg"] == "mean" else "sum", "kind": "bars", "title": mock["title"], "why": "so sánh các nhóm"},
++                                        {"ds": mock["table"], "by": by, "measure": non, "agg": "sum", "kind": "bars", "title": f"Tổng {non.lower()}", "why": "(cố ý sai) AI cộng chỉ số không cộng được"}]})
++        raise AssertionError("LLM giả chưa biết vai trò: " + system[:80])
++
++    return fake
++
++
++def _insights(user, mock, truth, out):
++    """Đọc bảng kết quả đầu tiên trong prompt ('### [0] Tiêu đề' rồi CSV) và viết phát hiện từ ĐÚNG các ô đó."""
++    m = re.search(r"### \[0\] (.+?)\n(.*?)(?=\n### \[|\nPhát hiện sơ bộ|\Z)", user, re.S)
++    if not m:
++        return {"summary": "Chưa đọc được bảng kết quả.", "insights": [], "actions": [], "risks": []}
++    title, df = m.group(1).strip(), pd.read_csv(io.StringIO(m.group(2)))
++    g, v = df.columns[0], df.columns[-1]
++    df = df.dropna().sort_values(v, ascending=False)
++    if len(df) < 2:
++        return {"summary": "Chỉ có một nhóm, chưa so sánh được.", "insights": [], "actions": [], "risks": []}
++    top, bot = df.iloc[0], df.iloc[-1]
++    dec = 0 if float(top[v]).is_integer() and float(bot[v]).is_integer() else 2
++    ratio = float(top[v]) / float(bot[v])
++    cell = lambda row: f"[{title}, {row[g]}, {v}] = {vn(float(row[v]), dec)}"          # noqa: E731
++    absent = truth["absent_terms"][0]
++    return {"summary": f"Nhóm {top[g]} dẫn đầu, nhóm {bot[g]} thấp nhất.",
++            "insights": [{"title": f"{top[g]} dẫn đầu ở chỉ số «{v}»", "confidence": "Cao", "evidence": f"{cell(top)}; {cell(bot)}", "source": title},
++                         {"title": f"{top[g]} cao hơn {bot[g]} khoảng {vn(ratio, 1)} lần", "confidence": "Trung bình",
++                          "evidence": f"{vn(float(top[v]), dec)} / {vn(float(bot[v]), dec)} = {vn(ratio, 2)}", "source": title},
++                         # LỖI CÀI SẴN: cộng hai nhóm rồi ghi nhiều hơn 20% so với tổng thật. Bộ đánh giá PHẢI thấy phát hiện này bị gắn cờ (xem PLANTED trong run_eval.py).
++                         {"title": f"{top[g]} và {bot[g]} cộng lại vượt mốc", "confidence": "Cao",
++                          "evidence": f"{vn(float(top[v]), dec)} + {vn(float(bot[v]), dec)} = {vn((float(top[v]) + float(bot[v])) * 1.2, dec)}", "source": title}],
++            "actions": [{"text": f"Xem lại nhóm {bot[g]}", "priority": "Trung bình", "impact": "chưa ước tính được"}],
++            "risks": [f"Giả thuyết cần kiểm chứng: chênh lệch giữa các nhóm có thể liên quan đến {absent}. Dữ liệu cần thu thêm: thông tin về {absent}."]}
+diff --git a/tests/eval/questions.json b/tests/eval/questions.json
+new file mode 100644
+index 0000000..832535b
+--- /dev/null
++++ b/tests/eval/questions.json
+@@ -0,0 +1,5 @@
++[
++  {"id": "chi_tieu-1", "dataset": "chi_tieu", "question": "Tôi tiêu tiền vào đâu nhiều nhất?", "note": "tháng cuối thiếu ngày; nhóm 'Từ thiện' chỉ 3 dòng; số dư không cộng được"},
++  {"id": "nhan_su-1", "dataset": "nhan_su", "question": "Phòng ban nào có mức lương cao nhất?", "note": "tuổi, thâm niên, điểm là chỉ số không cộng được; mã nhân viên là mã"},
++  {"id": "san_xuat-1", "dataset": "san_xuat", "question": "Sản lượng theo nhà máy năm nay ra sao?", "note": "ba bảng cùng cấu trúc; 2026 mới đến giữa tháng 9; không có dữ liệu bảo trì, máy móc, nguyên liệu"}
++]
+diff --git a/tests/eval/run_eval.py b/tests/eval/run_eval.py
+new file mode 100644
+index 0000000..d9a6b92
+--- /dev/null
++++ b/tests/eval/run_eval.py
+@@ -0,0 +1,170 @@
++# -*- coding: utf-8 -*-
++"""Bộ đánh giá Mission Control (khung HM-02): chạy TRỌN LUỒNG 7 bước trên các bộ dữ liệu mô phỏng rồi kiểm các bất biến.
++
++  python tests/eval/run_eval.py --mock                      # LLM giả: kiểm HẠ TẦNG (luồng, tệp xuất, bất biến). Không cần mạng/khóa. Dùng khi sửa code.
++  python tests/eval/run_eval.py --mock --only nhan_su       # một bộ dữ liệu
++  EVAL_API_KEY=... python tests/eval/run_eval.py --model gpt-4o --base-url https://api.openai.com/v1 [--strict]
++                                                            # LLM THẬT: đo chất lượng AI (chạy tay, tốn tiền). Chưa được thử với mô hình thật trong bản này.
++
++Thoát mã 1 nếu (chế độ --mock) có bất biến bị vi phạm, ca đối chứng nào trượt, hoặc luồng lỗi; chế độ --model chỉ thoát mã 1 khi có --strict
++(AI thật có thể vi phạm; mục tiêu là đo, không chặn). Bộ dữ liệu riêng (thật, đã ẩn danh) để ở tests/eval/private/ (đã được .gitignore), cùng định dạng với datasets/."""
++import argparse
++import io
++import json
++import os
++import sys
++import time
++import traceback
++import unicodedata
++
++HERE = os.path.dirname(os.path.abspath(__file__))
++sys.path.insert(0, os.path.dirname(HERE))      # tests/ (để dùng _flow)
++sys.path.insert(0, HERE)
++import _flow as F  # noqa: E402
++import invariants as I  # noqa: E402
++import mock_llm  # noqa: E402
++from datasets import ALL  # noqa: E402
++from pptx import Presentation  # noqa: E402
++
++from app import numfmt as nf  # noqa: E402
++
++
++PLANTED = 1          # số phép tính sai mà LLM giả (mock_llm.py) cố ý cài vào mỗi bộ dữ liệu
++
++
++def _csv(df, nfd):
++    b = df.to_csv(index=False)
++    return (unicodedata.normalize("NFD", b) if nfd else b).encode("utf-8")
++
++
++def _pptx_text(b):
++    out = []
++    for sl in Presentation(io.BytesIO(b)).slides:
++        for sh in sl.shapes:
++            if sh.has_text_frame:
++                out.append(sh.text_frame.text)
++            if getattr(sh, "has_table", False) and sh.has_table:
++                out += [cell.text for r in sh.table.rows for cell in r.cells]
++    return "\n".join(out)
++
++
++def run_one(c, ds, question):
++    """Chạy trọn luồng cho một bộ dữ liệu + một câu hỏi, trả về I.Run. Lỗi ở bước nào thì ném ngoại lệ kèm tên bước."""
++    F.post(c, "/api/new")
++    files = [(io.BytesIO(_csv(df, ds.get("nfd"))), n) for n, df in ds["tables"].items()]
++    r = c.post("/api/upload", data={"files": files}, content_type="multipart/form-data")
++    assert r.status_code == 200, f"tải tệp: {r.get_data(as_text=True)[:200]}"
++    F.post(c, "/api/start", {"question": question})
++
++    def step(name, timeout=300):
++        s = F.wait(c, timeout)
++        if s.get("error"):
++            raise RuntimeError(f"{name}: {s['error']}")
++        return s
++
++    s = step("bước 1")
++    F.post(c, "/api/accept/1"); s = step("bước 2")
++    F.post(c, "/api/accept/2"); s = step("bước 3 (menu)")
++    F.post(c, "/api/a3/code", {"ids": [m["id"] for m in s["d"]["3"]["menu"]], "custom": "", "specs": []}); s = step("bước 3 (code)")
++    F.post(c, "/api/a3/exec", {"codes": []}); s = step("bước 3 (chạy)", 600)
++    tables = s["d"]["3"]["result"]["tables"]
++    if any(t.get("err") for t in tables) and not any(t.get("rows") for t in tables):
++        raise RuntimeError("bước 3: mọi phân tích đều lỗi: " + "; ".join(str(t.get("err"))[:80] for t in tables))
++    F.post(c, "/api/accept/3"); s = step("bước 4 (phát hiện)")
++    F.post(c, "/api/accept/4"); s = step("bước 5 (thiết kế)")
++    d5 = s["d"]["5"]
++    F.post(c, "/api/accept/5", {"title": d5.get("title") or "Báo cáo", "charts": d5["charts"], "kpis": [], "dash": d5["dash"]["ai"]}); s = step("bước 6 (rà soát)")
++    F.post(c, "/api/accept/6"); s = step("bước 7 (xuất)")
++    aid = s["id"]
++    get = lambda n: c.get(f"/api/download/{aid}/{n}").data       # noqa: E731
++    html = c.get(f"/api/view/{aid}/dashboard.html").get_data(as_text=True)
++    dash = json.loads(html.split('<script id="data" type="application/json">')[1].split("</script>")[0])
++    d4 = s["d"]["4"]
++    return I.Run(truth=ds["truth"], question=question, summary=d4.get("summary", ""), insights=d4.get("insights", []), actions=d4.get("actions", []),
++                 risks=d4.get("risks", []), tables=s["d"]["3"]["result"]["tables"], pptx=_pptx_text(get("bao_cao.pptx")), md=get("bao_cao.md").decode("utf-8"),
++                 html=c.get(f"/api/view/{aid}/bao_cao.html").get_data(as_text=True), dash=dash,
++                 chart_titles=[x.get("title", "") for x in d5["charts"]] + [p["title"] for p in dash.get("plan") or [] if p.get("title")])
++
++
++def real_llm(model, base_url, key):
++    from app import llm as L
++    cfg = {"api_key": key, "base_url": base_url, "model": model}
++    client = L.make_client(cfg)
++    return lambda system, user, max_tokens=8000, json_mode=False: L.chat(client, cfg, system, user, max_tokens, json_mode)
++
++
++def main():
++    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
++    g = ap.add_mutually_exclusive_group(required=True)
++    g.add_argument("--mock", action="store_true", help="LLM giả (kiểm hạ tầng)")
++    g.add_argument("--model", help="tên mô hình thật (cần EVAL_API_KEY)")
++    ap.add_argument("--base-url", default=os.environ.get("EVAL_BASE_URL", "https://api.openai.com/v1"))
++    ap.add_argument("--only", help="chỉ chạy các bộ dữ liệu này, cách nhau bằng dấu phẩy")
++    ap.add_argument("--strict", action="store_true", help="chế độ --model: thoát mã 1 nếu có vi phạm")
++    a = ap.parse_args()
++
++    questions = json.load(open(os.path.join(HERE, "questions.json"), encoding="utf-8"))
++    only = set(a.only.split(",")) if a.only else None
++    if a.model and not os.environ.get("EVAL_API_KEY"):
++        sys.exit("Thiếu khóa API: đặt biến môi trường EVAL_API_KEY.")
++
++    bad = False
++    # ---- 1) ca đối chứng: bất biến có bắt được lỗi không (không cần LLM)
++    first = next(iter(ALL.values()))()
++    ok, n, miss = I.run_controls(I.clean_run(first["truth"]))
++    print(f"Ca đối chứng: {ok}/{n} lỗi cố ý đều bị bất biến bắt" + ("" if ok == n else "   <<< BẤT BIẾN KHÔNG ĐÁNG TIN"))
++    for m in miss:
++        print("   ✘", m)
++    bad |= ok != n
++
++    # ---- 2) chạy trọn luồng từng bộ dữ liệu
++    app, c = F.setup()
++    import app.agents.planner as planner
++    rows, t_all = [], time.time()
++    for q in questions:
++        if only and q["dataset"] not in only:
++            continue
++        ds = ALL[q["dataset"]]()
++        fake = mock_llm.make(ds) if a.mock else real_llm(a.model, a.base_url, os.environ["EVAL_API_KEY"])
++        F.llm.llm = fake
++        planner.llm = fake                      # planner đã import sẵn tên `llm`
++        t0 = time.time()
++        print(f"\n▶ {ds['title']}: «{q['question']}»", flush=True)
++        try:
++            run = run_one(c, ds, q["question"])
++        except Exception as e:                  # noqa: BLE001
++            print(f"   ✘ luồng lỗi: {e}")
++            if os.environ.get("EVAL_TRACE"):
++                traceback.print_exc()
++            rows.append((ds["id"], None, None, None, None, None, None, [f"luồng lỗi: {str(e)[:80]}"]))
++            bad = True
++            continue
++        viol = I.check_all(run)
++        v = [x.get("verify") for x in run.insights]
++        if a.mock and v.count("mismatch") != PLANTED:          # AI giả cài sẵn PLANTED lỗi: hệ thống phải bắt đúng bấy nhiêu, không hơn không kém
++            viol["P01"] = [f"AI giả cài sẵn {PLANTED} lỗi số học nhưng hệ thống gắn cờ {v.count('mismatch')} phát hiện"]
++        flagged = [x for x in run.insights if x.get("verify") == "mismatch"]
++        if a.mock and any(x.get("confidence") == "Cao" for x in flagged):
++            viol.setdefault("I01", []).append("phát hiện cài sẵn lỗi vẫn 'Cao'")
++        rows.append((ds["id"], len(run.insights), v.count("ok"), v.count("mismatch"), v.count("unverified"), len(run.actions), round(time.time() - t0), viol))
++        for code, items in viol.items():
++            for it in items[:3]:
++                print(f"   ✘ {code}: {it}")
++        bad |= bool(viol)
++
++    # ---- 3) bảng điểm
++    print("\n" + "=" * 92)
++    print(f"{'bộ dữ liệu':<12}{'phát hiện':>10}{'đã kiểm':>9}{'sai':>6}{'chưa kiểm':>11}{'hành động':>11}{'giây':>6}  bất biến vi phạm")
++    for ds_id, n_i, ok_i, mm, un, n_a, sec, viol in rows:
++        if n_i is None:
++            print(f"{ds_id:<12}{'-':>10}{'-':>9}{'-':>6}{'-':>11}{'-':>11}{'-':>6}  {viol[0]}")
++        else:
++            print(f"{ds_id:<12}{n_i:>10}{ok_i:>9}{mm:>6}{un:>11}{n_a:>11}{sec:>6}  " + (", ".join(f"{k}×{len(x)}" for k, x in viol.items()) or "không"))
++    print("=" * 92)
++    print(f"Tổng thời gian {round(time.time() - t_all)} giây · chế độ {'mock (LLM giả: chỉ kiểm hạ tầng, KHÔNG phản ánh chất lượng AI)' if a.mock else 'mô hình ' + a.model}")
++    print("KẾT LUẬN:", "CÓ VI PHẠM" if bad else "TẤT CẢ ĐẠT")
++    sys.exit(1 if bad and (a.mock or a.strict) else 0)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/quickfix_test.py b/tests/quickfix_test.py
+new file mode 100644
+index 0000000..69fd849
+--- /dev/null
++++ b/tests/quickfix_test.py
+@@ -0,0 +1,293 @@
++# -*- coding: utf-8 -*-
++"""Kiểm thử bản 0.1.7 (HM-01 trong kế hoạch nâng cấp): sửa nhanh các lỗi làm mất lòng tin.
++  Q1/Q1b  bằng chứng không còn phép tính tự do; phép tính còn sót bị CODE tính lại, sai thì gắn cờ
++  Q2      prompt không ép AI bịa (không ép số lượng, không ép hành động, không "mức thay đổi hợp lý")
++  Q3      không còn câu tự khẳng định cứng khi có phát hiện chưa kiểm được
++  Q4      KPI bảng điều khiển: không chắc thì dùng trung bình, đổi tay được trên thẻ; AI không được chọn "tổng" cho chỉ số không cộng được
++  Q5      trạng thái kiểm tra hiện ở bước 5, báo cáo, bảng điều khiển
++  Q6      thẻ dữ liệu do code lập, đưa vào prompt
++  Q7      hai ô bối cảnh (quyết định, đòn bẩy)
++Chạy: python tests/quickfix_test.py"""
++import io
++import json
++import os
++import re
++import sys
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++import _flow as F  # noqa: E402
++import numpy as np  # noqa: E402
++import pandas as pd  # noqa: E402
++from pptx import Presentation  # noqa: E402
++
++from app import labels as lb, numfmt as nf  # noqa: E402
++from app.agents import insight as insight_mod, playbook  # noqa: E402
++from app.data.scope import data_card  # noqa: E402
++from app.export import dash_plan, interactive  # noqa: E402
++
++fails = 0
++
++
++def check(name, cond, extra=""):
++    global fails
++    print(("OK   " if cond else "FAIL ") + name + (f"  [{extra}]" if (extra and not cond) else ""))
++    fails += 0 if cond else 1
++
++
++# ============================================================ Q1b: tính lại phép tính trong bằng chứng
++CALC = [
++    ("669,19 + 543,6 + 410,5 + 389,12 + 301,77 + 420,1 + 330 = 2.152,25", 1, 1),   # ca trong ảnh: tổng thật là 3.064,28
++    ("669,19 + 543,6 + 410,5 + 389,12 + 301,77 + 420,1 + 330 = 3.064,28", 1, 0),
++    ("(120,5 + 130 + 99,5) / 3 = 39,46", 1, 1),                                     # trung bình thật 116,67
++    ("(120,5 + 130 + 99,5) / 3 = 116,67", 1, 0),
++    ("669,19 / 2.152,25 = 31,09%", 1, 0),
++    ("669,19 / 2.152,25 = 41,09%", 1, 1),
++    ("[Phân tích 1, NM1, Sản lượng] = 669,19; [Phân tích 1, NM2, Sản lượng] = 543,6", 0, 0),   # ô nguồn, không phải phép tính
++    ("T3/2026 = 123", 0, 0),
++    ("2026-03-01 = 5", 0, 0),
++    ("1,2 tỷ + 0,8 tỷ = 2 tỷ", 1, 0),
++    ("1,2 tỷ + 0,8 tỷ = 3 tỷ", 1, 1),
++    ("5 - 8 = -3", 1, 0),
++    ("5 - 8 = 3", 1, 1),
++    ("2.240 / 1.000 = 2,24", 1, 0),                                                  # dấu chấm mơ hồ: hiểu kiểu nào khớp cũng không bị bắt oan
++    ("10 / 0 = 5", 0, 0),                                                           # chia 0: không kết luận
++    ("5,5 / 12 = 45,83%", 1, 0),                                                    # lệch chỉ do toán hạng đã làm tròn: không phải sai
++    ("5 / 12 = 42%", 1, 0),
++    ("5 / 12 = 52%", 1, 1),
++    ("Tổng NM1 = 669,19 + 543,6 = 1.300,79", 1, 1),
++    ("36,38 × 12 = 436,56", 1, 0),
++]
++wrong = [(t, nf.calc_check(t)) for t, ck, bd in CALC if (nf.calc_check(t)["checked"], len(nf.calc_check(t)["bad"])) != (ck, bd)]
++check(f"Q1b: tính lại phép tính trong bằng chứng ({len(CALC)} ca, gồm ca sai trong ảnh)", not wrong, str(wrong[:2]))
++check("Q1b: giá trị tính lại hiển thị đúng (3.064,28 và 116,67)",
++      nf.calc_check(CALC[0][0])["bad"][0]["calc"] == "3.064,28" and nf.calc_check(CALC[2][0])["bad"][0]["calc"] == "116,67")
++check("Q1b: numfmt không dùng eval/exec", not re.search(r"\b(eval|exec)\(", open(nf.__file__, encoding="utf-8").read()))
++
++tab = pd.DataFrame({"Nhóm": list("ABC"), "Giá trị": [1500000000.0, 800000000.0, 700000000.0]})
++known = nf.Known.from_dfs([tab])
++ins = nf.audit_insights([
++    {"title": "A chiếm 50% tổng", "confidence": "Cao", "evidence": "1.500.000.000 / 3.000.000.000 = 50%"},
++    {"title": "Tổng ba nhóm", "confidence": "Cao", "evidence": "669,19 + 543,6 + 410,5 = 2.152,25"},
++    {"title": "Doanh thu 9.999.999.999 đồng", "confidence": "Cao", "evidence": "không rõ"},
++    {"title": "Nhận định chung", "confidence": "Trung bình", "evidence": "xu hướng đi lên"},
++], known)
++check("Q1b: phát hiện có phép tính đúng -> verify=ok, giữ độ tin cậy", ins[0]["verify"] == "ok" and ins[0]["confidence"] == "Cao")
++check("Q1b: phép tính sai -> verify=mismatch, calc_mismatch có số tính lại, hạ độ tin cậy xuống Thấp",
++      ins[1]["verify"] == "mismatch" and ins[1]["confidence"] == "Thấp" and "1.623,29" in ins[1]["calc_mismatch"][0], str(ins[1]))
++check("Q1b: số lớn không có trong bảng -> mismatch (hành vi cũ giữ nguyên)", ins[2]["verify"] == "mismatch" and ins[2]["check"] and ins[2]["confidence"] == "Thấp")
++check("Q1b: không có gì để kiểm -> 'unverified' (KHÔNG coi là đúng), giữ nguyên độ tin cậy", ins[3]["verify"] == "unverified" and ins[3]["confidence"] == "Trung bình")
++check("Q1b: gọi nhiều lần cho cùng kết quả (idempotent: make_final/live_meta gọi lại)", nf.audit_insights(ins, known) == ins)
++check("Q1b: đếm đã kiểm / tổng; all_verified chỉ đúng khi mọi phát hiện đều ok", nf.verify_counts(ins) == (1, 4) and not nf.all_verified(ins) and nf.all_verified(ins[:1]) and not nf.all_verified([]))
++
++# ---- Q1b mở rộng: đối chiếu từng ô được trích [bảng, hàng, cột] = giá trị với bảng kết quả (Q1 cấm viết phép tính nên đây là cách kiểm chính)
++cdf = pd.DataFrame({"Nhóm": ["NM1", "NM2", "NM3"], "Tổng sản lượng": [31892.6, 10482.9, 20000.0]})
++ck = nf.Known.from_dfs([cdf])
++cc_ = lambda t: nf.check_cells(t, ck)                           # noqa: E731
++check("Q1b ô trích: giá trị khớp (kể cả làm tròn, viết lệch hoa/dấu tên hàng, cột) -> ok",
++      cc_("[Sản lượng, NM1, Tổng sản lượng] = 31.892,6")["ok"] == 1 and cc_("[Sản lượng, NM1, Tổng sản lượng] = 31.893")["ok"] == 1
++      and cc_("[Sản lượng, nm1, tong san luong] = 31.892,6")["ok"] == 1 and cc_("[Sản lượng, NM2, Tổng sản lượng] = 10,5 nghìn")["ok"] == 1)
++check("Q1b ô trích: ô tìm thấy mà lệch giá trị -> báo sai kèm giá trị bảng ghi", "31.892,6" in cc_("[Sản lượng, NM1, Tổng sản lượng] = 99.999,9")["bad"][0])
++check("Q1b ô trích: không tìm thấy hàng/cột -> 'chưa kiểm được', KHÔNG báo sai oan",
++      all(cc_(t) == {"ok": 0, "bad": [], "unlocated": 1} for t in ("[Sản lượng, NM9, Tổng sản lượng] = 5", "[Sản lượng, NM1, Cột lạ] = 5", "[x, NM1] = 5")))
++ins_c = nf.audit_insights([{"title": "NM1 dẫn đầu", "confidence": "Cao", "evidence": "[Sản lượng, NM1, Tổng sản lượng] = 31.892,6"},
++                           {"title": "NM1 dẫn đầu", "confidence": "Cao", "evidence": "[Sản lượng, NM1, Tổng sản lượng] = 39.999,9"},
++                           {"title": "NM9 dẫn đầu", "confidence": "Cao", "evidence": "[Sản lượng, NM9, Tổng sản lượng] = 31.892,6"}], ck)
++check("Q1b ô trích: số NHỎ (dưới 1 triệu) cũng được kiểm: khớp -> ok; lệch -> mismatch + hạ 'Thấp'; không định vị được -> unverified",
++      [x["verify"] for x in ins_c] == ["ok", "mismatch", "unverified"] and ins_c[1]["confidence"] == "Thấp" and "31.892,6" in nf.verify_note(ins_c[1]), str([(x["verify"], x.get("confidence")) for x in ins_c]))
++
++# ============================================================ Q1/Q2: prompt
++P = insight_mod.PROMPT
++check("Q1: evidence chỉ chép ô nguồn, không viết phép tính", "KHÔNG viết phép tính" in P and "phép tính cụ thể" not in P)
++check("Q2: không ép số lượng (tối đa, được phép 0), bỏ '3-5 phát hiện'", "3-5 phát hiện" not in P and "Tối đa 5" in P and "được phép 0" in P)
++check("Q2: hành động chỉ đưa khi gắn phát hiện, được phép bỏ trống", "chỉ đưa khi gắn với một phát hiện" in P and "được phép bỏ trống" in P)
++check("Q2: không còn 'mức thay đổi hợp lý' như một chỉ dẫn tự đặt (cả INSIGHT_RULES lẫn CODE_RULES)",
++      "mức thay đổi hợp lý (nêu giả định)" not in playbook.INSIGHT_RULES and "mức thay đổi hợp lý theo dữ liệu" not in playbook.CODE_RULES and "KHÔNG tự đặt mức thay đổi" in playbook.INSIGHT_RULES)
++check("Q2: có câu đóng 'chỉ khẳng định điều suy ra được từ cột và bảng được cung cấp' + yếu tố ngoài dữ liệu chỉ là giả thuyết",
++      "Chỉ khẳng định điều suy ra được từ các cột và bảng được cung cấp" in P and "giả thuyết cần kiểm chứng" in P)
++check("Q2: có quy tắc không tự đặt mốc so sánh, tác động chỉ bằng số có sẵn trong bảng", "KHÔNG tự đặt mốc" in playbook.INSIGHT_RULES and "chưa ước tính được" in playbook.INSIGHT_RULES)
++
++# ============================================================ Q4: KPI mặc định an toàn
++add = {c: lb.is_additive(c) for c in ["Doanh thu", "Số lượng", "Tổng tiền", "Số tiền (đ)", "Sản lượng", "Khối lượng sản xuất", "Thời lượng", "revenue"]}
++non = {c: lb.is_additive(c) for c in ["Tuổi", "Age", "Điểm", "Đơn giá", "Rating", "Chiều cao", "Thâm niên", "Satisfaction", "Mã đơn hàng", "Tỷ lệ hoàn trả"]}
++check("Q4: cột tiền/số lượng/khối lượng/thời lượng/'Tổng...' cộng được", all(add.values()), str([c for c, v in add.items() if not v]))
++check("Q4: tuổi, điểm, đơn giá, cột LẠ (Age, Satisfaction...) KHÔNG cộng được -> mặc định trung bình", not any(non.values()), str([c for c, v in non.items() if v]))
++check("Q4: 'Khối lượng', 'Thời lượng' không còn bị gắn đơn vị tiền (đ)", lb.unit("Khối lượng sản xuất") == "" and lb.unit("Thời lượng") == "" and lb.unit("Lương") == "đ")
++
++rng = np.random.default_rng(3)
++n = 120
++df = pd.DataFrame({"Ngày": pd.date_range("2026-01-01", periods=n).astype(str), "Khu vực": rng.choice(["Bắc", "Trung", "Nam"], n),
++                   "Doanh thu": rng.integers(100, 900, n) * 1000, "Số lượng": rng.integers(1, 9, n), "Age": rng.integers(20, 60, n),
++                   "Tuổi": rng.integers(20, 60, n), "Điểm": rng.integers(1, 10, n), "Đơn giá": rng.integers(10, 99, n) * 1000})
++spec = interactive._spec("x.csv", df)
++mm = {m["label"]: m for m in spec["meas"]}
++check("Q4: bảng điều khiển: Age, Tuổi, Điểm, Đơn giá mặc định trung bình; Doanh thu, Số lượng cộng",
++      all(mm[k]["avg"] for k in ("Age", "Tuổi", "Điểm", "Đơn giá")) and not mm["Doanh thu"]["avg"] and not mm["Số lượng"]["avg"] and mm["Doanh thu"]["add"], str({k: v["avg"] for k, v in mm.items()}))
++cat = dash_plan.catalog({"x.csv": df})
++age_k = next(m["k"] for m in cat[0]["meas"] if m["label"] == "Age")
++rev_k = next(m["k"] for m in cat[0]["meas"] if m["label"] == "Doanh thu")
++dim = cat[0]["dims"][0]["k"]
++pl = dash_plan.validate([{"ds": "x.csv", "by": dim, "m": age_k, "agg": "sum", "kind": "bars", "src": "ai"},
++                         {"ds": "x.csv", "by": dim, "m": rev_k, "agg": "sum", "kind": "bars", "src": "ai"},
++                         {"ds": "x.csv", "by": "t", "m": age_k, "agg": "sum", "kind": "trend", "src": "user"}], cat)
++check("Q4: AI chọn 'tổng' cho tuổi -> đổi sang trung bình; AI chọn tổng cho doanh thu -> giữ; người dùng tự chọn tổng -> giữ",
++      [p["agg"] for p in pl] == ["avg", "sum", "sum"], str([(p["m"], p["agg"], p["src"]) for p in pl]))
++check("Q4: tiêu đề biểu đồ AI không còn 'Tổng age'", "Tổng" not in dash_plan.title(pl[0], cat), dash_plan.title(pl[0], cat))
++pl2 = dash_plan.validate([{"ds": "x.csv", "by": dim, "m": age_k, "agg": "sum", "kind": "bars", "src": "ai", "title": "Tổng tuổi theo khu vực"},
++                          {"ds": "x.csv", "by": dim, "m": rev_k, "agg": "sum", "kind": "bars", "src": "ai", "title": "Tổng doanh thu theo khu vực"}], cat)
++check("Q4: AI viết sẵn tiêu đề 'Tổng tuổi...' mà bị đổi sang trung bình -> bỏ tiêu đề đó (không để chữ 'Tổng' trên số trung bình); tiêu đề hợp lệ được giữ",
++      "Tổng" not in str(dash_plan.title(pl2[0], cat)) and pl2[1]["title"] == "Tổng doanh thu theo khu vực", str([(p["agg"], p["title"]) for p in pl2]))
++js = open(os.path.join(os.path.dirname(interactive.__file__), "assets", "live.js"), encoding="utf-8").read()
++check("Q4: live.js có nút đổi cách tổng hợp trên thẻ chỉ số (data-ag) và dùng aggOf thay cho m.avg cứng", "data-ag" in js and "aggOf" in js and js.count("m.avg ? 'avg' : 'sum'") == 1)
++
++# ============================================================ Q6: thẻ dữ liệu
++card = data_card({"san_xuat.csv": pd.DataFrame({"Ngày": pd.date_range("2026-01-01", periods=60).astype(str), "Nhà máy": rng.choice(["NM1", "NM2"], 60), "Sản lượng": rng.normal(100, 5, 60).round(1)})})
++check("Q6: thẻ dữ liệu liệt kê bảng, cột (kèm kiểu), kỳ thời gian thật", all(x in card for x in ("san_xuat.csv", "Sản lượng (số)", "Nhà máy (phân loại)", "Ngày (thời gian)", "01/01/2026 đến 01/03/2026")), card[:300])
++check("Q6: thẻ dữ liệu có câu giới hạn (chỉ dựa vào đây; ngoài dữ liệu là giả thuyết)", "Chỉ được dựa vào những bảng, cột" in card and "giả thuyết cần kiểm chứng" in card)
++check("Q6: không có bảng -> thẻ rỗng", data_card({}) == "" and data_card({"a": pd.DataFrame()}) == "")
++
++# ============================================================ luồng đầy đủ với LLM giả: Q1b, Q3, Q5, Q6, Q7
++app, c = F.setup()
++orig = F.fake_llm
++BOX = {"ins": None}
++
++
++def fake(system, user, max_tokens=8000, json_mode=False):
++    if "Agent Phát hiện" in system and BOX["ins"] is not None:
++        F.PROMPTS.append((system[:80], user))
++        return json.dumps(BOX["ins"](user) if callable(BOX["ins"]) else BOX["ins"])
++    return orig(system, user, max_tokens, json_mode)
++
++
++F.llm.llm = fake
++
++
++def run_flow(payload, **start):
++    BOX["ins"] = payload
++    F.post(c, "/api/new")
++    F.post(c, "/api/sample")
++    F.post(c, "/api/start", {"question": "Khu vực nào bán tốt nhất?", **start})
++    s = F.wait(c)
++    F.post(c, "/api/accept/1"); F.wait(c)
++    F.post(c, "/api/accept/2"); s = F.wait(c)
++    F.post(c, "/api/a3/code", {"ids": [m["id"] for m in s["d"]["3"]["menu"]], "custom": "", "specs": []}); F.wait(c)
++    F.post(c, "/api/a3/exec", {"codes": []}); F.wait(c, 120)
++    F.post(c, "/api/accept/3"); s = F.wait(c)
++    F.post(c, "/api/accept/4"); s = F.wait(c)
++    d5 = s["d"]["5"]
++    F.post(c, "/api/accept/5", {"title": "Báo cáo", "charts": d5["charts"], "kpis": [], "dash": d5["dash"]["ai"]}); s = F.wait(c)
++    check("luồng: bước 6 (rà soát) tạo xong", "checks" in s["d"]["6"], str(s["d"].get("6")))
++    chk = s["d"]["6"]["checks"]
++    F.post(c, "/api/accept/6"); s = F.wait(c)
++    aid = s["id"]
++    get = lambda n: c.get(f"/api/download/{aid}/{n}").data       # noqa: E731
++    pp = Presentation(io.BytesIO(get("bao_cao.pptx")))
++    txt = []
++    for sl in pp.slides:
++        for sh in sl.shapes:
++            if sh.has_text_frame:
++                txt.append(sh.text_frame.text)
++            if getattr(sh, "has_table", False) and sh.has_table:
++                txt += [cell.text for r in sh.table.rows for cell in r.cells]
++    return s, chk, "\n".join(txt), get("bao_cao.md").decode("utf-8"), c.get(f"/api/view/{aid}/bao_cao.html").get_data(as_text=True), c.get(f"/api/view/{aid}/dashboard.html").get_data(as_text=True)
++
++
++GOOD = {"summary": "Tóm tắt.", "insights": [
++    {"title": "Hai khu vực gộp lại 300", "confidence": "Cao", "evidence": "[Phân tích 1, A, Tổng doanh thu] = 100; [Phân tích 1, B, Tổng doanh thu] = 200; 100 + 200 = 300", "source": "Phân tích 1"},
++    {"title": "Trung bình hai khu vực là 15", "confidence": "Trung bình", "evidence": "(10 + 20) / 2 = 15", "source": "Phân tích 1"}],
++    "actions": [{"text": "Xem lại nhóm yếu", "priority": "Cao", "impact": "chưa ước tính được"}], "risks": ["Giả thuyết cần kiểm chứng: chiến dịch. Dữ liệu cần thu thêm: chi phí."]}
++s, chk, pptx, md, html, dash = run_flow(GOOD, decision="có tăng ngân sách quảng cáo không?", levers="giá bán, ngân sách quảng cáo", ctx="Cửa hàng nhỏ")
++ins4 = s["d"]["4"]["insights"]
++check("Q1b/Q5 (luồng): cả hai phát hiện verify=ok, giữ nguyên độ tin cậy", [x["verify"] for x in ins4] == ["ok", "ok"] and ins4[0]["confidence"] == "Cao", str([(x["verify"], x["confidence"]) for x in ins4]))
++check("Q3 (luồng): mọi phát hiện đã kiểm -> được phép khẳng định ở tiêu đề slide", "mỗi phát hiện đều có số liệu đã đối chiếu" in pptx, pptx[:300])
++check("Q3 (luồng): bước 7 nói '2/2 phát hiện đã kiểm được' và không có cảnh báo", any("2/2 phát hiện đã kiểm được số liệu" in x and not x.startswith("⚠") for x in chk), str(chk))
++check("Q5 (luồng): báo cáo HTML có nhãn 'Đã kiểm số liệu' và chân trang '2/2 phát hiện đã được đối chiếu'", "Đã kiểm số liệu" in html and "2/2 phát hiện đã được đối chiếu" in html)
++check("Q5 (luồng): Markdown ghi '2/2 phát hiện đã được đối chiếu'", "2/2 phát hiện đã được đối chiếu" in md and "⚠" not in md.split("## Phát hiện chính")[1].split("## Khuyến nghị")[0])
++check("Q3 (luồng): báo cáo HTML không còn câu 'Mọi con số được tính từ dữ liệu đã làm sạch, bằng chứng truy ngược'", "Mọi con số được tính" not in html)
++data = json.loads(dash.split('<script id="data" type="application/json">')[1].split("</script>")[0])
++check("Q5 (luồng): dữ liệu bảng điều khiển mang trạng thái kiểm tra của từng phát hiện", [x.get("verify") for x in data["insights"]] == ["ok", "ok"])
++
++# Q6: prompt của Agent Phát hiện và Agent Thiết kế có thẻ dữ liệu
++pi = [u for r, u in F.PROMPTS if "Agent Phát hiện" in r][-1]
++pr = [u for r, u in F.PROMPTS if "Agent Thiết kế" in r][-1]
++check("Q6 (luồng): prompt Agent Phát hiện có thẻ dữ liệu (tên bảng, cột thật)", "THẺ DỮ LIỆU" in pi and "sales_q3.csv" in pi and "doanh_thu" in pi, pi[:100])
++check("Q6 (luồng): prompt Agent Thiết kế cũng có thẻ dữ liệu", "THẺ DỮ LIỆU" in pr)
++
++# Q7: bối cảnh
++st = c.get("/api/state").get_json()
++check("Q7: ctx nối đủ bối cảnh, quyết định, đòn bẩy; brief giữ riêng từng phần",
++      st["ctx"] == "Cửa hàng nhỏ | Quyết định cần đưa ra từ kết quả này: có tăng ngân sách quảng cáo không? | Những thứ người dùng có thể thay đổi: giá bán, ngân sách quảng cáo"
++      and st["brief"] == {"ctx": "Cửa hàng nhỏ", "decision": "có tăng ngân sách quảng cáo không?", "levers": "giá bán, ngân sách quảng cáo"}, str((st["ctx"], st["brief"])))
++check("Q7: AI đọc được quyết định và đòn bẩy trong prompt", "có tăng ngân sách quảng cáo không?" in pi and "Những thứ người dùng có thể thay đổi: giá bán" in pi)
++check("Q7: báo cáo xuất ra hiện bối cảnh đầy đủ", "Quyết định cần đưa ra từ kết quả này" in md)
++
++# --- một phát hiện có phép tính sai (ca trong ảnh) -> gắn cờ, không khẳng định cứng ở đâu cả
++BAD = {"summary": "Tóm tắt.", "insights": [
++    {"title": "Bảy nhà máy cộng lại 2.152,25 nghìn tấn", "confidence": "Cao", "evidence": "669,19 + 543,6 + 410,5 + 389,12 + 301,77 + 420,1 + 330 = 2.152,25", "source": "Phân tích 1"},
++    {"title": "Hai nhóm cộng 300", "confidence": "Cao", "evidence": "100 + 200 = 300", "source": "Phân tích 1"}], "actions": [], "risks": []}
++s, chk, pptx, md, html, dash = run_flow(BAD)
++ins4 = s["d"]["4"]["insights"]
++check("Q1b (luồng): phép tính sai trong ảnh bị gắn cờ, độ tin cậy 'Cao' bị hạ xuống 'Thấp'", ins4[0]["verify"] == "mismatch" and ins4[0]["confidence"] == "Thấp" and "3.064,28" in ins4[0]["calc_mismatch"][0], str(ins4[0]))
++check("Q3 (luồng): có phát hiện bị gắn cờ -> tiêu đề slide trung tính, không còn câu khẳng định", "Các phát hiện chính" in pptx and "mỗi phát hiện đều có" not in pptx)
++check("Q3 (luồng): slide hiện cảnh báo 'Phép tính không khớp'", "Phép tính không khớp" in pptx)
++check("Q3 (luồng): bước 7 đổi câu thành '1/2 phát hiện đã kiểm được' và là dòng cảnh báo (⚠)", any(x.startswith("⚠") and "1/2" in x for x in chk) and not any("2/2" in x for x in chk), str(chk))
++check("Q3/Q5 (luồng): Markdown ghi cảnh báo và '1/2 phát hiện đã được đối chiếu'", "⚠ Phép tính không khớp" in md and "1/2 phát hiện đã được đối chiếu" in md)
++check("Q5 (luồng): báo cáo HTML có nhãn 'Phép tính không khớp' và dòng 'Lưu ý kiểm tra'", "vf-bad" in html and "Lưu ý kiểm tra" in html and "3.064,28" in html)
++
++# --- ô được trích khớp bảng thật -> đã kiểm (dù số nhỏ); ô trích lệch giá trị -> gắn cờ, đúng giá trị bảng ghi hiện ra trong báo cáo
++def _cells(user):
++    m = re.search(r"### \[0\] (.+?)\n(.*?)(?=\n### \[|\nPhát hiện sơ bộ|\Z)", user, re.S)
++    tdf = pd.read_csv(io.StringIO(m.group(2)))
++    g, v = tdf.columns[0], tdf.columns[-1]
++    r0 = tdf.iloc[0]
++    fmt = lambda x: nf.vn(float(x), 2)                          # noqa: E731
++    return {"summary": "Tóm tắt.", "actions": [], "risks": [], "insights": [
++        {"title": f"{r0[g]} là nhóm đầu bảng", "confidence": "Cao", "evidence": f"[{m.group(1).strip()}, {r0[g]}, {v}] = {fmt(r0[v])}", "source": "p"},
++        {"title": f"{r0[g]} gấp rưỡi mức thật", "confidence": "Cao", "evidence": f"[{m.group(1).strip()}, {r0[g]}, {v}] = {fmt(float(r0[v]) * 1.5)}", "source": "p"}]}, float(r0[v])
++
++
++REAL = {}
++BOX_FN = lambda u: (lambda p, real: (REAL.update(v=real), p)[1])(*_cells(u))            # noqa: E731
++s, chk, pptx, md, html, dash = run_flow(BOX_FN)
++ins4 = s["d"]["4"]["insights"]
++check("Q1b ô trích (luồng): ô khớp bảng thật -> verify=ok kể cả khi số nhỏ hơn 1 triệu", ins4[0]["verify"] == "ok" and ins4[0]["confidence"] == "Cao", str(ins4[0]))
++check("Q1b ô trích (luồng): ô lệch giá trị -> mismatch, hạ 'Thấp', ghi chú nêu đúng giá trị bảng", ins4[1]["verify"] == "mismatch" and ins4[1]["confidence"] == "Thấp"
++      and nf.vn(REAL["v"], 2) in ins4[1]["cell_mismatch"][0], str(ins4[1]))
++check("Q5 (luồng): báo cáo HTML nêu 'Số trích không khớp bảng kết quả'; tiêu đề slide trung tính", "Số trích không khớp bảng kết quả" in html and "mỗi phát hiện đều có" not in pptx)
++
++# --- 0 phát hiện, 0 hành động: luồng và mọi tệp xuất vẫn chạy
++ZERO = {"summary": "Dữ liệu chưa đủ để kết luận.", "insights": [], "actions": [], "risks": ["Giả thuyết cần kiểm chứng: có thể do mùa vụ. Dữ liệu cần thu thêm: lịch khuyến mãi."]}
++s, chk, pptx, md, html, dash = run_flow(ZERO)
++check("Q2 (luồng): AI trả 0 phát hiện, 0 hành động -> luồng 7 bước và mọi tệp xuất vẫn chạy", s["approved"] and "bao_cao.pptx" in s["outputs"] and len(pptx) > 100, str(s.get("outputs")))
++check("Q2 (luồng): báo cáo nói rõ chưa có phát hiện đủ chắc, bước 7 cũng vậy", "Chưa có phát hiện nào đủ chắc" in md and any("Chưa có phát hiện nào đủ chắc" in x for x in chk), str(chk))
++check("Q2 (luồng): không còn bảng khuyến nghị rỗng trong Markdown; giả thuyết (risks) vẫn được giữ", "## Khuyến nghị hành động" not in md and "Giả thuyết cần kiểm chứng" in md)
++
++# ============================================================ Q4 + Q5 trong trình duyệt thật (bỏ qua nếu thiếu Playwright/Chromium)
++try:
++    from playwright.sync_api import sync_playwright
++    with sync_playwright() as p:
++        b = p.chromium.launch()
++        pg = b.new_page(viewport={"width": 1400, "height": 900})
++        errs = []
++        pg.on("pageerror", lambda e: errs.append(str(e)))
++        small = pd.DataFrame({"Ngày": pd.date_range("2026-01-01", periods=60).astype(str), "Khu vực": rng.choice(["Bắc", "Nam"], 60), "Age": rng.integers(20, 60, 60)})
++        meta = {"title": "T", "question": "q", "ctx": "", "date": "01/01/2026", "summary": "s", "actions": [], "risks": [],
++                "insights": nf.audit_insights([{"title": "x", "confidence": "Cao", "evidence": "1 + 2 = 4"}, {"title": "y", "confidence": "Cao", "evidence": "1 + 2 = 3"}, {"title": "z", "confidence": "Cao", "evidence": "xu hướng"}], nf.Known())}
++        pg.set_content(interactive.build_dashboard(meta, {"x.csv": small}))
++        pg.wait_for_selector(".kpi.hero")
++        hero = lambda: pg.inner_text(".kpi.hero span").lower()       # noqa: E731
++        check("Q4 (trình duyệt): thẻ chính của cột 'Age' mặc định là TRUNG BÌNH, không phải 'Tổng age'", "trung bình" in hero() and "tổng" not in hero(), hero())
++        pg.click(".kpi.hero [data-ag=sum]")
++        check("Q4 (trình duyệt): bấm 'Tổng' trên thẻ thì đổi sang tổng, kèm lưu ý chỉ số này thường không cộng được", "tổng" in hero() and "không cộng được" in pg.inner_text(".kpi.hero"), hero())
++        pg.click(".kpi.hero [data-ag=avg]")
++        check("Q4 (trình duyệt): bấm 'Trung bình' thì quay lại, lưu ý biến mất", "trung bình" in hero() and "không cộng được" not in pg.inner_text(".kpi.hero"))
++        tags = pg.locator("#nar .in .tag").all_inner_texts()
++        check("Q5 (trình duyệt): bảng điều khiển hiện nhãn kiểm tra: không khớp / đã kiểm / chưa kiểm được",
++              any("Phép tính không khớp" in t for t in tags) and any("Đã kiểm số liệu" in t for t in tags) and any("Chưa kiểm được" in t for t in tags), str(tags))
++        check("Q5 (trình duyệt): có dòng cảnh báo cụ thể cho phép tính sai (1 + 2 = 4)", "1 + 2 = 4" in pg.inner_text("#nar"))
++        check("trình duyệt: không có lỗi JavaScript", not errs, str(errs))
++        b.close()
++except Exception as e:                                          # noqa: BLE001
++    print("BỎ QUA  phần trình duyệt:", str(e)[:120])
++
++print(f"\n{'TẤT CẢ ĐẠT' if not fails else str(fails) + ' KIỂM TRA THẤT BẠI'}")
++sys.exit(1 if fails else 0)

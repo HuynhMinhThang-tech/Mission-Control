@@ -107,7 +107,9 @@ def _spec(name, df):
     if not out_dims and time is None:
         return None
     mvals = {f"m{j}": s.astype(float) for j, (c, s) in enumerate(meas)}
-    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": lb.is_rate(c),
+    # "avg" = cách tổng hợp MẶC ĐỊNH là trung bình. Chỉ cộng khi nhận ra rõ là cộng được (lb.is_additive); không chắc thì trung bình (an toàn).
+    # Người xem vẫn đổi tay được ngay trên thẻ chỉ số của bảng điều khiển.
+    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": not lb.is_additive(c), "add": lb.is_additive(c),
                  "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
 
     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều

@@ -1,0 +1,5 @@
+[
+  {"id": "chi_tieu-1", "dataset": "chi_tieu", "question": "Tôi tiêu tiền vào đâu nhiều nhất?", "note": "tháng cuối thiếu ngày; nhóm 'Từ thiện' chỉ 3 dòng; số dư không cộng được"},
+  {"id": "nhan_su-1", "dataset": "nhan_su", "question": "Phòng ban nào có mức lương cao nhất?", "note": "tuổi, thâm niên, điểm là chỉ số không cộng được; mã nhân viên là mã"},
+  {"id": "san_xuat-1", "dataset": "san_xuat", "question": "Sản lượng theo nhà máy năm nay ra sao?", "note": "ba bảng cùng cấu trúc; 2026 mới đến giữa tháng 9; không có dữ liệu bảo trì, máy móc, nguyên liệu"}
+]
