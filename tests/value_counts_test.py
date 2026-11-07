@@ -115,6 +115,22 @@ out3 = cleaner.fold_standardize(ai2, rep2)
 main = [o for o in out3 if o.get("column") == "cap_bac" and o["op"] == "standardize_text"]
 check(len(main) == 1 and main[0].get("recommended") and main[0]["mapping"] == {"CV": "Chuyên viên", "NV": "Nhân viên"}, "AI xác nhận viết tắt -> nằm trong đề xuất chính (được chọn sẵn), không lặp ở nhóm nghi trùng")
 
+
+# ---- chống gộp nhầm hai giá trị khác nghĩa nhưng gần giống chữ (ca thật: Nội tổng hợp / Ngoại tổng hợp)
+KH = pd.DataFrame({"khoa": ["Nội tổng hợp"] * 66 + ["Ngoại tổng hợp"] * 60 + ["nội tổng hợp"] * 6 + ["Nội TH"] * 6 + ["NỘI TH"] * 6 + ["Khoa Sản"] * 30 + ["Noi tong hopp"]})
+rk = vc.report({"sach.xlsx": KH})[0]
+wm = {a: b for g in rk["weak"] for a, b in g["map"].items()}
+check("Ngoại tổng hợp" not in wm and "Nội tổng hợp" not in wm, "Nội tổng hợp (66) và Ngoại tổng hợp (60) đều phổ biến: KHÔNG đề xuất gộp")
+check(wm.get("Noi tong hopp") == "Nội tổng hợp", "chữ gõ sai chỉ xuất hiện 1 lần vẫn được gợi ý gộp về giá trị đúng")
+check(vc._opposed("noi tong hop", "ngoai tong hop") and vc._opposed("nam", "nu") and not vc._opposed("noi tong hop", "noi tong hopp"), "nhận ra cặp từ đối lập (Nội/Ngoại, Nam/Nữ); chữ gõ sai thì không phải đối lập")
+check(vc._both_common(66, 60) and not vc._both_common(66, 2) and not vc._both_common(40, 3), "phổ biến và cùng cỡ thì giữ nguyên; biến thể hiếm thì được xét gộp")
+_prev_raw = state.A["raw"]
+state.A["raw"] = {"sach.xlsx": KH}
+mops = cleaner.merge_fill(cleaner.fold_standardize([], vc.report(state.A["raw"])))
+check({o["label"] for o in mops if o.get("weak")} == {"Gộp giá trị nghi trùng"} and {o["label"] for o in mops if not o.get("weak") and o["op"] == "standardize_text"} == {"Gộp giá trị viết khác nhau"},
+      "thẻ 'nghi trùng' giữ đúng nhãn riêng, không bị ghi đè thành nhãn của thẻ chắc chắn")
+state.A["raw"] = _prev_raw
+
 # ---- người dùng tự gộp trên bảng đếm
 state.A["d"] = {2: {"ops": []}}
 mo = cleaner.manual_ops({"manual": [{"file": "cap.csv", "column": "cap_bac", "mapping": {"CV": "Chuyên viên", "KHÔNGCÓ": "x", "NV": ""}}, {"file": "cap.csv", "column": "khong_co", "mapping": {"a": "b"}}]})
@@ -143,5 +159,12 @@ check(d["pv"]["fx"][ops[0]["id"]].startswith("Gộp ") and d["vc"]["overview"] =
 check(d["pv"]["before"]["Định dạng"] > d["pv"]["after"]["Định dạng"], "chọn gộp thì số vấn đề 'Định dạng' giảm")
 lg = cleaner.apply_choice({"sel": {}, "meth": {}, "val": {}})
 check(state.A["clean"]["nv.csv"]["phong_ban"].nunique() == 4 and any("Gộp giá trị" in x for x in state.A["applied"]), "áp dụng lựa chọn: cột còn 4 giá trị chuẩn")
+check(d.get("uni") is True, "bước làm sạch mới gắn cờ giao diện hợp nhất (một thẻ cho mỗi cột)")
+ck = "nv.csv\u0001phong_ban"
+check(ck in d["pv"]["colfx"] and d["pv"]["colfx"][ck].startswith("Gộp "), "có MỘT dòng kết quả chung cho cả cột (colfx), tính trên toàn bộ lựa chọn của cột")
+pv_m = cleaner.preview({"sel": {o["id"]: False for o in d["ops"]}, "manual": [{"file": "nv.csv", "column": "phong_ban", "mapping": {"ban giam doc": "Ban Giám đốc"}}]})
+check(pv_m["colfx"][ck].startswith("Gộp ") and "sửa 7 ô" in pv_m["colfx"][ck], "gộp chọn tay cũng có kết quả theo cột (sửa đúng 7 ô)")
+cleaner.apply_choice({"sel": {}, "meth": {}, "val": {}})
+check(state.A["d"][2]["merged"][ck].get("ban giam doc") == "Ban Giám đốc", "lưu lại phép gộp cuối cùng để xem lại trong Lịch sử")
 state.unbind()
 print(f"\nTẤT CẢ {n_ok} KIỂM TRA ĐỀU ĐẠT")

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .. import labels as lb
+from ..data.binary import binary as _binary
 from ..data.quality import to_dt
 from ..utils import E, is_text
 
@@ -24,6 +25,7 @@ WEEK = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ
 ID_NAME = re.compile(r"(^|_)(id|ma|code|stt|sdt|phone|email)(_|$)", re.I)
 TIER0 = re.compile(r"tien|doanh|revenue|amount|sales|chi|thu|profit|loi_nhuan|cost|gia_tri|(?<!so_)(?<!san_)(?<!trong_)luong|thu_nhap|salary|income", re.I)
 TIER1 = re.compile(r"so_luong|qty|quantity|sl$", re.I)
+MAX_DIMS, MAX_NUM_MEAS, MAX_RATES = 12, 10, 12
 HINT = re.compile(r"tien|doanh|revenue|amount|sales|gia_tri|chi|thu|profit|loi_nhuan|cost|price|don_gia|so_luong|qty|quantity", re.I)
 
 
@@ -70,11 +72,20 @@ def _spec(name, df):
             continue                                   # số nguyên gần như duy nhất = mã định danh
         meas.append((c, s))
     meas.sort(key=lambda x: (3 if lb.is_rate(x[0]) else 0 if TIER0.search(_k(x[0])) else 1 if TIER1.search(_k(x[0])) else 2, 0 if _k(x[0]).startswith("tong") else 1))   # cột "Tổng ..." lên trước
-    meas = meas[:6]
+    meas = meas[:MAX_NUM_MEAS]
+    # ---- chỉ số TỶ LỆ từ các cột Đạt / Không đạt (không chiếm chỗ của chiều phân tích)
+    rates, rate_cols = [], set()
+    for c in df.columns:
+        if c == tcol or c in [m[0] for m in meas] or lb.is_id(c) or ID_NAME.search(_k(c)) or len(rates) >= MAX_RATES:
+            continue
+        r = _binary(df[c])
+        if r:
+            rates.append((c, r[0], r[1]))
+            rate_cols.add(c)
     # ---- chiều phân tích
     dims = []
     for c in df.columns:
-        if c == tcol or c in [m[0] for m in meas] or lb.is_id(c) or ID_NAME.search(_k(c)):
+        if c == tcol or c in [m[0] for m in meas] or c in rate_cols or lb.is_id(c) or ID_NAME.search(_k(c)):
             continue
         s = df[c]
         if pd.api.types.is_datetime64_any_dtype(s) or pd.api.types.is_float_dtype(s):
@@ -84,7 +95,7 @@ def _spec(name, df):
             if is_text(s) and s.dropna().astype(str).str.len().mean() > 40:
                 continue
             dims.append((k, c))
-    dims = [c for _, c in sorted(dims, key=lambda x: x[0])][:6]
+    dims = [c for _, c in sorted(dims, key=lambda x: x[0])][:MAX_DIMS]
 
     cols, labels = {}, {}
     out_dims = []
@@ -104,13 +115,16 @@ def _spec(name, df):
         if p.dt.date.nunique() >= 14:
             cols["wd"] = p.dt.dayofweek.fillna(-1).astype(int).to_numpy()
             out_dims.append({"k": "wd", "label": "Thứ trong tuần", "vals": WEEK, "na": -1, "miss": 0.0, "ord": True})
-    if not out_dims and time is None:
+    if not out_dims and time is None and not rates:
         return None
-    mvals = {f"m{j}": s.astype(float) for j, (c, s) in enumerate(meas)}
+    allm = [(c, s, None) for c, s in meas] + [(c, s, pos) for c, s, pos in rates]        # chỉ số số trước, chỉ số tỷ lệ sau
+    mvals = {f"m{j}": s.astype(float) for j, (c, s, _) in enumerate(allm)}
     # "avg" = cách tổng hợp MẶC ĐỊNH là trung bình. Chỉ cộng khi nhận ra rõ là cộng được (lb.is_additive); không chắc thì trung bình (an toàn).
     # Người xem vẫn đổi tay được ngay trên thẻ chỉ số của bảng điều khiển.
-    out_meas = [{"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": not lb.is_additive(c), "add": lb.is_additive(c),
-                 "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} for j, (c, s) in enumerate(meas)]
+    out_meas = [({"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": not lb.is_additive(c), "add": lb.is_additive(c),
+                  "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} if pos is None else
+                 {"k": f"m{j}", "label": f"Tỷ lệ {pos.lower()} · {_pretty(c)}", "short": _pretty(c), "unit": "@rate", "avg": True, "add": False, "rate": True, "pos": pos, "dec": 1})
+                for j, (c, s, pos) in enumerate(allm)]
 
     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều
     cube, dropped = False, []
@@ -161,7 +175,7 @@ def _safe(obj):
         .replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
-def build_dashboard(meta, dfs, plan=None):
+def build_dashboard(meta, dfs, plan=None, bp=None, edit=False):
     """meta: title, question, ctx, date, summary, insights, actions, risks, kpis. dfs: {tên: DataFrame đã làm sạch}.
     plan: danh sách biểu đồ được chọn (xem export/dash_plan.py); None = để trình duyệt tự chọn bố cục theo dữ liệu như trước."""
     ds = build_datasets(dfs)
@@ -170,6 +184,10 @@ def build_dashboard(meta, dfs, plan=None):
                "risks": meta.get("risks") or [], "datasets": ds}
     if plan is not None:
         payload["plan"] = plan
+    if edit:
+        payload["edit"] = True                   # chỉ bản XEM THỬ ở bước Báo cáo: hiện nút ẩn / đổi dạng / di chuyển trên từng thẻ; bản xuất ra không có
+    if bp:
+        payload["bp"] = bp                       # bản thiết kế: KPI, bố cục, bảng chi tiết, các khối chữ (xem export/dash_plan.py)
     css = (ASSETS / "live.css").read_text("utf-8")
     js = (ASSETS / "live.js").read_text("utf-8")
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'

@@ -16,6 +16,11 @@ from .common import dedupe_charts, refine_charts
 from .markdown import build_md
 
 
+def memo_zip():
+    from ..agents.memo import zip_files          # nạp muộn: tránh vòng import agents <-> export
+    return zip_files()
+
+
 def make_final():
     d3, d4, d5 = A["d"][3]["result"], A["d"][4], A["d"][5]
     fin = d5["final"]
@@ -49,7 +54,7 @@ def live_meta(title=None):
 
 def snapshot():
     """Toàn bộ các bước đã thực hiện, để xem lại ở chế độ chỉ đọc."""
-    keys = ("id", "question", "ctx", "brief", "files", "d", "ag", "log", "outputs", "started", "finished", "applied")
+    keys = ("id", "question", "ctx", "brief", "files", "d", "ag", "log", "outputs", "started", "finished", "applied", "memo")
     s = {k: A[k] for k in keys}
     s["st"] = ["done"] * 7
     s["approved"] = True
@@ -61,7 +66,7 @@ def publish():
     F = make_final()
     mt_html, mt_md = "text/html; charset=utf-8", "text/markdown; charset=utf-8"
     files = {
-        "dashboard.html": (build_dashboard(live_meta(F["title"]), A["clean"], A["d"][5]["final"].get("dash")).encode("utf-8"), mt_html),   # dashboard TƯƠNG TÁC với đúng các biểu đồ đã chọn
+        "dashboard.html": (build_dashboard(live_meta(F["title"]), A["clean"], A["d"][5]["final"].get("dash"), A["d"][5]["final"].get("bp")).encode("utf-8"), mt_html),   # dashboard TƯƠNG TÁC với đúng các biểu đồ đã chọn
         "bao_cao.html": (build_html(F).encode("utf-8"), mt_html),                                           # báo cáo tĩnh có bằng chứng
         "bao_cao.pptx": (build_pptx(F), "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
         "bao_cao.md": (build_md(F).encode("utf-8"), mt_md),
@@ -70,6 +75,8 @@ def publish():
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for n in ("dashboard.html", "bao_cao.html", "bao_cao.pptx", "bao_cao.md"):
             z.writestr(n, files[n][0])
+        for n, md in memo_zip().items():                       # bản tổng hợp từng bước (đã duyệt/sửa) đi kèm gói chia sẻ
+            z.writestr(n, md)
         for n, d in A["clean"].items():
             z.writestr("du_lieu_sach/" + re.sub(r"[^\w.\-]", "_", n) + ("" if n.endswith(".csv") else ".csv"), d.to_csv(index=False))
     files["share.zip"] = (buf.getvalue(), "application/zip")

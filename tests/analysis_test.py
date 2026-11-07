@@ -154,11 +154,77 @@ ai = dash_plan.from_ai([
 check("from_ai: giữ đúng, bỏ cột/chỉ số bịa, bỏ trùng, đổi tròn+trung bình thành cột", len(ai) == 3 and ai[2]["kind"] == "bars" and ai[0]["by"] == "t" and ai[1]["by"] == dk["Khu vực"], str([(a["by"], a["m"], a["kind"]) for a in ai]))
 check("validate: sửa tổ hợp vô nghĩa (đường cho biến không phải thời gian)", dash_plan.validate([{"ds": c0["name"], "by": dk["Kênh"], "m": "*", "kind": "trend"}], cat)[0]["kind"] == "bars")
 check("validate: thời gian + tròn -> cột dọc; khóa lạ bị bỏ", dash_plan.validate([{"ds": c0["name"], "by": "t", "m": "", "kind": "donut"}, {"ds": c0["name"], "by": "zz"}, {"ds": "x", "by": "t"}, {"ds": c0["name"], "by": "t", "m": "m99"}], cat)[0]["kind"] == "cols" and len(dash_plan.validate([{"ds": c0["name"], "by": "t", "m": "", "kind": "donut"}, {"ds": c0["name"], "by": "zz"}, {"ds": "x", "by": "t"}, {"ds": c0["name"], "by": "t", "m": "m99"}], cat)) == 1)
-check("validate: tối đa 12 biểu đồ", len(dash_plan.validate([{"ds": c0["name"], "by": d["k"], "m": m["k"], "agg": a, "kind": "bars"} for d in c0["dims"] for m in c0["meas"] for a in ("sum", "avg")] * 2, cat)) == 12)
+check("validate: tối đa 16 biểu đồ", len(dash_plan.validate([{"ds": c0["name"], "by": d["k"], "m": m["k"], "agg": a, "kind": "bars"} for d in c0["dims"] for m in c0["meas"] for a in ("sum", "avg")] * 2, cat)) == 16)
 auto = dash_plan.auto_plan(cat)
 check("auto_plan: có xu hướng + cơ cấu + xếp hạng, đều hợp lệ", any(a["kind"] == "trend" for a in auto) and any(a["kind"] == "donut" for a in auto) and len(dash_plan.validate(auto, cat)) == len(auto))
 check("suggest: AI gợi ý quá ít thì bổ sung bằng luật", len(dash_plan.suggest([], cat)) >= 4)
 check("title: tên biểu đồ tiếng Việt", dash_plan.title({"ds": c0["name"], "by": dk["Khu vực"], "m": mk["Doanh thu"], "agg": "sum"}, cat) == "Tổng doanh thu theo khu vực" and dash_plan.title({"ds": c0["name"], "by": "t", "m": "", "agg": "count"}, cat) == "Số bản ghi theo tháng")
+
+# ---------------------------------------------------------------- Mục 3: phân tích «Tỷ lệ đạt» và «Xếp hạng 80/20», góc nhìn khả dụng
+from app.data import lenses  # noqa: E402
+from app.data.binary import binary, sides  # noqa: E402
+from app.data.sandbox import run_code  # noqa: E402
+
+rng = np.random.default_rng(7)
+nn = 324
+KS = pd.DataFrame({"Khoa": rng.choice(["Nội tổng hợp", "Ngoại", "Sản", "Nhi"], nn), "Ngay": pd.date_range("2025-01-01", periods=nn).astype(str),
+                   "TC2_VST": rng.choice(["Đạt", "Không đạt", None], nn, p=[.58, .34, .08]), "TC4_Tiem": rng.choice(["Đạt", "Không đạt", "Không áp dụng"], nn, p=[.7, .2, .1]),
+                   "Tien": rng.integers(10, 1000, nn)})
+KC = {"ks.xlsx": KS}
+check("binary: nhận diện cột Đạt / Không đạt (bỏ qua 'Không áp dụng'), không nhận cột số hay nhiều giá trị", sides(KS["TC2_VST"]) is not None and sides(KS["TC4_Tiem"]) is not None and sides(KS["Tien"]) is None and sides(KS["Khoa"]) is None)
+bv, pl = binary(KS["TC4_Tiem"])
+check("binary: 'Không áp dụng' và ô thiếu không vào tử số lẫn mẫu số (NaN)", pl == "Đạt" and int(bv.notna().sum()) == int((KS["TC4_Tiem"] != "Không áp dụng").sum()) and set(bv.dropna().unique()) == {0.0, 1.0})
+R = {}
+for k, spec in {"all": {"type": "rate", "cols": ["TC2_VST", "TC4_Tiem"]}, "by": {"type": "rate", "cols": ["TC2_VST", "TC4_Tiem"], "by": ["Khoa"]},
+                "time": {"type": "rate", "cols": ["TC2_VST"], "time": {"col": "Ngay", "grain": "quarter"}}, "par": {"type": "pareto", "measures": [{"col": "Tien", "agg": "sum"}], "by": ["Khoa"]},
+                "parc": {"type": "pareto", "measures": [{"col": None, "agg": "count"}], "by": ["Khoa"]}}.items():
+    sp, err = S.normalize(spec, KC)
+    R[k] = (sp, err, None if sp is None else run_code(S.build_code(sp, KC), KC))
+out = lambda k: R[k][2][0] if isinstance(R[k][2], tuple) else R[k][2]      # noqa: E731
+check("rate: ghép biến hợp lệ, chạy THẬT trong sandbox cho cả 3 cách xem (chung / theo nhóm / theo thời gian) và 2 kiểu xếp hạng", all(v[0] is not None for v in R.values()) and all(out(k) is not None for k in R), str([(k, v[1]) for k, v in R.items()]))
+ov = out("all")
+exp = float((KS["TC2_VST"].dropna() == "Đạt").mean() * 100)
+check("rate: tỷ lệ đạt chung đúng bằng cách tính tay (mẫu số = ô có đánh giá)", abs(float(ov.loc[ov["Tiêu chí"] == "TC2 VST", "Tỷ lệ đạt (%)"].iloc[0]) - round(exp, 1)) < 0.06 and int(ov.loc[ov["Tiêu chí"] == "TC4 Tiem", "Số lượt đánh giá"].iloc[0]) == int((KS["TC4_Tiem"] != "Không áp dụng").sum()))
+bk = out("by")
+nh = KS[KS["Khoa"] == "Ngoại"]["TC4_Tiem"].map({"Đạt": 1.0, "Không đạt": 0.0}).dropna().mean() * 100
+check("rate theo nhóm: từng khoa đúng số tay; khoa thấp nhất ở đầu bảng", abs(float(bk.loc[bk["Khoa"] == "Ngoại", "Tỷ lệ đạt: TC4 Tiem"].iloc[0]) - round(nh, 1)) < 0.06 and len(bk) == 4)
+check("rate theo thời gian: nhãn quý đúng dạng Q1/2025 theo thứ tự thời gian", list(out("time").iloc[:, 0][:3]) == ["Q1/2025", "Q2/2025", "Q3/2025"], str(list(out("time").iloc[:, 0])))
+pr = out("par")
+check("pareto: tỷ trọng cộng dồn kết thúc 100%, giảm dần, có cột 'Thuộc nhóm tạo 80% đầu'", abs(float(pr["Cộng dồn (%)"].iloc[-1]) - 100) < .1 and list(pr.iloc[:, 1]) == sorted(pr.iloc[:, 1], reverse=True) and "Thuộc nhóm tạo 80% đầu" in pr.columns)
+check("pareto: có câu kết luận 'k trên n nhóm tạo ra ~80%' tính từ dữ liệu", "nhóm" in S.spec_facts(R["par"][0], KC)[0] and "80%" in S.spec_facts(R["par"][0], KC)[0])
+check("rate: từ chối cột không phải Đạt / Không đạt; pareto: từ chối chỉ số trung bình", S.normalize({"type": "rate", "cols": ["Tien"]}, KC)[1] is not None and S.normalize({"type": "pareto", "measures": [{"col": "Tien", "agg": "mean"}], "by": ["Khoa"]}, KC)[1] is not None)
+cm = {c["name"]: c for c in S.columns_meta(KC)[0]["cols"]}
+check("columns_meta: đánh dấu cột Đạt / Không đạt (bin) để giao diện cho chọn làm tiêu chí", cm["TC2_VST"]["bin"] and cm["TC4_Tiem"]["bin"] and not cm["Tien"]["bin"] and not cm["Khoa"]["bin"])
+check("rate/pareto: biến dùng được liệt kê (để hiện 'Biến dùng')", set(S.used_vars(R["by"][0])) == {"TC2_VST", "TC4_Tiem", "Khoa"})
+lb_ = dict(lenses.available(KC))
+check("góc nhìn: dữ liệu đạt/không đạt có đủ góc nhìn tương ứng, nêu tên cột thật", "Tỷ lệ đạt / tuân thủ" in lb_ and "Tiêu chí hay trượt cùng nhau" in lb_ and "TC2 VST" in lb_["Tỷ lệ đạt / tuân thủ"] and "Dữ liệu thiếu tập trung ở đâu" in lb_)
+check("góc nhìn: dữ liệu bán hàng KHÔNG bị gán góc nhìn tỷ lệ đạt", "Tỷ lệ đạt / tuân thủ" not in dict(lenses.available(dfs)) and "Xếp hạng và 80/20 (Pareto)" in dict(lenses.available(dfs)))
+check("góc nhìn: khối prompt có danh sách khả dụng và dặn tránh các mục đã có", "Doanh thu theo khu vực" in lenses.block(KC, ["Doanh thu theo khu vực"]) and "KHÁC HẲN" in lenses.block(KC, ["x"]) and lenses.block({}, []) == "")
+
+# ---------------------------------------------------------------- Mục 4 + 5: chỉ số tỷ lệ, bản thiết kế, thẻ tĩnh
+catK = dash_plan.catalog(KC)
+cK = catK[0]
+rk = [m for m in cK["meas"] if m.get("rate")]
+check("catalog: cột Đạt / Không đạt thành chỉ số TỶ LỆ (không thành chiều), chiều là Khoa", len(rk) == 2 and all(m["unit"] == "@rate" and m["avg"] for m in rk) and [d["label"] for d in cK["dims"]][0] == "Khoa" and all("TC" not in d["label"] for d in cK["dims"]))
+bpK = dash_plan.default_bp(catK)
+check("bản thiết kế mặc định cho dữ liệu đạt/không đạt: bố cục 'compliance', KPI hợp với dữ liệu, KHÔNG có 'Số bản ghi', không bảng chi tiết",
+      bpK["layout"] == "compliance" and {k["kind"] for k in bpK["kpis"]} >= {"rate_all", "rate_low"} and all(k["kind"] != "count" for k in bpK["kpis"]) and bpK["table"]["on"] is False)
+check("bản thiết kế mặc định cho dữ liệu bán hàng: KPI theo chỉ số số (không chỉ 'Số bản ghi'); bảng chi tiết bật vì có từ 2 chỉ số số",
+      (lambda sk: len(sk) >= 3 and all(k["kind"] != "count" for k in sk))([k for k in dash_plan.default_bp(cat)["kpis"] if k["ds"] == "sales_q3.csv"]) and dash_plan.default_bp(cat)["table"]["on"] is True)
+check("auto_plan cho dữ liệu đạt/không đạt: có bảng điểm và ma trận nhiệt ở đầu, đều hợp lệ", [x.get("type") for x in dash_plan.auto_plan(catK)[:2]] == ["score", "heat"] and len(dash_plan.validate(dash_plan.auto_plan(catK), catK)) == len(dash_plan.auto_plan(catK)))
+vb = dash_plan.validate_bp({"layout": "lạ", "kpis": [{"ds": cK["name"], "kind": "rate_all"}, {"ds": cK["name"], "kind": "sum", "m": rk[0]["k"]}, {"ds": cK["name"], "kind": "top", "m": "zz", "by": "d0"}, {"ds": cK["name"], "kind": "distinct", "by": "zz"}], "table": False, "blocks": {"ins": False}}, catK)
+check("validate_bp: bố cục lạ -> auto; bỏ KPI sai (tổng của tỷ lệ, cột bịa, bảng bịa); giữ khối chữ đã tắt", vb["layout"] == "auto" and [k["kind"] for k in vb["kpis"]] == ["rate_all"] and vb["table"]["on"] is False and vb["blocks"]["ins"] is False and vb["blocks"]["ans"] is True, str(vb))
+check("validate_bp: không phải dict -> None (dashboard dựng như cũ)", dash_plan.validate_bp(None, catK) is None and dash_plan.validate_bp("x", catK) is None)
+ba = dash_plan.bp_from_ai({"layout": "rank", "kpis": [{"ds": cK["name"], "kind": "rate", "measure": rk[1]["label"], "label": "Tiêm an toàn"}, {"ds": cK["name"], "kind": "distinct", "by": "Khoa"}], "table": False}, catK)
+check("bp_from_ai: đổi nhãn sang khóa, giữ bố cục AI chọn, thẻ KPI AI đặt tên", ba["layout"] == "rank" and ba["kpis"][0]["m"] == rk[1]["k"] and ba["kpis"][0]["label"] == "Tiêm an toàn" and ba["kpis"][1]["by"] == "d0")
+check("bp_from_ai: AI không trả gì -> dùng luật (có KPI, không rỗng)", len(dash_plan.bp_from_ai(None, catK)["kpis"]) >= 3 and len(dash_plan.bp_from_ai({"layout": "story"}, catK)["kpis"]) >= 3 and dash_plan.bp_from_ai({"layout": "story"}, catK)["layout"] == "story")
+vs = dash_plan.validate([{"type": "static", "sid": "rc0", "title": "Doanh thu theo kênh", "kind": "cols", "labels": ["A", "B", "C"], "values": [3, 2, 1], "unit": "đ"}, {"type": "static", "sid": "bad", "labels": ["A", "B"], "values": [1, "x"]},
+                         {"type": "static", "sid": "short", "labels": ["A"], "values": [1]}, {"type": "static", "sid": "nan", "labels": ["A", "B"], "values": [1, float("nan")]}], catK)
+check("validate: thẻ từ phân tích giữ nhãn/số hợp lệ; bỏ thẻ có số không hợp lệ, quá ngắn hoặc NaN", len(vs) == 1 and vs[0]["type"] == "static" and vs[0]["values"] == [3.0, 2.0, 1.0] and vs[0]["kind"] == "cols")
+vh = dash_plan.validate([{"type": "heat", "ds": cK["name"], "by": "d0", "ms": [rk[0]["k"], "zz"]}, {"type": "heat", "ds": cK["name"], "by": "zz"}, {"type": "score", "ds": cK["name"], "ms": ["zz"]}], catK)
+check("validate: ma trận nhiệt giữ chỉ số tỷ lệ thật, bỏ chiều bịa; bảng điểm chỉ số bịa -> hiện tất cả tiêu chí", len(vh) == 2 and vh[0]["ms"] == [rk[0]["k"]] and vh[1]["type"] == "score" and vh[1]["ms"] == [])
+check("validate: chỉ số tỷ lệ luôn lấy trung bình và không vẽ tròn", dash_plan.validate([{"ds": cK["name"], "by": "d0", "m": rk[0]["k"], "agg": "sum", "kind": "donut"}], catK)[0]["agg"] == "avg" and dash_plan.validate([{"ds": cK["name"], "by": "d0", "m": rk[0]["k"], "agg": "sum", "kind": "donut"}], catK)[0]["kind"] != "donut")
+check("title: tên thẻ KPI và biểu đồ mới bằng tiếng Việt", dash_plan.kpi_title({"ds": cK["name"], "kind": "rate_all"}, catK) == "Tỷ lệ đạt chung" and dash_plan.kpi_title({"ds": cK["name"], "kind": "distinct", "by": "d0"}, catK) == "Số khoa" and dash_plan.title({"type": "score", "ds": cK["name"]}, catK) == "Tỷ lệ đạt theo từng tiêu chí")
 
 print(f"\n{'TẤT CẢ ĐẠT' if not fails else str(fails) + ' KIỂM TRA THẤT BẠI'}")
 sys.exit(1 if fails else 0)

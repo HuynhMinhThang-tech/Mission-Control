@@ -24,7 +24,7 @@ def fresh():
     return {"id": uuid.uuid4().hex[:12], "created": datetime.now().isoformat(timespec="seconds"), "started": None, "finished": None,
             "question": "", "ctx": "", "brief": {}, "files": [], "dirty": [], "raw": {}, "struct": {}, "alt": {}, "clean": None, "st": ["pending"] * 7, "d": {}, "x": {},
             "ag": dict(AG), "approved": False, "job": {"running": False, "step": None, "k": -1}, "err": None, "log": [],
-            "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}}
+            "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}, "memo": {}}
 
 
 # ------------------------------------------------------------ Phiên theo người dùng --
@@ -217,6 +217,39 @@ def start_job(step, labels, fn, *a):
                     A["job"] = {"running": False, "step": step, "k": A["job"]["k"]}
                     bump()
                 log(f"Lỗi: {e}")
+        finally:
+            _tls.s = None
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+def start_bg(step, label, fn, *a):
+    """Việc nền KHÔNG đổi trạng thái của bước (vd viết bản tổng hợp sau khi bạn chấp nhận bước).
+    Vẫn đặt job.running để khóa mọi thao tác khác trong lúc chạy; `fn` tự xử lý lỗi của nó."""
+    owner = current()
+    with LOCK:
+        if A["job"]["running"]:
+            raise RuntimeError("Đang có tác vụ chạy, hãy chờ xong.")
+        labs = list(A["ag"].get(step) or [])
+        if label not in labs:
+            labs.append(label)
+        A["ag"][step] = labs
+        A["job"] = {"running": True, "step": step, "k": labs.index(label)}
+        bump()
+    log("Bắt đầu: " + label)
+
+    def work():
+        _tls.s = owner
+        try:
+            try:
+                fn(*a)
+            except Exception as e:                         # noqa: BLE001  (lưới an toàn: không để job kẹt ở trạng thái đang chạy)
+                traceback.print_exc()
+                log(f"Lỗi: {e}")
+            finally:
+                with LOCK:
+                    A["job"] = {"running": False, "step": step, "k": 99}
+                    bump()
         finally:
             _tls.s = None
 

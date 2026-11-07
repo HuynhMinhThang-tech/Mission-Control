@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """AGENT 3 · Hoạch định phân tích → viết code pandas → tổng hợp kết quả (bước 4)."""
-from ..data import analysis_spec as S
+from .. import labels as lb
+from ..data import analysis_spec as S, lenses
 from ..data.quality import schema
 from ..data.sandbox import autofix_code, describe_error, df_table, prepare, run_code
 from ..errors import UserError
@@ -24,11 +25,14 @@ ROLE_PARSE = "Agent Nhận diện yêu cầu phân tích"
 MAX_FIX = 2                                 # số lần nhờ AI sửa một code lỗi trước khi báo lỗi cho người dùng
 
 PROMPT_MENU = (
-    "Hãy ĐỀ XUẤT 6-10 phân tích / chỉ số ứng viên để NGƯỜI DÙNG TỰ CHỌN (chưa viết code). Gồm mô tả (điều gì đã xảy ra), "
-    "chẩn đoán (vì sao, phân rã theo khu vực/sản phẩm...), và nếu có cột thời gian thì thêm 1 mục dự báo kỳ kế tiếp "
-    "(hồi quy tuyến tính/trung bình trượt, có khoảng tin cậy). "
-    'Trả về DUY NHẤT JSON: {"menu":[{"title":"...","type":"Mô tả|Chẩn đoán|Dự báo","goal":"trả lời điều gì","metrics":["tên chỉ số = công thức cụ thể"],'
-    '"columns":["tên cột THẬT trong dữ liệu mà phân tích này dùng"],"why":"vì sao liên quan tới câu hỏi","recommended":true}]}')
+    "Hãy ĐỀ XUẤT 8-12 phân tích / chỉ số ứng viên để NGƯỜI DÙNG TỰ CHỌN (chưa viết code). Mỗi mục có MỘT \"góc nhìn\" (angle) riêng; KHÔNG quá 2 mục cùng góc nhìn. "
+    "Đừng chỉ chia theo khuôn mô tả - chẩn đoán - dự báo: hãy chọn góc nhìn hợp với dữ liệu và câu hỏi, ưu tiên các GÓC NHÌN KHẢ DỤNG (nếu có) bên trên, "
+    "và BẮT BUỘC có 2-3 mục angle=\"Góc nhìn mới\": cách nhìn bất ngờ hoặc ngược trực giác mà CHÍNH dữ liệu này kiểm chứng được "
+    "(vd nhóm nhỏ nhưng kéo cả chỉ số, hai tiêu chí hay cùng trượt, điểm khác thường giữa hai nhóm trông giống nhau). "
+    "Mọi mục phải tính được từ cột THẬT, không bịa số liệu. Mỗi mục có \"action\": một câu dạng \"nếu thấy ... thì bạn có thể ...\" gắn với quyết định và những gì người dùng có thể thay đổi (nếu họ đã nêu). "
+    "Chỉ thêm mục dự báo kỳ kế tiếp khi có cột thời gian (hồi quy tuyến tính/trung bình trượt, có khoảng tin cậy). "
+    'Trả về DUY NHẤT JSON: {"menu":[{"title":"...","angle":"tên góc nhìn ngắn","type":"Mô tả|Chẩn đoán|Dự báo|Góc nhìn mới","goal":"trả lời điều gì","metrics":["tên chỉ số = công thức cụ thể"],'
+    '"columns":["tên cột THẬT trong dữ liệu mà phân tích này dùng"],"why":"vì sao liên quan tới câu hỏi","action":"nếu thấy X thì Y","recommended":true}]}')
 
 PROMPT_PARSE = (
     'Người dùng mô tả bằng lời điều họ muốn phân tích. Hãy nhận diện thành các yêu cầu có cấu trúc, dùng ĐÚNG tên cột (trường "name") trong danh sách cột. '
@@ -69,13 +73,15 @@ def _menu_vars(items):
         if not v:
             v = S.vars_in_text(" ".join([str(m.get("title", "")), str(m.get("goal", "")), " ".join(map(str, m.get("metrics") or []))]), A["clean"])
         m["vars"] = v[:8]
-        m["type"] = m.get("type") if m.get("type") in ("Mô tả", "Chẩn đoán", "Dự báo") else "Phân tích"
+        m["type"] = m.get("type") if m.get("type") in ("Mô tả", "Chẩn đoán", "Dự báo", "Góc nhìn mới") else "Phân tích"
+        m["angle"] = " ".join(str(m.get("angle") or "").split())[:40] or ("Góc nhìn mới" if m["type"] == "Góc nhìn mới" else m["type"])
+        m["action"] = " ".join(str(m.get("action") or "").split())[:240]
         m["metrics"] = [str(x) for x in (m.get("metrics") or [])][:5]
 
 
-def menu(fb=""):
+def menu(fb="", avoid=()):
     tick(0)
-    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + scope_block(A["clean"]) + PROMPT_MENU
+    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + prev(3, fb, 3500) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + scope_block(A["clean"]) + lenses.block(A["clean"], avoid) + PROMPT_MENU
                  + ("\nNgười dùng đã góp ý: hãy ĐIỀU CHỈNH danh sách theo đúng góp ý (thêm/bớt/đổi mục), giữ các mục không liên quan." if fb else ""))
     items = [m for m in r["menu"] if isinstance(m, dict) and m.get("title")]
     if not items:
@@ -85,6 +91,24 @@ def menu(fb=""):
     _menu_vars(items)
     # `cols`: danh sách biến thật (kèm kiểu) cho bộ ghép biến ở giao diện
     put(3, {"phase": "menu", "menu": items, "cols": S.columns_meta(A["clean"]), "tasks": None, "result": None})
+
+
+def more(fb=""):
+    """«Cho tôi góc nhìn khác»: xin AI thêm các mục KHÁC HẲN những mục đã đề xuất, nối vào danh sách hiện có (lựa chọn của bạn được giữ nguyên)."""
+    tick(0)
+    d = A["d"][3]
+    have = list(d.get("menu") or [])
+    r = llm_json(SYS(ROLE_PLAN), ctx_txt(fb) + f"Dữ liệu đã làm sạch:\n{J(schema(A['clean'], 3), 6000)}\n\n" + scope_block(A["clean"]) + lenses.block(A["clean"], [m.get("title") for m in have])
+                 + PROMPT_MENU.replace("8-12 phân tích", "4-6 phân tích MỚI"))
+    seen = {lb.fold(str(m.get("title"))) for m in have}
+    new = [m for m in r["menu"] if isinstance(m, dict) and m.get("title") and lb.fold(str(m["title"])) not in seen][:8]
+    if not new:
+        raise RuntimeError("AI chưa nghĩ thêm được góc nhìn nào khác. Hãy thử nêu rõ điều bạn muốn xem ở ô «Yêu cầu riêng».")
+    for k, m in enumerate(new, start=len(have)):
+        m["id"] = f"m{k}"
+        m["recommended"] = False                           # mục thêm: để bạn tự chọn, không tự tick
+    _menu_vars(new)
+    put(3, {**d, "phase": "menu", "menu": have + new, "tasks": None, "result": None})
 
 
 def parse_request(text):

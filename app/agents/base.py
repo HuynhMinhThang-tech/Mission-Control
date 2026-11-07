@@ -12,7 +12,8 @@ def SYS(role):
 def ctx_txt(fb=""):
     fbl = (f"Góp ý của người dùng (ƯU TIÊN SỐ 1: PHẢI thực hiện đúng và thể hiện RÕ trong kết quả mới, không được trả lại bản cũ): {fb}\n"
            if fb else "Góp ý của người dùng: không\n")
-    return f"Câu hỏi kinh doanh: {A['question']}\nBối cảnh doanh nghiệp: {A['ctx'] or 'không có'}\n" + fbl
+    from .memo import chain_txt           # nạp muộn: memo.py cũng import base
+    return f"Câu hỏi: {A['question']}\nBối cảnh: {A['ctx'] or 'không có'}\n" + chain_txt() + fbl
 
 
 def prev(i, fb, n=4500):

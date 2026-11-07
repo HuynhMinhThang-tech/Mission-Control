@@ -112,7 +112,7 @@ def build_html(F):
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{E(F["title"])}</title><style>{CSS}</style></head><body>'
             f'<header class="hd"><div class="wrap"><p class="eyebrow">Báo cáo phân tích · {E(F["date"])}</p><h1>{E(F["title"])}</h1>'
-            f'<p class="q"><b>Câu hỏi kinh doanh:</b> {E(F["question"])}</p>'
+            f'<p class="q"><b>Câu hỏi:</b> {E(F["question"])}</p>'
             f'{"<p class=q style=margin-top:6px><b>Bối cảnh:</b> " + E(F["ctx"]) + "</p>" if F["ctx"] else ""}<div class="chips">{chips}</div></div></header>'
             f'<nav class="tabs"><div class="wrap">{nav}</div></nav><main class="wrap">'
             f'<section id="answer"><h2>Câu trả lời ngắn</h2><div class="card answer"><p class="big">{E(F["summary"])}</p>{narrative}</div></section>'

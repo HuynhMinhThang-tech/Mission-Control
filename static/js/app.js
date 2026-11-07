@@ -9,7 +9,7 @@ const fmtTime = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.ge
 const fmtDur = (a, b) => { if (!a || !b) return '—'; let s = Math.max(0, Math.round((b - a) / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); s %= 60; return h ? `${h} giờ ${m} phút` : m ? `${m} phút ${s} giây` : `${s} giây` };
 
 let ST = null, R = null, SAVEV = 0, V = 0, NAV = 'flow', TAB = 'dash', FB = false, BUSY = false, UPL = false, SEL = {}, T0 = {};
-const U = { ctx: '', fbt: '', dec: '', lev: '' };
+const U = { ctx: '', fbt: '', dec: '', lev: '', mfb: '' };
 const S_ = () => R || ST, RO = () => !!R;
 const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : { g }; return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
 
@@ -156,6 +156,54 @@ ${f ? `<p class="why0">${esc(f.text)}</p>${(f.groups || []).map(g => `<div class
 ${v.overview ? `<p class="why0">${esc(v.overview)}</p>` : ''}
 ${flagC.length ? flagC.map(([c, ci]) => card(c, ci, fmap.get(KEY(c)))).join('') : '<p class="sub">Không thấy giá trị nào bị viết khác nhau hay nghi ngờ trùng.</p>'}
 ${restC.length ? `<details class="vrest"><summary>Các cột còn lại, chưa thấy bất thường (${N(restC.length)})</summary>${restC.map(([c, ci]) => card(c, ci, null)).join('')}</details>` : ''}</div>` }
+/* ---------- Làm sạch kiểu hợp nhất: MỘT thẻ cho mỗi cột ----------
+   Bảng đếm giá trị, gợi ý gộp của hệ thống (chắc chắn: chọn sẵn; nghi trùng: bấm "Nhận gợi ý"), lựa chọn tay "Gộp vào…" và các thao tác khác của cột
+   nằm chung một chỗ, cùng MỘT cách thao tác, và chỉ có MỘT dòng kết quả cho cả cột. Bản lưu cũ (không có d.uni) vẫn hiện kiểu cũ. */
+const VKEY = c => c.file + '\u0001' + c.col;
+function vcSuggest(d, c) {                      // {giá trị cũ: {to, sure}}; sure = chắc chắn trùng và được đề xuất chọn sẵn
+  const out = {};
+  d.ops.forEach(o => { if (o.op !== 'standardize_text' || o.file !== c.file || o.column !== c.col) return; const sure = !!o.recommended && !o.weak;
+    Object.entries(o.mapping || {}).forEach(([k, to]) => { if (!out[k] || (sure && !out[k].sure)) out[k] = { to, sure } }) });
+  return out }
+function vcEff(d, c, mm) {                      // phép gộp đang hiệu lực của cột = gợi ý chắc chắn + lựa chọn của bạn ('' = giữ nguyên)
+  const m = {}, man = (mm || {})[VKEY(c)] || {};
+  Object.entries(vcSuggest(d, c)).forEach(([k, g]) => { if (g.sure) m[k] = g.to });
+  Object.entries(man).forEach(([k, x]) => { if (x) m[k] = x; else delete m[k] });
+  return m }
+function uniTable(d, c, ci, aw, s, eff) {
+  const sg = vcSuggest(d, c), man = (s.mm || {})[VKEY(c)] || {}, mx = Math.max(...c.top.map(r => r[1]), 1), vals = c.top.filter(r => r[0] !== '(thiếu)').map(r => r[0]);
+  const rows = c.top.map(([k, n]) => {
+    const to = eff[k], g = sg[k], auto = !!(to && g && g.sure && g.to === to && man[k] === undefined);
+    const tag = to ? `<span class="tag ${auto ? 'st' : 'me'}">gộp vào «${esc(to)}»${auto ? ' · hệ thống gợi ý' : aw ? ' · bạn chọn' : ''}</span>`
+      : g ? `<span class="tag wk">nghi là «${esc(g.to)}»</span>${aw ? `<button class="lnk" data-a="mmacc" data-mm="${ci}" data-val="${esc(k)}" data-to="${esc(g.to)}">Nhận gợi ý</button>` : ''}` : '';
+    const names = vals.filter(x => x !== k); if (to && !names.includes(to)) names.push(to);
+    const pick = aw && k !== '(thiếu)' ? `<select class="mmsel" data-mm="${ci}" data-val="${esc(k)}" aria-label="Gộp «${esc(k)}» vào"><option value="">Giữ nguyên</option>${names.map(x => `<option value="${esc(x)}" ${to === x ? 'selected' : ''}>Gộp vào «${esc(x)}»</option>`).join('')}</select>` : '';
+    const base = [`<span class="vv">${esc(k)}</span>${tag}`, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%'];
+    return aw ? [...base, pick] : base });
+  return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Xử lý'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` }
+function uniCard(c, ci, f, ops, d, aw, s, pv, fx) {
+  const key = VKEY(c), eff = aw ? vcEff(d, c, s.mm) : ((d.merged || {})[key] || {}), nEff = Object.keys(eff).length, cf = (pv.colfx || {})[key];
+  const found = [...new Set(ops.map(o => o.found).filter(Boolean))].join('; '), sug = Object.keys(vcSuggest(d, c)).length;
+  return `<div class="cg"><div class="cgh"><b>${esc(c.col)}</b><span class="tag">${esc(c.file)}</span><span class="sub">${N(c.distinct)} giá trị khác nhau${c.missing ? ` · ${N(c.missing)} ô thiếu` : ''}</span>
+${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}${nEff ? `<span class="found ok">${nEff} giá trị được gộp</span>` : ''}</div>
+${f && f.text ? `<p class="why0">${esc(f.text)}</p>` : ''}
+<details class="vcd" ${(f || nEff || sug) ? 'open' : ''}><summary>${aw && sug ? 'Bảng đếm giá trị và gộp giá trị' : 'Bảng đếm giá trị của cột này'}</summary>${uniTable(d, c, ci, aw, s, eff)}</details>
+${nEff && cf ? `<div class="fx">${ico('check', 14)}<span>Kết quả cho cột này: <b>${esc(cf)}</b></span></div>` : ''}
+${ops.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }
+function cleanUni(d, aw, s, pv, fx) {
+  const v = d.vc || {}, cols = v.cols || [], mm = s.mm || {}, fmap = new Map((v.findings || []).map(f => [f.file + '\u0001' + f.col, f]));
+  const og = new Map(); d.ops.filter(o => o.op !== 'standardize_text').forEach(o => { const k = o.file + '\u0001' + (o.column || ''); if (!og.has(k)) og.set(k, []); og.get(k).push(o) });
+  const hasSg = new Set(d.ops.filter(o => o.op === 'standardize_text').map(o => o.file + '\u0001' + o.column)), byKey = new Map(cols.map((c, ci) => [VKEY(c), [c, ci]]));
+  const order = [], seen = new Set(), rest = [], add = k => { if (!seen.has(k)) { seen.add(k); order.push(k) } };
+  (v.findings || []).forEach(f => add(f.file + '\u0001' + f.col));
+  cols.forEach(c => { const k = VKEY(c); if (og.has(k) || hasSg.has(k) || Object.keys(mm[k] || {}).length) add(k) });
+  [...og.keys()].forEach(add);
+  cols.forEach(c => { if (!seen.has(VKEY(c))) rest.push(byKey.get(VKEY(c))) });
+  const one = k => { const e = byKey.get(k), ops = og.get(k) || []; if (e) return uniCard(e[0], e[1], fmap.get(k), ops, d, aw, s, pv, fx); if (!ops.length) return '';
+    const f = ops[0], found = [...new Set(ops.map(o => o.found).filter(Boolean))].join('; ');
+    return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${ops.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` };
+  const head = cols.length ? `<div class="vcb"><div class="vch"><b>Kiểm tra giá trị từng cột</b><code>${esc(v.cmd)}</code><span class="tag">Đã chạy trên ${N(v.ncols)} cột văn bản</span></div>${v.overview ? `<p class="why0">${esc(v.overview)}</p>` : ''}</div>` : '';
+  return head + order.map(one).join('') + (rest.length ? `<details class="vrest"><summary>Các cột còn lại, chưa thấy bất thường (${N(rest.length)})</summary>${rest.map(([c, ci]) => uniCard(c, ci, null, [], d, aw, s, pv, fx)).join('')}</details>` : '') }
 function mapView(o) {
   if (o.op !== 'standardize_text' || !o.map_view || !o.map_view.length) return '';
   const r = o.map_view, top = r.slice(0, 8);
@@ -170,6 +218,71 @@ function opCard(o, d, aw, s, fx) {
 ${o.reason ? `<p class="why">${esc(o.reason)}</p>` : ''}${meth}${mapView(o)}${risk ? `<p class="rk">Rủi ro: ${esc(risk)}</p>` : ''}
 ${fx[o.id] ? `<div class="fx ${on ? '' : 'off'}">${ico('check', 14)}<span>${on ? 'Kết quả' : 'Nếu áp dụng'}: <b>${esc(fx[o.id])}</b></span></div>` : ''}</div>` }
 
+/* ---------- Panel nhập liệu ----------
+   Ô nhập trong trang có kích thước CỐ ĐỊNH (không kéo giãn). Bấm vào ô thì mở một panel lớn để nhập; nội dung dài thì cuộn trong panel.
+   Chữ gõ trong panel được đẩy ngược về đúng ô gốc bằng sự kiện `input`, nên toàn bộ xử lý lưu trạng thái cũ (U / sel) dùng lại nguyên.
+   Không giữ tham chiếu cứng tới ô vì stage() có thể vẽ lại trang: tìm lại ô theo thuộc tính khi cần. */
+let TPLOCK = false;
+const tpSel = ta => ta.id ? '#' + ta.id : ta.dataset.i ? `textarea[data-i="${ta.dataset.i}"]${ta.dataset.s ? `[data-s="${ta.dataset.s}"]` : ''}` : ta.dataset.b ? `textarea[data-b="${ta.dataset.b}"]` : null;
+function openTextPanel(o) {                                   // o: {title, value, hint, mono, readonly, onInput, onClose, extra}
+  if (document.querySelector('.ov.tp')) return null;
+  const ov = document.createElement('div'); ov.className = 'ov tp';
+  ov.innerHTML = `<div class="dlg tpd ${o.mono ? 'mono' : ''}" role="dialog" aria-modal="true" aria-label="${esc(o.title)}"><div class="tph"><b>${esc(o.title)}</b>${o.readonly ? '<span class="tag">Chỉ đọc</span>' : ''}<button type="button" class="ib tpx" aria-label="Đóng">${ico('x', 16)}</button></div>
+${o.hint && !o.readonly ? `<p class="tps">${esc(o.hint)}</p>` : ''}<textarea class="tpt" ${o.readonly ? 'readonly' : ''} placeholder="${esc(o.hint || '')}" spellcheck="false">${esc(o.value || '')}</textarea>
+<div class="tpf"><small class="tpc"></small><span class="tpk">${o.readonly ? '' : 'Ctrl/⌘ + Enter để xong · '}Esc để đóng</span><button type="button" class="btn tpd0">Xong</button></div></div>`;
+  document.body.appendChild(ov);
+  const tx = ov.querySelector('.tpt'), cnt = ov.querySelector('.tpc'), upd = () => { cnt.textContent = N(tx.value.length) + ' ký tự' };
+  const close = () => { document.removeEventListener('keydown', key, true); ov.remove(); if (o.onClose) o.onClose(tx.value) };
+  const key = e => { if (!ov.isConnected) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close() }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); close() }
+    else if (e.key === 'Tab') { const f = [...ov.querySelectorAll('textarea,button')]; if (!f.length) return; const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus() } };
+  document.addEventListener('keydown', key, true);
+  let dn = false; ov.addEventListener('mousedown', e => { dn = e.target === ov }); ov.addEventListener('click', e => { if (dn && e.target === ov) close(); dn = false });   // bấm ra ngoài mới đóng; kéo chọn chữ ra ngoài thì không
+  ov.querySelector('.tpx').addEventListener('click', close); ov.querySelector('.tpd0').addEventListener('click', close);
+  tx.addEventListener('input', () => { upd(); if (o.onInput) o.onInput(tx.value) });
+  upd(); tx.focus(); tx.setSelectionRange(tx.value.length, tx.value.length);
+  return { close, el: tx } }
+function openFieldPanel(ta) {                                 // mở panel cho một <textarea data-pn>; ghi ngược về ô gốc
+  const q = tpSel(ta), live = () => (ta.isConnected ? ta : (q && document.querySelector(q)));
+  const ro = ta.readOnly || ta.disabled || RO();
+  const r = openTextPanel({ title: ta.dataset.pn, value: ta.value, hint: ta.getAttribute('placeholder') || '', mono: ta.hasAttribute('data-mono'), readonly: ro,
+    onInput: v => { const el = live(); if (el) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) } },
+    onClose: () => { const el = live(); if (el) { TPLOCK = true; try { el.focus({ preventScroll: true }) } finally { TPLOCK = false } } } });
+  if (r) TPLOCK = false }
+const tpOpen = t => { if (TPLOCK || !t || t.tagName !== 'TEXTAREA' || !t.dataset.pn || t.closest('.tpd') || document.querySelector('.ov.tp')) return; t.blur(); openFieldPanel(t) };
+document.addEventListener('focusin', e => tpOpen(e.target));              // vào ô bằng bàn phím (Tab) hoặc bấm lần đầu
+document.addEventListener('click', e => tpOpen(e.target));                // bấm lại đúng ô đang giữ focus (focusin sẽ không bắn lần nữa)
+
+/* ---------- Bản tổng hợp sau mỗi bước (markdown) ----------
+   Chấp nhận bước xong thì hệ thống viết bản tổng hợp và DỪNG: bạn đọc, sửa tay hoặc nhờ AI viết lại, rồi duyệt; lúc đó Agent kế tiếp mới chạy và nhận bản này làm ngữ cảnh. */
+let MFB = false;
+function mdHtml(md) {                                           // bộ dựng markdown nhỏ: thoát ký tự HTML trước rồi mới dựng, nên an toàn
+  const out = []; let list = null, para = [];
+  const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const fp = () => { if (para.length) { out.push(`<p>${para.map(inl).join('<br>')}</p>`); para = [] } }, fl = () => { if (list) { out.push(`</${list}>`); list = null } };
+  for (const raw of String(md || '').split('\n')) { const l = raw.trimEnd(); let m;
+    if (!l.trim()) { fp(); fl() }
+    else if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { fp(); fl(); out.push(`<h${m[1].length + 2}>${inl(m[2])}</h${m[1].length + 2}>`) }
+    else if ((m = l.match(/^\s*[-*]\s+(.*)$/))) { fp(); if (list !== 'ul') { fl(); out.push('<ul>'); list = 'ul' } out.push(`<li>${inl(m[1])}</li>`) }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { fp(); if (list !== 'ol') { fl(); out.push('<ol>'); list = 'ol' } out.push(`<li>${inl(m[1])}</li>`) }
+    else if ((m = l.match(/^>\s?(.*)$/))) { fp(); fl(); out.push(`<blockquote>${inl(m[1])}</blockquote>`) }
+    else { fl(); para.push(l) } }
+  fp(); fl(); return out.join('') }
+function memoBox(i) {
+  const S = S_(), m = S.memo && S.memo[i]; if (!m || i > 5) return '';
+  const ttl = i === 0 ? 'Đề bài' : STEPS[i].t, dl = `<button class="btn g sm" data-a="mdl" data-v="${i}">${ico('download', 14)} Tải .md</button>`;
+  if (m.status === 'writing') return `<div class="memo wr" role="status"><span class="spin"></span><div><b>Đang viết bản tổng hợp của bước này…</b><small>Viết xong sẽ đến lượt bạn đọc, sửa và duyệt trước khi Agent kế tiếp chạy.</small></div></div>`;
+  if (m.status === 'approved' || RO()) return `<details class="memo ok"><summary>${ico('check', 14)} Bản tổng hợp · ${esc(ttl)} <span class="tag">${m.src === 'auto' ? 'tự ghép từ phần bạn nhập' : m.edited ? 'đã duyệt · có chỉnh sửa' : 'đã duyệt'}</span></summary><div class="md">${mdHtml(m.md)}</div><div class="act">${dl}</div></details>`;
+  return `<div class="memo dr"><div class="mh"><b>${ico('file', 16)} Bản tổng hợp · ${esc(ttl)}</b><span class="tag">Chờ bạn duyệt</span></div>
+<p class="sub">Đây là những gì bước này đã chốt. Agent kế tiếp sẽ đọc đúng bản này làm ngữ cảnh. Hãy kiểm tra, sửa cho đúng ý rồi duyệt.</p>
+${m.err ? `<div class="note">${esc(m.err)}</div>` : ''}${(m.warn || []).length ? `<div class="note">Có số không trùng với số hệ thống đã ghi nhận: <b>${m.warn.map(esc).join(', ')}</b>. Hãy kiểm tra lại trước khi duyệt.</div>` : ''}
+<div class="md">${mdHtml(m.md)}</div>
+<div class="act"><button class="btn" data-a="mok" data-v="${i}">Duyệt và chuyển bước tiếp</button><button class="btn g" data-a="med" data-v="${i}">Sửa trực tiếp</button><button class="btn g" data-a="mfbt">Nhờ AI viết lại</button>${m.prev ? `<button class="btn g" data-a="mprev" data-v="${i}">Quay lại bản trước</button>` : ''}${dl}</div>
+${MFB ? `<div class="fb"><textarea data-i="mfb" data-pn="Góp ý cho bản tổng hợp" placeholder="Bạn muốn AI sửa gì trong bản tổng hợp này?">${esc(U.mfb)}</textarea><button class="btn" style="margin-top:8px" data-a="mrw" data-v="${i}">Gửi và viết lại</button></div>` : ''}</div>` }
+function dlMemo(i) { const m = S_().memo && S_().memo[i]; if (!m) return;
+  const u = URL.createObjectURL(new Blob([m.md], { type: 'text/markdown;charset=utf-8' })), x = document.createElement('a'); x.href = u; x.download = `tong_hop_${i === 0 ? 'de_bai' : 'buoc_' + i}.md`; document.body.appendChild(x); x.click(); x.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000) }
+
 /* ---------- 7 bước ---------- */
 const VIEW = [
   () => { const S = S_(), d = S.st[0] === 'done', F = S.files, br = S.brief || {}, ctx = d ? (br.ctx ?? S.ctx) : U.ctx, dec = d ? (br.decision || '') : U.dec, lev = d ? (br.levers || '') : U.lev;
@@ -177,9 +290,9 @@ const VIEW = [
     const none = !d && !F.length ? `<div class="hint">Chưa có tệp? <button class="lnk" data-a="sample">Dùng dữ liệu mẫu</button></div>` : '';
     return `<h2>Dữ liệu và bối cảnh</h2>
 <div class="frm"><label>Tệp dữ liệu</label>${drop}${none}${F.length ? fileList(S) : ''}
-<label for="ctx">Bối cảnh doanh nghiệp (không bắt buộc)</label><textarea id="ctx" data-i="ctx" ${d ? 'disabled' : ''} placeholder="Mô tả ngắn về doanh nghiệp">${esc(ctx)}</textarea>
-<label for="dec">Bạn cần ra quyết định gì từ kết quả này? (không bắt buộc)</label><textarea id="dec" data-i="dec" rows="2" ${d ? 'disabled' : ''} placeholder="Ví dụ: có tăng ngân sách quảng cáo tháng sau không?">${esc(dec)}</textarea>
-<label for="lev">Bạn có thể thay đổi những gì? (không bắt buộc)</label><textarea id="lev" data-i="lev" rows="2" ${d ? 'disabled' : ''} placeholder="Ví dụ: giá bán, ngân sách quảng cáo, lịch làm việc">${esc(lev)}</textarea></div>
+<label for="ctx">Bối cảnh (không bắt buộc)</label><textarea id="ctx" data-i="ctx" data-pn="Bối cảnh" ${d ? 'readonly' : ''} placeholder="Mô tả ngắn về bối cảnh">${esc(ctx)}</textarea>
+<label for="dec">Bạn cần ra quyết định gì từ kết quả này? (không bắt buộc)</label><textarea id="dec" data-i="dec" data-pn="Quyết định cần đưa ra" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: có tăng ngân sách quảng cáo tháng sau không?">${esc(dec)}</textarea>
+<label for="lev">Bạn có thể thay đổi những gì? (không bắt buộc)</label><textarea id="lev" data-i="lev" data-pn="Những gì bạn có thể thay đổi" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: giá bán, ngân sách quảng cáo, lịch làm việc">${esc(lev)}</textarea></div>
 ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 16) + 'Bắt đầu phân tích</button></div>'}` },
   () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
 ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
@@ -187,11 +300,14 @@ ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.
   () => { const S = S_(), d = S.d[2], s = sel(2), aw = S.st[2] === 'await' && !RO();
     if (s.needPv && aw) { s.needPv = false; pvClean().then(() => stage()) }
     const pv = (aw && s.pv) || d.pv, fx = pv.fx || d.pv.fx || {};
-    const groups = new Map(); d.ops.forEach(o => { const k = o.file + '\u0001' + (o.column || ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o) });
-    const html = [...groups.values()].map(g => { const f = g[0], found = [...new Set(g.map(o => o.found).filter(Boolean))].join('; ');
-      return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${g.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }).join('');
+    let body;
+    if (d.uni) body = cleanUni(d, aw, s, pv, fx) || '<p class="lead">Không có thao tác nào được đề xuất.</p>';
+    else { const groups = new Map(); d.ops.forEach(o => { const k = o.file + '\u0001' + (o.column || ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o) });
+      const html = [...groups.values()].map(g => { const f = g[0], found = [...new Set(g.map(o => o.found).filter(Boolean))].join('; ');
+        return `<div class="cg"><div class="cgh"><b>${f.column ? esc(f.column) : 'Toàn bảng'}</b><span class="tag">${esc(f.file)}</span>${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}</div>${g.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }).join('');
+      body = vcBlock(d.vc, aw) + (html || '<p class="lead">Không có thao tác nào được đề xuất.</p>') }
     const keys = Object.keys(pv.before).filter(k => pv.before[k] || pv.after[k]);
-    return `<h2>Làm sạch dữ liệu</h2>${adjBanner(d)}${vcBlock(d.vc, aw)}${html || '<p class="lead">Không có thao tác nào được đề xuất.</p>'}
+    return `<h2>Làm sạch dữ liệu</h2>${adjBanner(d)}${body}
 <div class="two"><div class="box"><h4>Trước</h4>${bar(keys.map(k => [k, pv.before[k]]))}</div><div class="box"><h4>Sau khi áp dụng</h4>${bar(keys.map(k => [k, pv.after[k]]))}</div></div>
 <div><small style="color:var(--sub)">Đã xử lý khoảng ${N(pv.n)} mục.${aw ? ' Thao tác rủi ro mặc định không được chọn.' : ''}</small></div>` },
   () => { const S = S_(), d = S.d[3], s = sel(3);
@@ -201,23 +317,26 @@ ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.
 ${d.insights.map((x, i) => `<div class="f ins">${ck('i', i)}<span class="tg">Phát hiện ${i + 1}</span><b>${esc(x.title)}</b> <small>Độ tin cậy: ${esc(x.confidence || '')}</small>${(b => b ? `<span class="vf ${b[0]}">${esc(b[1])}</span>` : '')(vfBadge(x))}<details ${x.verify === 'mismatch' ? 'open' : ''}><summary>Bằng chứng</summary>${esc(x.source || '')}: ${esc(x.evidence || '')}${vfNote(x) ? `<p class="vfn ${x.verify === 'unverified' ? 'un' : ''}">${x.verify === 'unverified' ? 'ⓘ' : '⚠'} ${esc(vfNote(x))}</p>` : ''}</details></div>`).join('') || fnd('Chưa có phát hiện nào đủ chắc để nêu từ dữ liệu này. Xem các lưu ý và dữ liệu cần thu thêm bên dưới.', 'Lưu ý', 'risk')}
 ${d.actions.map((x, i) => `<div class="f act">${ck('a', i)}<span class="tg">Hành động</span>${esc(x.text)} <small>[${esc(x.priority || '')}] ${esc(x.impact || '')}</small></div>`).join('')}${(d.risks || []).map(x => fnd(esc(x), 'Rủi ro', 'risk')).join('')}` },
   () => { const S = S_(), d = S.d[5], s = sel(5), aw = S.st[5] === 'await' && !RO(), r3 = S.d[3].result, T = r3.tables, sc = selCharts(), sk = selKpis();
-    const panel = aw ? `<details open><summary>Chọn biểu đồ và chỉ số đưa lên báo cáo và slide</summary><div class="ask" style="padding-top:10px"><label>Tiêu đề báo cáo</label><input data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
- <p class="hint">Chỉ số (KPI)</p>${r3.kpis.map((k, i) => !String(k.value ?? '').trim() ? '' : `<label class="opt ${(s['p' + i] ?? true) ? 'on' : ''}"><input type="checkbox" data-s="5" data-k="p${i}" ${(s['p' + i] ?? true) ? 'checked' : ''}><span><b>${esc(fv(k.value))}</b><small>${esc(k.label)}</small></span></label>`).join('')}
- <p class="hint">Biểu đồ (chọn loại phù hợp, xem trước ngay)</p>${d.charts.length ? '' : `<p class="hint" style="background:var(--warnb);color:var(--warn);padding:10px 12px;border-radius:10px">Báo cáo và slide chưa có biểu đồ vì các phân tích ở bước 4 chưa cho ra bảng số liệu hợp lệ (xem lỗi ở bước 4). Bảng điều khiển tương tác vẫn dùng được: bạn có thể duyệt, hoặc quay lại bước 4 để chạy lại phân tích.</p>`}<div class="cpg">${d.charts.map((c, i) => chartCard(c, i, s, T)).join('')}</div></details>` : '';
+    if (aw) syncStatic(d, s, T);
+    const warn = d.charts.length ? '' : `<p class="hint" style="background:var(--warnb);color:var(--warn);padding:10px 12px;border-radius:10px">Báo cáo và slide chưa có biểu đồ vì các phân tích ở bước 4 chưa cho ra bảng số liệu hợp lệ (xem lỗi ở bước 4). Bảng điều khiển tương tác vẫn dùng được: bạn có thể duyệt, hoặc quay lại bước 4 để chạy lại phân tích.</p>`;
     const title = (d.final && !aw) ? d.final.title : (aw ? (s.rt ?? d.title) : d.title);
-    return `<h2>Báo cáo</h2>${adjBanner(d)}${panel}
-<div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>
-${TAB === 'dash' ? `${aw && d.dash ? dashPick(d, s) : ''}<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải bảng điều khiển…</div><iframe class="dashf" title="Bảng điều khiển tương tác" src="${S.approved ? `/api/view/${S.id}/dashboard.html` : d.dash ? dpSrc(title, aw ? dpState(d, s) : ((d.final && d.final.dash) || d.dash.ai)) : '/api/dash_preview?title=' + encodeURIComponent(title)}"></iframe></div><div class="hint">Bấm vào biểu đồ để lọc chéo. Số liệu tính từ dữ liệu đã làm sạch.</div>`
+    const src = S.approved ? `/api/view/${S.id}/dashboard.html` : d.dash ? dpSrc(title, aw ? dpState(d, s) : ((d.final && d.final.dash) || d.dash.ai), aw ? bpState(d, s) : ((d.final && d.final.bp) || (d.dash || {}).bp), aw) : '/api/dash_preview?title=' + encodeURIComponent(title);
+    const body = TAB === 'dash' ? `<div class="dashw"><div class="dashl"><span class="spin lg"></span>Đang tải bảng điều khiển…</div><iframe class="dashf" title="Bảng điều khiển tương tác" src="${src}"></iframe></div><div class="hint">${aw ? 'Rê chuột vào một biểu đồ để ẩn, đổi dạng hoặc di chuyển; "+ Thêm biểu đồ" ở cuối trang hoặc trong thư viện bên cạnh. ' : ''}Bấm vào biểu đồ để lọc chéo. Số liệu tính từ dữ liệu đã làm sạch.</div>`
       : TAB === 'rep' ? fnd(esc(S.d[4].summary), 'Câu trả lời') + kpo(sk) + `<div class="two">${sc.map(c => chart(c, T)).join('')}</div>` + fnd(esc(d.narrative).replace(/\n/g, '<br>'), 'Tóm tắt') + fnd(esc(S.question) + (S.ctx ? '<br>' + esc(S.ctx) : ''), 'Bối cảnh') + fnd('Dựa trên ' + S.d[3].tasks.length + ' phân tích đã chọn và dữ liệu đã làm sạch.', 'Phương pháp') + fnd(S.d[4].actions.map(a => esc(a.text)).join('<br>') || '—', 'Khuyến nghị')
-      : `<div class="slides">${outline(S, sc).map((x, i) => `<div class="sl">${i + 1}. ${esc(i === 0 ? title : x[0])}<small>${esc(x[1])}</small></div>`).join('')}</div>`}` },
+      : `<div class="slides">${outline(S, sc).map((x, i) => `<div class="sl">${i + 1}. ${esc(i === 0 ? title : x[0])}<small>${esc(x[1])}</small></div>`).join('')}</div>`;
+    const tabs = `<div class="tb">${[['dash', 'Bảng điều khiển tương tác', 'dash'], ['rep', 'Báo cáo', 'file'], ['ppt', 'Slide', 'slides']].map(([k, l, i]) => `<button class="${TAB === k ? 'on' : ''}" data-a="tab" data-v="${k}">${ico(i, 15)}${l}</button>`).join('')}</div>`;
+    return `<h2>Báo cáo</h2>${adjBanner(d)}${warn}<div class="${aw ? 's6' : ''}"><div class="s6m">${tabs}${body}</div>${aw ? libHTML(d, s, T, r3) : ''}</div>` },
   () => { const S = S_(), d = S.d[6], ap = S.approved;
     const dl = ap ? `<div class="dl"><a class="btn" href="/api/view/${S.id}/bao_cao.html" target="_blank" rel="noopener" title="Báo cáo đầy đủ: câu trả lời, phát hiện, bằng chứng, khuyến nghị">${ico('file', 16)}Báo cáo</a><a class="btn" href="/api/view/${S.id}/dashboard.html" target="_blank" rel="noopener" title="Bảng điều khiển tương tác: bộ lọc, lọc chéo, biểu đồ">${ico('dash', 16)}Bảng điều khiển</a><a class="btn" href="/api/download/${S.id}/bao_cao.pptx" title="Tải file PowerPoint">${ico('slides', 16)}PPT</a><a class="btn" href="/api/download/${S.id}/share.zip" title="Gói chia sẻ: báo cáo, dashboard, PPT, dữ liệu sạch">${ico('archive', 16)}ZIP</a></div>` : '<div class="note">Xuất và chia sẻ bị khóa cho đến khi bạn duyệt.</div>';
     return `<h2>Duyệt và xuất file</h2>${d.checks.map(x => /^⚠/.test(x) ? fnd(esc(x.replace(/^⚠\s*/, '')), 'Lưu ý', 'risk') : fnd('✓ ' + esc(x), 'Đã xong')).join('')}${dl}` }];
 
 function payload(i) { const s = sel(i), S = S_();
+  if (i === 2 && S.d[2].uni) { const d = S.d[2], manual = [];       // kiểu hợp nhất: mọi phép gộp (gợi ý chắc chắn + bạn chọn) đi chung một đường "manual"
+    (d.vc.cols || []).forEach(c => { const m = vcEff(d, c, s.mm); if (Object.keys(m).length) manual.push({ file: c.file, column: c.col, mapping: m }) });
+    return { manual, sel: Object.fromEntries(d.ops.map(o => [o.id, o.op === 'standardize_text' ? false : (s['c' + o.id] ?? o.recommended)])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
   if (i === 2) { const d = S.d[2]; return { manual: Object.entries(s.mm || {}).map(([k, m]) => { const [file, column] = k.split('\u0001'); return { file, column, mapping: m } }).filter(x => Object.keys(x.mapping).length), sel: Object.fromEntries(d.ops.map(o => [o.id, s['c' + o.id] ?? o.recommended])), meth: Object.fromEntries(d.ops.map(o => [o.id, s['m' + o.id] ?? o.method])), val: Object.fromEntries(d.ops.map(o => [o.id, s['v' + o.id] ?? o.value])) } }
   if (i === 4) { const d = S.d[4]; return { ins: d.insights.map((x, k) => s['i' + k] ?? true), act: d.actions.map((x, k) => s['a' + k] ?? true) } }
-  if (i === 5) { const r = S.d[3].result, o = { title: s.rt ?? S.d[5].title, charts: selCharts(), kpis: r.kpis.map((k, j) => j).filter(j => s['p' + j] ?? true) }; if (S.d[5].dash) o.dash = dpState(S.d[5], s); return o }
+  if (i === 5) { const r = S.d[3].result, o = { title: s.rt ?? S.d[5].title, charts: selCharts(), kpis: r.kpis.map((k, j) => j).filter(j => s['p' + j] ?? true) }; if (S.d[5].dash) { syncStatic(S.d[5], s, S.d[3].result.tables); o.dash = dpState(S.d[5], s); o.bp = bpState(S.d[5], s) } return o }
   return {} }
 
 const FBP = { menu: ['Bạn muốn thêm hoặc bỏ mục nào?', 'Gửi và chỉnh danh sách'], code: ['Bạn muốn sửa gì ở code?', 'Gửi và viết lại code'], result: ['Bạn muốn tính thêm gì?', 'Gửi, viết lại code và chạy lại'] };
@@ -228,21 +347,22 @@ function actions(i, s) { if (RO()) return '';
     else if (ph === 'code') m = '<button class="btn" data-a="a3exec">Thực thi code phân tích</button><button class="btn g" data-a="a3re">Chọn lại danh sách</button>';
     else m = `<button class="btn" data-a="ok">${i === 6 ? 'Duyệt báo cáo' : 'Chấp nhận và tiếp tục'}</button>`;
     const fp = i === 3 ? FBP[ph] : ['Bạn muốn AI chỉnh gì?', 'Gửi và chạy lại'];
-    return fbChips(i) + `<div class="act">${m}${i === 6 ? '' : '<button class="btn g" data-a="adj">Điều chỉnh</button>'}</div>` + (FB && i < 6 ? `<div class="fb"><textarea data-i="fbt" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
+    return fbChips(i) + `<div class="act">${m}${i === 6 ? '' : '<button class="btn g" data-a="adj">Điều chỉnh</button>'}</div>` + (FB && i < 6 ? `<div class="fb"><textarea data-i="fbt" data-pn="Góp ý để điều chỉnh" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
   if (s === 'done' && !ST.approved) return fbChips(i) + '<div class="act"><button class="btn g" data-a="redo">Làm lại từ bước này</button></div>'; return '' }
 
 function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card">';
   if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div><div class="wls" id="waitList">${waitList(S, i)}</div>`;
   else if (s === 'error') h += `<h2>${STEPS[i].t}</h2><div class="note">Lỗi: ${esc(S.err && S.err.msg)}</div><div class="act"><button class="btn" data-a="retry">Thử lại</button></div>`;
   else if (s === 'pending' && i > 0) h += `<p class="lead">Bước này chưa chạy.</p>`;
-  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
+  else { h += memoBox(i); try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
   $('stage').innerHTML = h + '</div>'; applyRO() }
 function applyRO() { $('vFlow').classList.toggle('ro', RO()); if (!RO()) return;
   document.querySelectorAll('#stage input,#stage select').forEach(e => e.disabled = true);
   document.querySelectorAll('#stage textarea').forEach(e => e.readOnly = true);
-  document.querySelectorAll('#stage button[data-a]:not([data-a="tab"])').forEach(e => e.disabled = true) }
+  document.querySelectorAll('#stage button[data-a]:not([data-a="tab"]):not([data-a="mdl"])').forEach(e => e.disabled = true) }
 function stepper() { const S = S_(); $('stepper').innerHTML = STEPS.map((p, i) => { const s = S.st[i];
-  return `<button class="st ${s} ${i === V ? 'view' : ''}" data-a="go" data-v="${i}" ${s === 'pending' && i > 0 ? 'disabled' : ''}><span class="n">${s === 'running' ? '<span class="spin sm"></span>' : s === 'done' ? ico('check', 14) : ico(p.i, 14)}</span><span class="t">${p.t}</span></button>` }).join('') }
+  const mp = i > 0 && i < 6 && S.memo && S.memo[i] && S.memo[i].status !== 'approved';      // đã chấp nhận nhưng bản tổng hợp chưa duyệt
+  return `<button class="st ${s}${mp ? ' memo' : ''} ${i === V ? 'view' : ''}" data-a="go" data-v="${i}" ${mp ? 'title="Chờ bạn duyệt bản tổng hợp"' : ''} ${s === 'pending' && i > 0 ? 'disabled' : ''}><span class="n">${s === 'running' ? '<span class="spin sm"></span>' : s === 'done' ? ico(mp ? 'file' : 'check', 14) : ico(p.i, 14)}</span><span class="t">${p.t}</span></button>` }).join('') }
 
 /* ---------- Lịch sử ---------- */
 function histRow(h) {
@@ -353,7 +473,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'new') {
     if (ST.job.running) { notify('Đang có tác vụ chạy, hãy chờ xong rồi tạo phân tích mới.', 'warn'); return }
     if (!R && ST.st[0] === 'done' && !ST.approved && !(await askConfirm('Phân tích hiện tại chưa được duyệt sẽ bị bỏ. Tiếp tục?', 'Tạo phân tích mới'))) return;
-    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; U.dec = ''; U.lev = ''; $('q').value = ''; all(); toTop() } }
+    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; U.dec = ''; U.lev = ''; U.mfb = ''; MFB = false; $('q').value = ''; all(); toTop() } }
   else if (a === 'pv') { const o = PV[v] = PV[v] || { src: 'current' }; o.open = !o.open; stage(); if (o.open) { await pvLoad(v, o.src); stage() } }
   else if (a === 'pvsrc') { PV[v].src = b.dataset.x; stage(); await pvLoad(v, b.dataset.x); stage() }
   else if (a === 'sample') { await post('/api/sample') }
@@ -366,7 +486,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'go') { V = +v; FB = false; all() }
   else if (a === 'tab') { TAB = v; stage() }
   else if (a === 'rerender') { stage() }
-  else if (a === 'ckind') { sel(5)['k' + b.dataset.i] = v; stage() }
+  else if (a === 'ckind') { sel(5)['k' + b.dataset.i] = v; if (TAB === 'dash' && document.getElementById('libin')) libPaint(); else stage() }
   else if (a === 'ftab') { GT[grpOf(v)] = v; stage() }
   else if (a === 'rmgroup') { for (const f of S_().files.filter(f => grpOf(f.name) === v)) { delete PV[f.name]; await post('/api/remove_file', { name: f.name }) } delete GT[v] }
   else if (a === 'adj') { FB = !FB; stage() }
@@ -374,7 +494,15 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
     if (i === 3 && ST.d[3].tasks) { const d = ST.d[3], s = sel(3); body.codes = d.tasks.map((x, j) => s['code' + j] ?? x.code) }    // code bạn đã sửa tay đi cùng góp ý, AI sửa trên bản của bạn
     keepSnap(i); if (!(await post('/api/run/' + i, body))) delete KEEP[i] }
   else if (a === 'retry') { await post('/api/run/' + V, {}) }
-  else if (a === 'ok') { const i = V; if (await post('/api/accept/' + i, payload(i)) && i < 6) { V = i + 1; all() } }
+  else if (a === 'mmacc') { const c = ST.d[2].vc.cols[+b.dataset.mm], s = sel(2); s.mm = s.mm || {}; (s.mm[VKEY(c)] = s.mm[VKEY(c)] || {})[b.dataset.val] = b.dataset.to; await pvClean(); stage() }
+  else if (a === 'ok') { const i = V; await post('/api/accept/' + i, payload(i)) }       // ở lại bước: bản tổng hợp được viết và chờ bạn duyệt rồi mới sang bước sau
+  else if (a === 'mok') { if (await post('/api/memo/' + v + '/approve')) { MFB = false; V = +v + 1; all() } }
+  else if (a === 'med') { const i = +v, m = ST.memo[i]; openTextPanel({ title: 'Bản tổng hợp · ' + STEPS[i].t, value: m.md, mono: true, hint: 'Sửa trực tiếp bằng markdown. Agent kế tiếp sẽ đọc đúng nội dung này.',
+    onClose: async x => { if (x.trim() && x.trim() !== m.md.trim()) await post('/api/memo/' + i + '/save', { md: x }) } }) }
+  else if (a === 'mfbt') { MFB = !MFB; stage() }
+  else if (a === 'mrw') { const x = U.mfb.trim(); if (!x) return; U.mfb = ''; MFB = false; await post('/api/memo/' + v + '/rewrite', { feedback: x }) }
+  else if (a === 'mprev') { const m = ST.memo[+v]; if (m && m.prev) await post('/api/memo/' + v + '/save', { md: m.prev }) }
+  else if (a === 'mdl') dlMemo(+v)
   else if (a === 'redo') { FB = false; await post('/api/redo/' + V) }
   else if (a === 'a3code') { const d = ST.d[3], s = sel(3); keepSnap(3); if (!(await post('/api/a3/code', { ids: d.menu.filter(m => s['a' + m.id] ?? m.recommended).map(m => m.id), custom: s.anc || '', specs: (s.specs || []).map(x => x.spec) }))) delete KEEP[3] }
   else if (a === 'a3exec') { const d = ST.d[3], s = sel(3); keepSnap(3); await post('/api/a3/exec', { codes: d.tasks.map((t, i) => s['code' + i] ?? t.code) }) }
@@ -388,8 +516,8 @@ document.addEventListener('change', async e => { const t = e.target;
   if (t.id === 'file') { const fl = [...t.files]; t.value = ''; if (fl.length) await upload(fl); return }
   if (RO()) return;
   if (t.dataset.mm !== undefined) { const c = S_().d[2].vc.cols[+t.dataset.mm], s = sel(2), key = c.file + '\u0001' + c.col; s.mm = s.mm || {}; const m = s.mm[key] = s.mm[key] || {};
-    if (t.value) m[t.dataset.val] = t.value; else delete m[t.dataset.val]; if (!Object.keys(m).length) delete s.mm[key]; await pvClean(); stage(); return }
-  if (t.dataset.k) { const s = sel(+t.dataset.s); s[t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value; if (t.dataset.s === '2' && /^[mv]o/.test(t.dataset.k)) s['c' + t.dataset.k.slice(1)] = true; if (t.dataset.s === '2') await pvClean(); stage() } });
+    const sg = vcSuggest(S_().d[2], c)[t.dataset.val]; if (t.value || (S_().d[2].uni && sg && sg.sure)) m[t.dataset.val] = t.value; else delete m[t.dataset.val]; if (!Object.keys(m).length) delete s.mm[key]; await pvClean(); stage(); return }
+  if (t.dataset.k) { const s = sel(+t.dataset.s); s[t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value; if (t.dataset.s === '2' && /^[mv]o/.test(t.dataset.k)) s['c' + t.dataset.k.slice(1)] = true; if (t.dataset.s === '2') await pvClean(); if (t.dataset.s === '5' && TAB === 'dash' && document.getElementById('libin')) libPaint(); else stage() } });
 document.addEventListener('input', e => { const t = e.target; if (t.id === 'q') fitQ(); if (!t.dataset.i || RO()) return; if (t.dataset.s) sel(+t.dataset.s)[t.dataset.i] = t.value; else U[t.dataset.i] = t.value });
 document.addEventListener('dragover', e => { if (e.target.closest('#dz')) e.preventDefault() });
 document.addEventListener('drop', e => { if (e.target.closest('#dz')) { e.preventDefault(); if (e.dataTransfer.files.length) upload(e.dataTransfer.files) } });

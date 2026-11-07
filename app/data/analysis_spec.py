@@ -11,6 +11,8 @@ Các loại phân tích (`type`):
   cross       Phân tích chéo hai biến phân loại (bảng hàng × cột), giá trị là chỉ số hoặc số bản ghi.
   correlate   Tương quan giữa hai biến số.
   distribution Phân bố của một biến (số: theo khoảng; phân loại: theo giá trị).
+  rate        Tỷ lệ Đạt / tuân thủ của một hoặc nhiều cột nhị phân (Đạt / Không đạt, Có / Không...), theo nhóm, theo thời gian hoặc chung.
+  pareto      Xếp hạng và 80/20: nhóm nào tạo ra phần lớn tổng (tỷ trọng và tỷ trọng cộng dồn).
   free        Yêu cầu viết tự do (không nhận diện được hết) -> chuyển nguyên văn cho AI viết code.
 Code sinh ra chỉ dùng cú pháp mà sandbox cho phép (không import, không thuộc tính bắt đầu bằng gạch dưới)."""
 import re
@@ -18,6 +20,7 @@ import re
 import pandas as pd
 
 from .. import labels as lb
+from .binary import sides as _sides
 from .describe import KIND_LABEL, kind_of
 
 TYPES = {
@@ -26,7 +29,10 @@ TYPES = {
     "cross": ("Chéo hai biến phân loại", "Bảng hàng × cột: nhóm nào đi cùng nhóm nào"),
     "correlate": ("Tương quan hai biến số", "Hai biến số có đi cùng nhau không"),
     "distribution": ("Phân bố một biến", "Giá trị của biến tập trung ở đâu"),
+    "rate": ("Tỷ lệ đạt / tuân thủ", "Tỷ lệ Đạt của các cột Đạt / Không đạt, theo nhóm hoặc theo thời gian"),
+    "pareto": ("Xếp hạng và 80/20", "Nhóm nào tạo ra phần lớn tổng"),
 }
+MAX_CRIT = 8                   # số tiêu chí (cột nhị phân) tối đa trong một phân tích tỷ lệ
 AGGS = {"sum": "Tổng", "mean": "Trung bình", "median": "Trung vị", "count": "Đếm", "nunique": "Đếm giá trị khác nhau", "min": "Nhỏ nhất", "max": "Lớn nhất"}
 GRAINS = {"day": "ngày", "week": "tuần", "month": "tháng", "quarter": "quý", "year": "năm"}
 MAX_BY, MAX_MEAS, MAX_ROWS = 2, 3, 30
@@ -45,7 +51,7 @@ def columns_meta(clean):
             if kind == "empty" or str(c).endswith("_nghi_van"):
                 continue
             ent = {"name": str(c), "label": lb.label(c), "kind": kind, "kind_label": KIND_LABEL[kind], "unique": int(s.nunique(dropna=True)),
-                   "missing": int(s.isna().sum()), "unit": lb.unit(c), "avg": bool(lb.is_rate(c))}
+                   "missing": int(s.isna().sum()), "unit": lb.unit(c), "avg": bool(lb.is_rate(c)), "bin": _sides(s) is not None}
             if kind == "cat":
                 ent["top"] = [str(x) for x in s.dropna().astype(str).value_counts().head(3).index]
             cols.append(ent)
@@ -82,6 +88,10 @@ def _is_dim(d, col):
 
 def _is_meas(d, col):
     return _kinds(d, col) == "num"
+
+
+def _is_binary(d, col):
+    return _sides(d[col]) is not None
 
 
 def _is_time(d, col):
@@ -169,6 +179,31 @@ def normalize(spec, clean):
             if x == y:
                 raise ValueError("Hai biến phải khác nhau.")
             out["x"], out["y"] = x, y
+        elif t == "rate":
+            cs = [col(c, "tiêu chí Đạt / Không đạt", _is_binary, "cần cột chỉ có hai giá trị kiểu Đạt / Không đạt, Có / Không") for c in (spec.get("cols") or [])[:MAX_CRIT] if c]
+            if not cs:
+                raise ValueError("Chưa chọn tiêu chí (cột Đạt / Không đạt) nào.")
+            out["cols"] = list(dict.fromkeys(cs))
+            tm, by = spec.get("time") or {}, [b for b in (spec.get("by") or [])[:1] if b]
+            if tm.get("col"):
+                out["time"] = {"col": col(tm.get("col"), "cột thời gian", _is_time, "cần biến thời gian"), "grain": tm.get("grain") if tm.get("grain") in GRAINS and tm.get("grain") != "week" else "month"}
+            elif by:
+                out["by"] = [col(by[0], "biến chia nhóm", _is_dim, "cần biến phân loại có từ 2 đến 60 giá trị")]
+                if out["by"][0] in out["cols"]:
+                    raise ValueError("Biến chia nhóm phải khác tiêu chí.")
+        elif t == "pareto":
+            m = (spec.get("measures") or [{}])[0] if isinstance((spec.get("measures") or [{}])[0], dict) else {}
+            if m.get("col") in (None, "", "*"):
+                out["measures"] = [{"col": None, "agg": "count"}]
+            else:
+                c = col(m.get("col"), "chỉ số", _is_meas, "cần biến định lượng")
+                if m.get("agg", "sum") != "sum":
+                    raise ValueError("Xếp hạng 80/20 chỉ dùng cho chỉ số cộng được (Tổng hoặc Đếm số bản ghi).")
+                if (pd.to_numeric(d[c], errors="coerce") < 0).any():
+                    raise ValueError(f"Cột «{lb.label(c)}» có giá trị âm nên không tính tỷ trọng cộng dồn được.")
+                out["measures"] = [{"col": c, "agg": "sum"}]
+            by = col((spec.get("by") or [None])[0], "biến xếp hạng", _is_dim, "cần biến phân loại có từ 2 đến 60 giá trị")
+            out["by"] = [by]
         elif t == "distribution":
             c = col(spec.get("col"), "biến cần xem phân bố", lambda dd, cc: _kinds(dd, cc) in ("num", "cat"), "cần biến định lượng hoặc phân loại")
             out["col"] = c
@@ -184,6 +219,7 @@ def used_vars(sp):
     for m in sp.get("measures") or []:
         if m.get("col"):
             v.append(m["col"])
+    v += list(sp.get("cols") or [])
     v += list(sp.get("by") or [])
     if sp.get("time"):
         v.append(sp["time"]["col"])
@@ -245,6 +281,16 @@ def describe(sp):
         return (f"{lab(sp['x'])} và {lab(sp['y']).lower()}", f"Chia {lab(sp['x'])} thành 10 nhóm bằng nhau về số bản ghi rồi xem {lab(sp['y'])} trung bình của từng nhóm; kèm hệ số tương quan.")
     if t == "distribution":
         return (f"Phân bố {lab(sp['col']).lower()}", f"Số bản ghi theo từng khoảng giá trị (hoặc từng giá trị) của {lab(sp['col'])}.")
+    if t == "rate":
+        cs = ", ".join(lab(c) for c in sp["cols"])
+        if sp.get("time"):
+            g = GRAINS[sp["time"]["grain"]]
+            return (f"Tỷ lệ đạt theo {g}: {cs}", f"Tỷ lệ Đạt (%) của {cs} theo {g}, trên các ô đã có đánh giá (bỏ ô thiếu và «không áp dụng»).")
+        if sp.get("by"):
+            return (f"Tỷ lệ đạt theo {lab(sp['by'][0]).lower()}: {cs}", f"Tỷ lệ Đạt (%) của {cs} ở từng nhóm {lab(sp['by'][0])}, trên các ô đã có đánh giá; xếp nhóm thấp nhất lên đầu.")
+        return (f"Tỷ lệ đạt từng tiêu chí: {cs}", "Tỷ lệ Đạt (%) của từng tiêu chí trên các ô đã có đánh giá; xếp tiêu chí thấp nhất lên đầu.")
+    if t == "pareto":
+        return (f"Xếp hạng 80/20: {ms[0].lower()} theo {lab(sp['by'][0]).lower()}", f"Xếp {lab(sp['by'][0])} giảm dần theo {ms[0].lower()}, kèm tỷ trọng và tỷ trọng cộng dồn để thấy nhóm nào tạo ra phần lớn tổng.")
     return ("Yêu cầu riêng", "")
 
 
@@ -366,6 +412,59 @@ def build_code(sp, clean):
             L.append(f"r.columns = [{_q(lb.label(c))}, 'Số bản ghi']")
             L.append("r['Tỷ lệ (%)'] = (r['Số bản ghi'] / vc.sum() * 100).round(2)")
             L.append("result = r")
+    elif t == "rate":
+        cs = sp["cols"]
+        L.append("def ok(s, pos, neg):")
+        L.append("    v = s.astype(str).str.strip()")
+        L.append("    return pd.Series(np.where(v.isin(pos), 1.0, np.where(v.isin(neg), 0.0, np.nan)), index=s.index)")
+        L.append("x = pd.DataFrame({")
+        for j, c in enumerate(cs):
+            _, _, pv, nv = _sides(clean[f][c])
+            L.append(f"    'c{j}': ok(df[{_q(c)}], {pv!r}, {nv!r}),")
+        names_c = [lb.label(c) for c in cs]
+        keys = []
+        if sp.get("time"):
+            tc, grain = sp["time"]["col"], sp["time"]["grain"]
+            fr = {"day": "D", "month": "M", "quarter": "Q", "year": "Y"}[grain]
+            fmt = {"day": "%Y-%m-%d", "month": "%Y-%m", "year": "%Y"}.get(grain)
+            L.append(f"    'k': pd.to_datetime(df[{_q(tc)}], errors='coerce', format='mixed').dt.to_period({_q(fr)}),")
+            keys = ["k"]
+        elif sp.get("by"):
+            L.append(f"    'k': df[{_q(sp['by'][0])}],")
+            keys = ["k"]
+        L.append("})")
+        cc = [f"c{j}" for j in range(len(cs))]
+        if keys:
+            L.append("x = x.dropna(subset=['k'])")
+            L.append(f"g = x.groupby('k')[{cc!r}].mean() * 100")
+            L.append(f"n = x.groupby('k')[{cc!r}].count().sum(axis=1)")
+            L.append("g['Số lượt đánh giá'] = n")
+            if sp.get("time"):
+                if sp["time"]["grain"] == "quarter":
+                    L.append("g.index = [f'Q{p.quarter}/{p.year}' for p in g.index]")
+                else:
+                    L.append(f"g.index = g.index.to_timestamp().strftime({_q(fmt)})")
+                kname = "Kỳ (" + GRAINS[sp["time"]["grain"]] + ")"
+            else:
+                L.append(f"g = g.sort_values({cc[0]!r})" if len(cc) == 1 else "g = g.assign(tb=g[" + repr(cc) + "].mean(axis=1)).sort_values('tb').drop(columns='tb')")
+                kname = lb.label(sp["by"][0])
+            L.append(f"g.columns = {[('Tỷ lệ đạt: ' + c) for c in names_c] + ['Số lượt đánh giá']!r}")
+            L.append(f"result = g.reset_index().rename(columns={{'index': {_q(kname)}, 'k': {_q(kname)}}}).round(1).reset_index(drop=True)")
+        else:
+            L.append(f"m = x[{cc!r}].mean() * 100")
+            L.append(f"n = x[{cc!r}].count()")
+            L.append(f"r = pd.DataFrame({{'Tiêu chí': {names_c!r}, 'Tỷ lệ đạt (%)': m.values, 'Số lượt đánh giá': n.values}})")
+            L.append("result = r.sort_values('Tỷ lệ đạt (%)').round(1).reset_index(drop=True)")
+    elif t == "pareto":
+        b = sp["by"][0]
+        meas_frame([("k", f"df[{_q(b)}]")])
+        L.append("g = x.groupby('k').agg(a0=('v0', 'sum')).reset_index().sort_values('a0', ascending=False)")
+        L.append("tot = g['a0'].sum()")
+        L.append("g['share'] = (g['a0'] / tot * 100).round(2)")
+        L.append("g['cum'] = (g['a0'].cumsum() / tot * 100).round(2)")
+        L.append("g['top'] = np.where(g['cum'] - g['share'] < 80, 'Có', 'Không')")
+        L.append(f"g = g.head({MAX_ROWS})")
+        L.append(f"result = g.rename(columns={{'k': {_q(lb.label(b))}, 'a0': {_q(names[0])}, 'share': 'Tỷ trọng (%)', 'cum': 'Cộng dồn (%)', 'top': 'Thuộc nhóm tạo 80% đầu'}}).reset_index(drop=True)")
     else:
         raise ValueError("Loại phân tích không sinh được code trực tiếp.")
     return "\n".join(L)
@@ -373,6 +472,15 @@ def build_code(sp, clean):
 
 def spec_facts(sp, clean):
     """Vài con số kèm kết quả mà bảng không tự thể hiện (hiện hệ số tương quan của spec 'correlate')."""
+    if sp.get("type") == "pareto" and sp.get("file") in clean:
+        d, m = clean[sp["file"]], sp["measures"][0]
+        v = pd.to_numeric(d[m["col"]], errors="coerce") if m.get("col") else pd.Series(1, index=d.index)
+        g = v.groupby(d[sp["by"][0]]).sum().sort_values(ascending=False)
+        if len(g) < 2 or g.sum() <= 0:
+            return []
+        cum = g.cumsum() / g.sum()
+        k = int((cum < .8).sum()) + 1
+        return [f"{k} trên {len(g)} nhóm ({k * 100 // len(g)}% số nhóm) tạo ra khoảng 80% tổng; nhóm đứng đầu chiếm {str(round(g.iloc[0] / g.sum() * 100, 1)).replace('.', ',')}%."]
     if sp.get("type") != "correlate" or sp.get("file") not in clean:
         return []
     d = clean[sp["file"]]

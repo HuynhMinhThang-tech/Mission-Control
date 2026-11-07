@@ -160,3 +160,35 @@ h2.sec{margin:36px 0 14px;font-size:18px;font-weight:700;letter-spacing:-.01em}
 .col.na .cb i{background:var(--na)}
 .col .cv{font-size:11px;color:var(--sub);white-space:nowrap}
 .col .cl{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
+
+/* ---- Bản thiết kế: thứ tự các khối theo kiểu bố cục (CSS order, không đổi cấu trúc HTML) ---- */
+.wrap.flx{display:flex;flex-direction:column}
+.flx>.dtabs{order:0}.flx>.note{order:6}.flx>.foot{order:9}
+.flx:is(.lay-auto,.lay-overview,.lay-compliance)>.ans{order:1}.flx:is(.lay-auto,.lay-overview,.lay-compliance)>.filters{order:2}.flx:is(.lay-auto,.lay-overview,.lay-compliance)>#kp{order:3}.flx:is(.lay-auto,.lay-overview,.lay-compliance)>#gr{order:4}.flx:is(.lay-auto,.lay-overview,.lay-compliance)>#nar{order:7}
+.flx.lay-rank>.filters{order:1}.flx.lay-rank>#kp{order:2}.flx.lay-rank>#gr{order:3}.flx.lay-rank>.ans{order:4}.flx.lay-rank>#nar{order:7}
+.flx.lay-story>.ans{order:1}.flx.lay-story>#nar{order:2}.flx.lay-story>.filters{order:3}.flx.lay-story>#kp{order:4}.flx.lay-story>#gr{order:5}
+.kpis.none{display:none}.kpi b.long{font-size:20px;line-height:1.25}.kpi small{overflow-wrap:anywhere}
+
+/* ---- Bảng điểm tiêu chí và ma trận nhiệt (dữ liệu Đạt / Không đạt) ---- */
+.score{display:flex;flex-direction:column;gap:4px}
+.sr{display:grid;grid-template-columns:minmax(110px,34%) minmax(0,1fr) 54px 44px;gap:10px;align-items:center;padding:5px 8px;border-radius:8px;cursor:pointer}
+.sr:hover,.sr.sel{background:var(--acc-soft)}.sr .sn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.sr .bt{height:10px;border-radius:99px;background:var(--track);overflow:hidden}.sr .bt i{display:block;height:100%;background:var(--acc);border-radius:99px}
+.sr b{text-align:right;font-size:13px}.sr small{color:var(--mute);text-align:right;font-size:11.5px}
+.heat{border-collapse:separate;border-spacing:3px;width:100%;font-size:12.5px}
+.heat th{font-weight:600;color:var(--sub);text-align:center;padding:4px 6px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heat th.hl{text-align:left;color:var(--ink);position:sticky;left:0;background:var(--surface);max-width:200px;cursor:pointer}.heat th.hl small{margin-left:6px;color:var(--mute);font-weight:400}
+.heat .hc{text-align:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-weight:600;background:color-mix(in srgb,var(--acc) calc(var(--v) * .55%),var(--surface))}
+.heat .hc.na{background:var(--track);color:var(--mute);cursor:default}.heat .hc.dim,.heat th.hl.dim{opacity:.4}.heat .hc.sel,.heat th.hl.sel{outline:2px solid var(--acc);outline-offset:-1px}
+.ch .tg{color:var(--mute)}
+
+/* ---- Chế độ chỉnh trên bản xem thử (chỉ trong ứng dụng): nút ẩn / đổi dạng / di chuyển ---- */
+.card{position:relative}.kpi{position:relative}
+.edb{position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .15s;z-index:5}
+.card:hover .edb,.edb:focus-within{opacity:1}
+.edb button,.kx{width:28px;height:28px;border:1px solid var(--line);background:var(--surface);border-radius:8px;color:var(--sub);line-height:1;padding:0}
+.edb button:hover,.kx:hover{color:var(--acc);border-color:var(--acc)}.edb button:disabled{opacity:.35;cursor:default}
+.kx{position:absolute;top:8px;right:8px;width:24px;height:24px;font-size:11px;opacity:0;transition:opacity .15s}.kpi:hover .kx{opacity:1}
+.addc{display:grid;place-items:center;border-style:dashed;background:transparent;box-shadow:none}.addc button{border:0;background:none;color:var(--acc);font-weight:700;padding:10px 20px;font-size:14px}
+@media(max-width:1000px){.edb{opacity:1}}
+@media print{.edb,.kx,.addc{display:none}}

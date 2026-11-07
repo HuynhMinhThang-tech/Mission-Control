@@ -14,8 +14,8 @@ from .llm import ensure_ready
 from .agents import NEXT, RUN
 from .agents.charts import valid_charts
 from .agents.cleaner import apply_choice, preview
-from .agents import adjust
-from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, parse_request, write_code
+from .agents import adjust, memo
+from .agents.planner import execute, labels_for as planner_labels, menu as planner_menu, more as planner_more, parse_request, write_code
 from .agents.profiler import run as s1_profile
 from .constants import STEP_T
 from .data import analysis_spec
@@ -40,7 +40,7 @@ def index():
 @bp.get("/api/state")
 def api_state():
     with LOCK:
-        o = {k: A[k] for k in ("id", "question", "ctx", "brief", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh")}
+        o = {k: A[k] for k in ("id", "question", "ctx", "brief", "files", "struct", "dirty", "st", "d", "ag", "approved", "job", "err", "log", "ver", "outputs", "started", "finished", "fbh", "memo")}
         o["hist"] = db.list_history(current_user_id())
         return jsonify(clean_json(o))
 
@@ -192,7 +192,7 @@ def start():
     p = request.get_json(silent=True) or {}
     q = (p.get("question") or "").strip()
     if not q:
-        return bad("Hãy nhập câu hỏi kinh doanh")
+        return bad("Hãy nhập câu hỏi")
     try:
         ensure_ready()            # chưa có key/model riêng -> báo ngay bằng panel, đừng chạy rồi mới lỗi
     except UserError as e:
@@ -218,6 +218,7 @@ def start():
                                           f"Những thứ người dùng có thể thay đổi: {levers}" if levers else "") if x)
         A["st"][0] = "done"
         A["started"] = A["started"] or now_iso()
+        memo.init_brief()
         bump()
     log("Đã nạp dữ liệu và câu hỏi")
     try:
@@ -301,6 +302,10 @@ def a3(act):
                 return bad("Hãy chọn ít nhất 1 mục, hoặc ghép biến / mô tả điều bạn muốn phân tích")
             start_job(3, ["Viết code cho các mục đã chọn"] if not specs or p.get("ids") or (p.get("custom") or "").strip() else ["Tạo code từ các biến đã ghép"],
                       write_code, p.get("ids", []), p.get("custom", ""), "", 0, specs)
+        elif act == "more":                            # «Cho tôi góc nhìn khác»: nối thêm các mục KHÁC HẲN vào danh sách đề xuất
+            if d.get("phase") != "menu":
+                return bad("Chỉ xin thêm góc nhìn khi đang ở bước chọn phân tích.")
+            start_job(3, ["Tìm thêm góc nhìn khác"], planner_more, "")
         elif act == "exec":
             start_job(3, ["Chạy code phân tích", "Tự sửa lỗi nếu có", "Tổng hợp KPI và phát hiện"], execute, p.get("codes", []))
         else:
@@ -339,7 +344,9 @@ def accept(i):
                 if any(x for x in (plan or [])):
                     return bad("Đang tắt hết biểu đồ. Hãy bật ít nhất 1 biểu đồ ở tab Bảng điều khiển tương tác.")
                 return bad("Chưa có biểu đồ nào để đưa vào báo cáo: các phân tích ở bước 4 chưa có bảng số liệu hợp lệ. Hãy quay lại bước 4 để xem lỗi và chạy lại.")
-            d5["final"] = {"title": (p.get("title") or d5["title"]).strip(), "charts": ch, "kpis": [int(k) for k in p.get("kpis", [])], "dash": plan}
+            cat = dash.get("catalog") or dash_plan.catalog(A["clean"])
+            bp = dash_plan.validate_bp(p["bp"], cat) if isinstance(p.get("bp"), dict) else dash.get("bp")
+            d5["final"] = {"title": (p.get("title") or d5["title"]).strip(), "charts": ch, "kpis": [int(k) for k in p.get("kpis", [])], "dash": plan, "bp": bp}
         elif i == 6:
             publish()
     except Exception as e:
@@ -349,12 +356,70 @@ def accept(i):
         A["st"][i] = "done"
         bump()
     log(("Đã chấp nhận: " + STEP_T[i]) if i < 6 else "Đã duyệt báo cáo")
-    if i < 6:
-        nxt = NEXT[i]
+    if i < 6:                                   # chưa chạy bước kế: viết bản tổng hợp để bạn duyệt trước (xem /api/memo/<i>/approve)
         try:
-            start_job(nxt[0], A["ag"][nxt[0]], nxt[1], "")
+            memo.begin(i)
         except RuntimeError as e:
             return bad(str(e), 409)
+    return jsonify(ok=True)
+
+
+def _memo_draft(i):
+    """Bản tổng hợp của bước i phải đang chờ duyệt (đã viết xong, bước kế chưa chạy)."""
+    m = (A.get("memo") or {}).get(i)
+    if i not in range(1, 6) or not m or A["st"][i] != "done" or A["job"]["running"]:
+        return None, bad("Chưa có bản tổng hợp nào sẵn sàng để duyệt ở bước này.", 409)
+    if m.get("status") != "draft":
+        return None, bad("Bản tổng hợp này đã duyệt hoặc đang được viết.", 409)
+    return m, None
+
+
+@bp.post("/api/memo/<int:i>/save")
+def memo_save(i):
+    p = request.get_json(silent=True) or {}
+    with LOCK:
+        m, err = _memo_draft(i)
+        if err:
+            return err
+        try:
+            memo.save(i, p.get("md"))
+        except ValueError as e:
+            return bad(str(e))
+        bump()
+    return jsonify(ok=True)
+
+
+@bp.post("/api/memo/<int:i>/rewrite")
+def memo_rewrite(i):
+    p = request.get_json(silent=True) or {}
+    fb = str(p.get("feedback") or "").strip()[:1500]
+    if not fb:
+        return bad("Hãy nêu bạn muốn AI sửa gì ở bản tổng hợp.")
+    with LOCK:
+        m, err = _memo_draft(i)
+        if err:
+            return err
+        try:
+            memo.rewrite(i, fb)
+        except RuntimeError as e:
+            return bad(str(e), 409)
+    return jsonify(ok=True)
+
+
+@bp.post("/api/memo/<int:i>/approve")
+def memo_approve(i):
+    """Duyệt bản tổng hợp xong thì Agent kế tiếp mới chạy, và nhận bản này làm ngữ cảnh."""
+    with LOCK:
+        m, err = _memo_draft(i)
+        if err:
+            return err
+        memo.approve(i)
+        bump()
+    nxt = NEXT[i]
+    try:
+        start_job(nxt[0], A["ag"][nxt[0]], nxt[1], "")
+    except RuntimeError as e:
+        return bad(str(e), 409)
     return jsonify(ok=True)
 
 
@@ -363,6 +428,7 @@ def redo(i):
     with LOCK:
         if A["job"]["running"] or A["approved"]:
             return bad("Không thể làm lại lúc này")
+        memo.drop_from(i)
         for j in range(i + 1, 7):
             A["st"][j] = "pending"
             A["d"].pop(j, None)
@@ -445,6 +511,14 @@ def dash_preview():
                     plan = dash_plan.validate(got, dash.get("catalog") or dash_plan.catalog(A["clean"]))
             except (ValueError, UnicodeDecodeError):
                 pass                                   # plan hỏng thì dùng gợi ý của AI, không làm hỏng trang xem thử
-        html = build_dashboard(live_meta(request.args.get("title") or None), A["clean"], plan)
+        bp = dash.get("bp")
+        rawb = request.args.get("bp")
+        if rawb:
+            try:
+                gotb = json.loads(base64.urlsafe_b64decode(rawb + "=" * (-len(rawb) % 4)).decode("utf-8"))
+                bp = dash_plan.validate_bp(gotb, dash.get("catalog") or dash_plan.catalog(A["clean"])) or bp
+            except (ValueError, UnicodeDecodeError):
+                pass
+        html = build_dashboard(live_meta(request.args.get("title") or None), A["clean"], plan, bp, edit=request.args.get("edit") == "1")
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 

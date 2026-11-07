@@ -14,6 +14,12 @@ TOP = 40                # số dòng đếm giữ lại để hiển thị cho m
 GENERIC = {"p", "pb", "bp", "phong", "ban", "khoi"}      # từ đứng đầu tên bộ phận: "P. Kinh doanh" = "Phòng Kinh doanh" = "Kinh doanh"
 MAX_COLS = 80
 MAX_MAP = 300           # số cặp "giá trị cũ -> giá trị chuẩn" tối đa trong một thao tác
+RARE_RATIO = .2         # chữ gõ sai là biến thể HIẾM của chữ đúng: nếu cả hai đều phổ biến và cùng cỡ thì là hai đối tượng khác nhau
+RARE_MIN = 5            # (dưới ngần này dòng thì coi là hiếm, kể cả khi tỷ lệ cao: dữ liệu ít)
+# Cặp từ trái nghĩa / đối lập (đã bỏ dấu): khác nhau đúng ở cặp này thì KHÔNG bao giờ gợi ý gộp (Nội / Ngoại, Nam / Nữ...)
+OPPOSITE = [("noi", "ngoai"), ("nam", "nu"), ("truoc", "sau"), ("tren", "duoi"), ("tang", "giam"), ("co", "khong"), ("dat", "khong"),
+            ("vao", "ra"), ("den", "di"), ("thu", "chi"), ("nhap", "xuat"), ("cao", "thap"), ("lon", "nho"), ("moi", "cu"),
+            ("dong", "mo"), ("bac", "nam"), ("tay", "dong"), ("trai", "phai")]
 
 
 def _is_cat(s):
@@ -49,6 +55,19 @@ def _core(key):
     while len(t) > 1 and t[0] in GENERIC:
         t.pop(0)
     return " ".join(t)
+
+
+def _opposed(a, b):
+    """Hai khóa chỉ khác nhau ở một cặp từ đối lập (vd «noi tong hop» và «ngoai tong hop») -> chắc chắn là hai đối tượng khác nhau."""
+    ta, tb = set(a.split()), set(b.split())
+    da, db = ta - tb, tb - ta
+    return any((x in da and y in db) or (y in da and x in db) for x, y in OPPOSITE)
+
+
+def _both_common(na, nb):
+    """Cả hai giá trị đều xuất hiện nhiều và cùng cỡ: chữ gõ sai thường rất hiếm so với chữ đúng, nên đây là hai giá trị thật (vd 66 dòng «Nội» và 60 dòng «Ngoại»)."""
+    lo, hi = sorted((na, nb))
+    return lo >= RARE_MIN and lo / hi > RARE_RATIO
 
 
 def weak_clusters(groups):
@@ -89,6 +108,8 @@ def weak_clusters(groups):
             if min(len(a), len(b)) < 6 or abs(len(a) - len(b)) > 2:
                 continue
             if re.sub(r"\d", "", a) == re.sub(r"\d", "", b):         # chỉ khác chữ số (Chi nhánh 1 / Chi nhánh 2): là hai đối tượng khác nhau
+                continue
+            if _opposed(a, b) or _both_common(groups[i]["n"], groups[j]["n"]):   # Nội/Ngoại, Nam/Nữ...; hoặc cả hai đều phổ biến: không đề xuất gộp
                 continue
             sm = difflib.SequenceMatcher(None, a, b)
             if sm.real_quick_ratio() >= .9 and sm.quick_ratio() >= .9 and sm.ratio() >= .9:

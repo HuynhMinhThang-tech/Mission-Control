@@ -47,7 +47,10 @@ def fake_llm(system, user, max_tokens=8000, json_mode=False):
             ops.append({"file": "sales_q3.csv", "op": "fill_missing", "column": "doanh_thu", "method": "median", "reason": f"Theo góp ý: {fb}", "risk": "", "recommended": True})
         return json.dumps({"operations": ops, "value_counts": {"overview": "ok", "columns": []}})
     if "Agent Hoạch định" in system:
-        menu = [{"title": "Doanh thu theo khu vực", "goal": "so sánh", "metrics": ["Tổng doanh thu = sum(doanh_thu)"], "why": "x", "recommended": True},
+        if "ĐÃ CÓ các mục sau" in user:                      # «Cho tôi góc nhìn khác»: mục mới + một mục trùng tên với mục cũ (phải bị bỏ)
+            return json.dumps({"menu": [{"title": "Doanh thu theo khu vực", "goal": "trùng", "metrics": ["m"], "why": "w"},
+                                        {"title": "Nhóm nhỏ kéo cả chỉ số", "angle": "Góc nhìn mới", "type": "Góc nhìn mới", "goal": "tìm nhóm nhỏ nhưng ảnh hưởng lớn", "metrics": ["Tỷ trọng"], "why": "w", "action": "nếu thấy nhóm nhỏ chiếm phần lớn thì ưu tiên nguồn lực cho nhóm đó", "recommended": True}]})
+        menu = [{"title": "Doanh thu theo khu vực", "goal": "so sánh", "angle": "So sánh nhóm", "action": "nếu thấy khu vực yếu thì cân nhắc chuyển ngân sách", "metrics": ["Tổng doanh thu = sum(doanh_thu)"], "why": "x", "recommended": True},
                 {"title": "Doanh thu theo sản phẩm", "goal": "so sánh", "metrics": ["Tổng doanh thu"], "why": "x", "recommended": True}]
         if fb:
             menu.append({"title": f"Mục theo góp ý: {fb}", "goal": "g", "metrics": ["m"], "why": "w", "recommended": True})
@@ -94,6 +97,12 @@ def fake_llm(system, user, max_tokens=8000, json_mode=False):
                                     {"ds": "sales_q3.csv", "by": "Khu vực", "measure": "Doanh thu", "agg": "sum", "kind": "donut", "title": "Cơ cấu", "why": "Khu vực nào chiếm nhiều"},
                                     {"ds": "sales_q3.csv", "by": "Khu vực", "measure": "Đơn giá", "agg": "avg", "kind": "donut", "title": "Đơn giá TB", "why": "so sánh"},
                                     {"ds": "sales_q3.csv", "by": "Cột bịa", "measure": "Doanh thu", "kind": "bars", "title": "Bịa", "why": "x"}]})
+    if "Agent Viết bản tổng hợp" in system:
+        if "BẢN TỔNG HỢP HIỆN TẠI" in user:           # nhờ AI viết lại theo góp ý: giữ bản hiện tại, thêm một dòng phản ánh góp ý
+            cur = user.split("(người dùng có thể đã sửa tay, phần họ sửa PHẢI được giữ):\n")[-1].split("\n\nGHI NHẬN CỦA HỆ THỐNG")[0]
+            m = re.search(r"Góp ý của người dùng cho bản tổng hợp: (.*)", user)
+            return json.dumps({"md": cur.rstrip() + f"\n\n## Theo góp ý\n- {m.group(1).strip() if m else ''}\n"})
+        return json.dumps({"notes": ["Cột doanh thu có thể còn thiếu dữ liệu, cần thận trọng khi tính trung bình.", "Con số 999.999 này không có trong ghi nhận nào."]})
     raise AssertionError("LLM giả chưa biết vai trò: " + system[:80])
 
 
@@ -118,8 +127,16 @@ def wait(c, timeout=90):
     raise TimeoutError("tác vụ nền chạy quá lâu")
 
 
+AUTO = {"memo": True}     # True: sau mỗi "chấp nhận" (bước 1-5) tự chờ bản tổng hợp rồi duyệt, để các test cũ đi trọn luồng; đặt False để test chính cổng duyệt
+
+
 def post(c, url, body=None, ok=True):
     r = c.post(url, json=body or {})
     if ok:
         assert r.status_code == 200, (url, r.status_code, r.get_data(as_text=True)[:300])
+    m = re.match(r"^/api/accept/([1-5])$", url)
+    if m and AUTO["memo"] and r.status_code == 200:
+        wait(c)                                                      # bản tổng hợp được viết ở luồng nền
+        r2 = c.post(f"/api/memo/{m.group(1)}/approve", json={})
+        assert r2.status_code == 200, (url, r2.status_code, r2.get_data(as_text=True)[:300])
     return r

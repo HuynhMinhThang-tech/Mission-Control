@@ -86,6 +86,16 @@ specs.append({"type": "correlate", "file": "sales_q3.csv", "x": "don_gia", "y": 
 specs.append({"type": "compare", "file": "sales_q3.csv", "measures": [{"col": "khong_co"}], "by": ["kenh"]})       # giả mạo từ trình duyệt: phải bị loại
 specs.append("rác")
 
+# ---- Mục 3: góc nhìn (angle), câu hành động, và nút «Cho tôi góc nhìn khác»
+m3 = F.wait(c)["d"]["3"]["menu"]
+check("menu phân tích: mỗi mục có góc nhìn (angle) và câu hành động; AI không khai thì lấy theo loại", m3[0]["angle"] == "So sánh nhóm" and m3[0]["action"].startswith("nếu thấy") and m3[1]["angle"] == "Phân tích" and m3[1]["action"] == "")
+n_plan = n_calls("Hoạch định")
+F.post(c, "/api/a3/more"); s = F.wait(c)
+m3b = s["d"]["3"]["menu"]
+check("«Cho tôi góc nhìn khác»: nối thêm mục mới, bỏ mục AI đề xuất trùng tên, giữ nguyên các mục cũ và id", [m["id"] for m in m3b] == [m["id"] for m in m3] + ["m%d" % len(m3)] and m3b[-1]["title"] == "Nhóm nhỏ kéo cả chỉ số" and [m["title"] for m in m3b[:len(m3)]] == [m["title"] for m in m3])
+check("mục thêm: mang loại 'Góc nhìn mới', KHÔNG tự tick (recommended=False), có câu hành động; prompt gửi AI nêu các mục đã có", m3b[-1]["type"] == "Góc nhìn mới" and m3b[-1]["recommended"] is False and "nhóm nhỏ" in m3b[-1]["action"] and "Doanh thu theo khu vực" in F.PROMPTS[-1][1] and "KHÁC HẲN" in F.PROMPTS[-1][1])
+check("«góc nhìn khác» chỉ gọi AI đúng 1 lần và vẫn ở pha chọn mục", n_calls("Hoạch định") == n_plan + 1 and s["d"]["3"]["phase"] == "menu" and s["st"][3] == "await")
+
 # ---- tạo code: ô ghép biến sinh code TRỰC TIẾP (không nhờ AI), AI chỉ lo mục menu
 n_code = n_calls("Phân tích dữ liệu")
 F.post(c, "/api/a3/code", {"ids": ["m0"], "custom": "", "specs": specs}); s = F.wait(c)

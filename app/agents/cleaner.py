@@ -36,7 +36,8 @@ PROMPT = (
     "kèm mapping từ từng cách viết sai/khác về MỘT giá trị chuẩn. Mỗi khóa của mapping phải là giá trị CÓ THẬT trong bảng đếm, không được bịa. "
     "BẮT BUỘC xét kỹ MỌI cột có ít giá trị khác nhau (danh mục như phòng ban, cấp bậc, khu vực, trạng thái, loại): nếu cùng một đối tượng xuất hiện dưới nhiều tên "
     "(viết tắt như 'CV' và 'Chuyên viên', 'NV' và 'Nhân viên', 'BGĐ' và 'Ban Giám đốc'; thêm bớt chữ như 'P. Kinh doanh' và 'Kinh doanh'; gõ sai; khác dấu hay hoa thường) thì PHẢI đề xuất gộp về một tên chuẩn "
-    "đang có trong cột (ưu tiên tên đầy đủ, rõ nghĩa). Chỉ để nguyên khi thật sự là hai đối tượng khác nhau. Danh sách 'NGHI là một' ở trên là gợi ý, bạn là người quyết định.")
+    "đang có trong cột (ưu tiên tên đầy đủ, rõ nghĩa). Chỉ để nguyên khi thật sự là hai đối tượng khác nhau. Danh sách 'NGHI là một' ở trên là gợi ý, bạn là người quyết định. "
+    "TUYỆT ĐỐI không gộp hai giá trị đều có nhiều bản ghi và cùng cỡ nhau khi chúng có thể khác nghĩa (vd Nội và Ngoại, Nam và Nữ, Trước và Sau, Đạt và Không đạt, Tăng và Giảm): gõ sai thường chỉ xuất hiện ít lần.")
 
 
 def fold_standardize(ops, rep):
@@ -120,7 +121,7 @@ def run(fb=""):
         if o["op"] == "standardize_text":
             o["map_view"] = map_view(o)
     tick(2)
-    d = {"ops": ops, "meth": METH, "vc": vcm.view(rep, res.get("value_counts"))}
+    d = {"ops": ops, "meth": METH, "vc": vcm.view(rep, res.get("value_counts")), "uni": True}     # uni: giao diện MỘT thẻ cho mỗi cột (bản lưu cũ không có cờ này -> hiện kiểu cũ)
     A["d"][2] = d
     d["pv"] = preview({"sel": {}, "meth": {}, "val": {}})
     put(2, d)
@@ -131,7 +132,7 @@ def merge_fill(ops):
     out, first = [], {}
     for o in ops:
         o["numeric"] = bool(pd.api.types.is_numeric_dtype(A["raw"][o["file"]][o["column"]])) if o.get("column") in A["raw"][o["file"]].columns else False
-        o["label"] = OPL[o["op"]]
+        o["label"] = o.get("label") or OPL[o["op"]]          # giữ nhãn riêng (vd "Gộp giá trị nghi trùng") nếu đã có
         if o["op"] != "fill_missing":
             out.append(o)
             continue
@@ -214,8 +215,30 @@ def pick_ops(p):
     return out + manual_ops(p)
 
 
+def merged_maps(picked):
+    """{(tệp, cột): bảng 'cũ -> chuẩn' cuối cùng} gộp MỌI lựa chọn gộp giá trị của cột đó (thẻ gợi ý lẫn chọn tay)."""
+    mp = {}
+    for _, o2 in picked:
+        if o2.get("op") == "standardize_text" and o2.get("mapping"):
+            mp.setdefault((o2["file"], o2["column"]), {}).update(o2["mapping"])
+    return {k: vcm.resolve(m) for k, m in mp.items() if vcm.resolve(m)}
+
+
+def col_effects(picked):
+    """Kết quả thật cho TỪNG cột sau khi áp mọi lựa chọn gộp của cột (một con số chung, không tính riêng từng thẻ)."""
+    out = {}
+    for (f, c), m in merged_maps(picked).items():
+        o = {"file": f, "op": "standardize_text", "column": c}
+        try:
+            out[f + "\u0001" + c] = effect(o, {**o, "mapping": m})
+        except Exception:                                  # noqa: BLE001
+            out[f + "\u0001" + c] = ""
+    return out
+
+
 def preview(p):
-    out, _ = apply_plan(A["raw"], [o2 for _, o2 in pick_ops(p)])
+    picked = pick_ops(p)
+    out, _ = apply_plan(A["raw"], [o2 for _, o2 in picked])
     b, a = issue_counts(A["raw"]), issue_counts(out)
     fx = {}
     for o in A["d"][2]["ops"]:
@@ -227,7 +250,7 @@ def preview(p):
             fx[o["id"]] = effect(o, o2)
         except Exception:                         # noqa: BLE001
             fx[o["id"]] = ""
-    return {"before": b, "after": a, "n": int(sum(b.values()) - sum(a.values())), "fx": fx}
+    return {"before": b, "after": a, "n": int(sum(b.values()) - sum(a.values())), "fx": fx, "colfx": col_effects(picked)}
 
 
 def apply_choice(p):
@@ -242,6 +265,7 @@ def apply_choice(p):
             o["method"] = chosen[o["id"]]["method"]
             if "value" in chosen[o["id"]]:
                 o["value"] = chosen[o["id"]]["value"]
+    A["d"][2]["merged"] = {f + "\u0001" + c: m for (f, c), m in merged_maps(picked).items()}     # để xem lại đúng giá trị nào đã gộp vào đâu (Lịch sử)
     A["dirty"] = []
     A["d"][2]["pv"] = preview(p)
     return lg
