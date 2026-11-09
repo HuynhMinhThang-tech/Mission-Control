@@ -38,7 +38,7 @@ def schema(dfs, sample=3):
 
 def profile_rows(dfs):
     return [{"file": n, "shape": list(d.shape),
-             "rows": [[c, str(d[c].dtype), int(d[c].isna().sum()), round(float(d[c].isna().mean() * 100), 1), int(d[c].nunique()),
+             "rows": [[c, str(d[c].dtype), int(d[c].isna().sum()), round(float(d[c].isna().mean() * 100), 2), int(d[c].nunique()),
                        ", ".join(d[c].dropna().astype(str).head(3))] for c in d.columns]} for n, d in dfs.items()]
 
 
@@ -73,19 +73,54 @@ CAT = {"Giá trị thiếu": "Thiếu", "Dòng trùng lặp": "Trùng", "Thừa 
        "Giá trị viết khác nhau": "Định dạng", "Ngoại lai (IQR)": "Ngoại lai", "Giá trị âm": "Giá trị âm"}
 
 
-def quality(dfs):
+# Phương án đề xuất xử lý cho từng loại vấn đề. Do CODE tạo (không nhờ AI) nên luôn có và luôn khớp tên thao tác của bước Làm sạch;
+# người dùng vẫn là người quyết định ở bước đó.
+FIX_GENERIC = {
+    "Dòng trùng lặp": "Xóa dòng trùng, giữ lại 1 bản. Kiểm tra trước: hai khoản giống hệt nhau có thể là hai giao dịch có thật",
+    "Giá trị thiếu": "Điền giá trị thay thế hoặc xóa dòng thiếu, tùy cột",
+    "Thừa khoảng trắng": "Cắt khoảng trắng đầu/cuối ô",
+    "Không nhất quán hoa/thường": "Chuẩn hóa về một kiểu chữ để cùng một giá trị không bị tách thành nhiều nhóm",
+    "Số đang lưu dạng text": "Bỏ dấu ngăn nghìn và ký hiệu tiền tệ rồi chuyển cột sang kiểu số",
+    "Ngày đang lưu dạng text": "Chuyển cột sang kiểu ngày (đọc theo thứ tự ngày/tháng/năm) để lọc và nhóm theo thời gian",
+    "Ngày sai định dạng": "Thống nhất một định dạng ngày rồi chuyển sang kiểu ngày; kiểm tra tay các ô không đọc được",
+    "Giá trị viết khác nhau": "Gộp các cách viết khác nhau về một giá trị chuẩn (bước Làm sạch, phần Gộp giá trị)",
+    "Ngoại lai (IQR)": "Kiểm tra từng giá trị: sửa nếu là lỗi nhập, giữ nếu có thật. Chỉ cắt ngoại lai khi chắc chắn, vì có thể mất dữ liệu đúng",
+    "Giá trị âm": "Xác định số âm có hợp lý không (hoàn tiền, điều chỉnh). Nếu không, gắn cờ để rà lại; nếu có, giữ và tách riêng khi phân tích",
+}
+
+
+def fix_for(issue, s=None, n=0):
+    """Phương án xử lý đề xuất cho MỘT vấn đề. `s` là cột (nếu có) để chọn cách điền thiếu hợp kiểu dữ liệu."""
+    base = FIX_GENERIC.get(issue, "Xem lại thủ công")
+    if issue != "Giá trị thiếu" or s is None or len(s) == 0:
+        return base
+    share = float(n) / len(s)
+    if share > 0.5:
+        return "Thiếu hơn một nửa số dòng: cân nhắc bỏ cột này, hoặc chỉ phân tích trên các dòng có dữ liệu"
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return "Giữ ô trống (không tự đoán ngày); các dòng này sẽ không vào phân tích theo thời gian"
+    if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+        return "Điền trung vị (ít bị ngoại lai kéo lệch), hoặc xóa dòng thiếu nếu số dòng ít"
+    return "Điền giá trị phổ biến nhất hoặc «Không rõ», hoặc xóa dòng thiếu nếu số dòng ít"
+
+
+def quality(dfs, with_fix=False):
+    """Quét vấn đề chất lượng. with_fix=True thêm cột `fix` (phương án đề xuất xử lý); mặc định giữ 4 cột cũ vì bảng này còn được đưa vào prompt của các Agent."""
     rows = []
 
-    def add(f, c, i, n):
-        rows.append({"file": f, "col": str(c), "issue": i, "n": int(n)})
+    def add(f, c, i, n, s=None):
+        r = {"file": f, "col": str(c), "issue": i, "n": int(n)}
+        if with_fix:
+            r["fix"] = fix_for(i, s, int(n))
+        rows.append(r)
 
     for n, d in dfs.items():
         if d.duplicated().sum():
-            add(n, "(toàn bảng)", "Dòng trùng lặp", d.duplicated().sum())
+            add(n, "(toàn bảng)", "Dòng trùng lặp", d.duplicated().sum(), None)
         for c in d.columns:
             s = d[c]
             if s.isna().sum():
-                add(n, c, "Giá trị thiếu", s.isna().sum())
+                add(n, c, "Giá trị thiếu", s.isna().sum(), s)
             if is_text(s) and not pd.api.types.is_datetime64_any_dtype(s):
                 t = s.dropna().astype(str)
                 if len(t) == 0:
@@ -116,7 +151,7 @@ def quality(dfs):
                     add(n, c, "Ngoại lai (IQR)", o)
                 if (s < 0).sum():
                     add(n, c, "Giá trị âm", (s < 0).sum())
-    return pd.DataFrame(rows, columns=["file", "col", "issue", "n"])
+    return pd.DataFrame(rows, columns=["file", "col", "issue", "n"] + (["fix"] if with_fix else []))
 
 
 def issue_counts(dfs):

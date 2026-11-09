@@ -249,7 +249,7 @@ def execute(codes, t0=0):
     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)
     known = numfmt.Known.from_dfs(dfs)                                   # mọi số có thật trong bảng kết quả: dùng để đoán đúng độ lớn và đối chiếu
-    kpis = numfmt.fix_kpis(r.get("kpis"), known)                          # KPI: 11773398767.5 -> "11,77 tỷ đồng"
+    kpis = numfmt.fix_kpis(r.get("kpis"), known)                          # KPI: 11773398767.5 -> "11.773.398.767,50 đ"
     r = {**numfmt.fix_payload({k: v for k, v in r.items() if k != "kpis"}, known), "kpis": kpis}
     charts = valid_charts(r.get("charts", []), tabs)
     if not charts:

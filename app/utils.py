@@ -10,28 +10,68 @@ def J(x, n=12000):
     return json.dumps(x, ensure_ascii=False, default=str)[:n]
 
 
-def vn(v, nd=2):
-    """Định dạng số kiểu Việt Nam: 1.234,5"""
-    try:
-        s = f"{float(v):,.{nd}f}"
-    except Exception:
-        return str(v)
-    if "." in s:
-        s = s.rstrip("0").rstrip(".")
+def _sep(s):
+    """'1,234.50' (kiểu Mỹ) -> '1.234,50' (kiểu Việt Nam)."""
     return s.replace(",", "§").replace(".", ",").replace("§", ".")
 
 
-def compact(v, nd=1):
-    """1.250.000.000 -> '1,3 tỷ'"""
+def _finite(v):
     try:
         x = float(v)
-    except Exception:
+    except (TypeError, ValueError):
+        return None
+    return x if np.isfinite(x) else None
+
+
+# ------------------------------------------------------------------ QUY TẮC SỐ DUY NHẤT (mọi nơi hiển thị đều đi qua đây) --
+#   số nguyên           -> 1.234.567                (không có phần thập phân)
+#   số thập phân        -> 1.234,50                 (luôn đúng 2 chữ số sau dấu phẩy)
+#   tỷ lệ / phần trăm   -> 54,20%                   (luôn đúng 2 chữ số sau dấu phẩy)
+#   tiền                -> 1.234.567 đ              (ghi ĐỦ số, có dấu ngăn nghìn, đơn vị theo dữ liệu; KHÔNG viết tắt nghìn/triệu/tỷ)
+# Bản JavaScript của cùng quy tắc nằm ở static/js/fmt.js và export/assets/live.js; sửa ở đâu thì sửa cả ba.
+def vn(v, nd=2):
+    """Số kiểu Việt Nam: nguyên thì không có phần thập phân, lẻ thì đúng `nd` chữ số sau dấu phẩy (1.234,50)."""
+    x = _finite(v)
+    if x is None:
         return str(v)
-    a = abs(x)
-    for d, u in ((1e9, " tỷ"), (1e6, " triệu"), (1e3, " nghìn")):
-        if a >= d:
-            return vn(x / d, nd) + u
-    return vn(x, nd)
+    if nd <= 0 or abs(x - round(x)) < 1e-9:           # số nguyên THẬT thì không có phần thập phân; 99,999 là số lẻ nên hiện 100,00
+        return _sep(f"{int(round(x)):,}")
+    return _sep(f"{x:,.{nd}f}")
+
+
+def fmt_dec(v, nd=2):
+    """Số thập phân LUÔN đủ `nd` chữ số sau dấu phẩy (dùng cho cả cột số lẻ để các dòng thẳng hàng)."""
+    x = _finite(v)
+    return str(v) if x is None else _sep(f"{x:,.{nd}f}")
+
+
+def fmt_pct(p, nd=2):
+    """p tính theo đơn vị phần trăm (54.2 -> '54,20%')."""
+    x = _finite(p)
+    return str(p) if x is None else fmt_dec(x, nd) + "%"
+
+
+def fmt_val(v, unit=""):
+    """Giá trị kèm đơn vị của dữ liệu: '%' -> 54,20% · 'đ' -> 1.234.567 đ · 'kg' -> 12,50 kg."""
+    if unit == "%":
+        return fmt_pct(v)
+    s = vn(v)
+    return f"{s} {unit}" if unit and _finite(v) is not None else s
+
+
+def fmt_money(v, unit="đ"):
+    return fmt_val(v, unit)
+
+
+def col_fmt(values):
+    """Hàm định dạng CHUNG cho một cột bảng: cột có số lẻ thì mọi ô đều 2 chữ số thập phân, cột toàn số nguyên thì không có phần thập phân."""
+    frac = False
+    for v in values:
+        x = _finite(v) if not isinstance(v, bool) else None
+        if x is not None and abs(x - round(x)) >= 1e-9:
+            frac = True
+            break
+    return (lambda v: fmt_dec(v)) if frac else (lambda v: vn(v, 0))
 
 
 def E(t):

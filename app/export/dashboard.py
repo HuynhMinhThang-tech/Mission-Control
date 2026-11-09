@@ -3,9 +3,10 @@
 from pathlib import Path
 
 from .. import numfmt
-from ..utils import E, vn
-from .common import PRI_ORDER, chart_rows, facts, trunc
+from ..utils import E, col_fmt, vn
+from .common import PRI_ORDER, chart_rows, facts, trunc, unit_of
 from .svg import chart_svg
+from . import fonts
 
 CSS = (Path(__file__).parent / "assets" / "dashboard.css").read_text("utf-8")
 
@@ -40,10 +41,11 @@ def _charts(F):
     for c in F["charts"]:
         rows = chart_rows(F["dfs"][c["task"]], c["x"], c["y"])
         head = c.get("insight") or c["title"]
-        sub = c["title"] + (f" · đơn vị: {c['unit']}" if c.get("unit") else "")
-        fl = "".join(f"<li>{E(x)}</li>" for x in facts(rows, c["kind"]))
+        sub = c["title"] + (f" · đơn vị: {unit_of(c)}" if c.get("unit") else "")
+        un = unit_of(c)
+        fl = "".join(f"<li>{E(x)}</li>" for x in facts(rows, c["kind"], un))
         out.append(f'<figure class="card"><figcaption><h3>{E(head)}</h3><p class="sub">{E(sub)}</p></figcaption>'
-                   f'{chart_svg(c["kind"], rows)}<ul class="facts">{fl}</ul>'
+                   f'{chart_svg(c["kind"], rows, un)}<ul class="facts">{fl}</ul>'
                    f'<p class="src">Nguồn: {E(F["table_titles"][c["task"]])} · số liệu đã làm sạch</p></figure>')
     return f'<section id="charts"><h2>Bằng chứng từ dữ liệu</h2><div class="grid">{"".join(out)}</div></section>' if out else ""
 
@@ -94,7 +96,9 @@ def _tbl(t):
     if not t["cols"]:
         return ""
     head = "".join(f"<th>{E(c)}</th>" for c in t["cols"])
-    body = "".join("<tr>" + "".join(f"<td>{E(vn(c, 2) if isinstance(c, (int, float)) and not isinstance(c, bool) else ('' if c is None else c))}</td>" for c in r) + "</tr>"
+    num = lambda c: isinstance(c, (int, float)) and not isinstance(c, bool)       # noqa: E731
+    fm = [col_fmt([r[j] for r in t["rows"] if j < len(r) and num(r[j])]) for j in range(len(t["cols"]))]      # mỗi cột một định dạng chung: có số lẻ thì mọi ô 2 chữ số
+    body = "".join("<tr>" + "".join(f"<td>{E(fm[j](c) if num(c) else ('' if c is None else c))}</td>" for j, c in enumerate(r)) + "</tr>"
                    for r in t["rows"][:30])
     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
@@ -110,7 +114,7 @@ def build_html(F):
     nav = "".join(f'<a href="#{a}">{t}</a>' for a, t in [("answer", "Câu trả lời"), ("kpi", "Chỉ số"), ("charts", "Biểu đồ"), ("insights", "Phát hiện"),
                                                          ("actions", "Hành động")] + ([("risks", "Rủi ro")] if F["risks"] else []) + [("method", "Phương pháp")])
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{E(F["title"])}</title><style>{CSS}</style></head><body>'
+            f'<title>{E(F["title"])}</title><style>{CSS}</style>{fonts.head_html(F.get("font"))}</head><body>'
             f'<header class="hd"><div class="wrap"><p class="eyebrow">Báo cáo phân tích · {E(F["date"])}</p><h1>{E(F["title"])}</h1>'
             f'<p class="q"><b>Câu hỏi:</b> {E(F["question"])}</p>'
             f'{"<p class=q style=margin-top:6px><b>Bối cảnh:</b> " + E(F["ctx"]) + "</p>" if F["ctx"] else ""}<div class="chips">{chips}</div></div></header>'

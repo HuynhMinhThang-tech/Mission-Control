@@ -15,8 +15,8 @@ from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from .. import numfmt
-from ..utils import compact, vn
-from .common import PRI_ORDER, chart_rows, facts, pp, scale, trunc
+from ..utils import fmt_pct, vn
+from .common import PRI_ORDER, chart_rows, facts, pp, trunc, unit_of
 
 NAVY, PRI, SOFT, INK, SUB, LINE, BG = "0F172A", "4F46E5", "EEF2FF", "1F2937", "5B6275", "E5E7EB", "F8FAFC"
 OK, WARN, BAD, MUTE, WHITE = "0F8F6A", "B76A00", "D6304A", "B4BAD6", "FFFFFF"
@@ -203,10 +203,27 @@ def kpi_slide(d):
     d.source(s, "Phân tích trên dữ liệu đã làm sạch")
 
 
-def _chart(s, x, y, w, h, rows, kind, div):
+def _label(s, v, unit=""):
+    """Nhãn số trên biểu đồ: số GHI ĐỦ theo quy tắc số chung (1.234.567; 54,20%). Viết thẳng thành chữ nên không phụ thuộc ngôn ngữ máy người mở (Excel format #,##0 sẽ ra 1,234,567 trên máy tiếng Anh)."""
+    return fmt_pct(v) if unit == "%" else vn(v)
+
+
+def _point_label(ser, i, text, size, color=None, pos=None):
+    dl = ser.points[i].data_label
+    tf = dl.text_frame
+    tf.text = text
+    r = tf.paragraphs[0].runs[0]
+    r.font.size, r.font.bold, r.font.name = Pt(size), True, FONT
+    if color:
+        r.font.color.rgb = rgb(color)
+    if pos is not None:
+        dl.position = pos
+
+
+def _chart(s, x, y, w, h, rows, kind, unit=""):
     cd = CategoryChartData()
     cd.categories = [trunc(pp(l), 18) for l, _ in rows]
-    cd.add_series("Giá trị", [round(v / div, 3) for _, v in rows])
+    cd.add_series("Giá trị", [float(v) for _, v in rows])
     donut = kind == "donut"
     line = kind == "line"
     ctype = CT.DOUGHNUT if donut else CT.LINE_MARKERS if line else CT.COLUMN_CLUSTERED if kind == "cols" else CT.BAR_CLUSTERED
@@ -226,17 +243,13 @@ def _chart(s, x, y, w, h, rows, kind, div):
             pt = ser.points[i]
             pt.format.fill.solid()
             pt.format.fill.fore_color.rgb = rgb(DONUT_PAL[i % len(DONUT_PAL)])
-        pl.has_data_labels = True
-        dl = pl.data_labels
-        dl.show_percentage, dl.show_value, dl.show_category_name = True, False, False
-        dl.number_format, dl.number_format_is_linked = "0%", False
-        dl.font.size, dl.font.bold, dl.font.name = Pt(SZ_SMALL), True, FONT
-        dl.font.color.rgb = rgb(WHITE)
+        tot = sum(v for _, v in rows) or 1
+        for i, (_, v) in enumerate(rows):
+            _point_label(ser, i, fmt_pct(v / tot * 100), SZ_SMALL, WHITE)               # phần trăm luôn 2 chữ số sau dấu phẩy
         return
     ch.has_legend = False
-    mx = max(abs(v) / div for _, v in rows) or 1
-    fmt = "#,##0" if mx >= 100 else "#,##0.0" if mx >= 10 else "#,##0.00"
     hi = max(range(len(rows)), key=lambda i: abs(rows[i][1]))
+    lo = min(range(len(rows)), key=lambda i: rows[i][1])
     if line:
         ser.smooth = False
         ser.format.line.color.rgb = rgb(PRI)
@@ -245,9 +258,9 @@ def _chart(s, x, y, w, h, rows, kind, div):
         ser.marker.size = 7
         ser.marker.format.fill.solid()
         ser.marker.format.fill.fore_color.rgb = rgb(PRI)
-        if len(rows) <= 12:
-            pl.has_data_labels = True
-            pl.data_labels.position = LP.ABOVE
+        show = set(range(len(rows))) if len(rows) <= 6 else {0, len(rows) - 1, hi, lo}          # số ghi đủ khá dài: nhiều điểm thì chỉ ghi đầu, cuối, cao nhất, thấp nhất
+        for i in sorted(show):
+            _point_label(ser, i, _label(s, rows[i][1], unit), SZ_SMALL, INK, LP.ABOVE)
     else:
         pl.gap_width = 55
         pl.vary_by_categories = False
@@ -258,12 +271,9 @@ def _chart(s, x, y, w, h, rows, kind, div):
             pt = ser.points[i]
             pt.format.fill.solid()
             pt.format.fill.fore_color.rgb = rgb(BAD if v < 0 else PRI if i == hi else MUTE)
-        pl.has_data_labels = True
-        pl.data_labels.position = LP.OUTSIDE_END
-    if pl.has_data_labels:
-        dl = pl.data_labels
-        dl.font.size, dl.font.bold, dl.font.name = Pt(SZ_SMALL), True, FONT
-        dl.number_format, dl.number_format_is_linked = fmt, False
+        show = set(range(len(rows))) if (kind == "bars" or len(rows) <= 6) else {hi, lo}
+        for i in sorted(show):
+            _point_label(ser, i, _label(s, rows[i][1], unit), SZ_SMALL, INK, LP.OUTSIDE_END)
     va, ca = ch.value_axis, ch.category_axis
     va.visible = False
     va.has_major_gridlines = False
@@ -281,16 +291,15 @@ def chart_slides(d):
         if not rows:
             continue
         s = d.slide(c.get("insight") or c["title"], "Phân tích")
-        div, ulab = scale(rows) if c["kind"] != "donut" else (1.0, "")
-        unit = " ".join(x for x in [ulab, c.get("unit", "")] if x)
-        text(s, MX, 1.7, 8.0, .35, c["title"] + (f"  (đơn vị: {unit})" if unit else ""), size=12, bold=True, color=SUB)
-        _chart(s, MX, 2.05, 8.0, 4.5, rows, c["kind"], div)
+        unit = unit_of(c)
+        text(s, MX, 1.7, 8.0, .35, c["title"] + (f"  (đơn vị: {unit})" if unit and c["kind"] != "donut" else ""), size=12, bold=True, color=SUB)
+        _chart(s, MX, 2.05, 8.0, 4.5, rows, c["kind"], unit)
         px, pw = 8.95, W - MX - 8.95
         rect(s, px, 1.75, pw, 4.8, fill=SOFT)
         text(s, px + .2, 1.9, pw - .4, .35, "ĐIỀU NÀY CÓ NGHĨA LÀ", size=11, bold=True, color=PRI)
         text(s, px + .2, 2.3, pw - .4, 1.7, trunc(c.get("insight") or c["title"], 230), size=14, bold=True, color=NAVY)
         text(s, px + .2, 4.1, pw - .4, .3, "Số liệu nổi bật", size=11, bold=True, color=PRI)
-        text(s, px + .2, 4.4, pw - .4, 2.1, [f"▸ {x}" for x in facts(rows, c["kind"])], size=12, color=INK, after=6)
+        text(s, px + .2, 4.4, pw - .4, 2.1, [f"▸ {x}" for x in facts(rows, c["kind"], unit)], size=12, color=INK, after=6)
         d.source(s, f"{trunc(F['table_titles'][c['task']], 80)}; dữ liệu đã làm sạch")
 
 

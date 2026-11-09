@@ -14,6 +14,7 @@ import re
 
 from .. import numfmt
 from ..constants import STEP_T
+from ..utils import fmt_pct
 from ..data.cleaning import OPL
 from ..llm import llm_json
 from ..state import A, LOCK, bump, log, next_gen, now_iso, start_bg
@@ -64,9 +65,11 @@ def facts_1():
     L = ["## Quy mô dữ liệu"] + [f"- {k['label']}: {k['value']}" + (f" ({k['delta']})" if k.get("delta") else "") for k in d.get("kpis") or []]
     L += _lines("## Cấu trúc tệp", [f"- {x['file']}: {x['verdict']} — {_cut('; '.join(x.get('issues') or []) or 'ổn', 160)}" + (f"; đã xử lý: {_cut('; '.join(x['actions']), 120)}" if x.get("actions") else "")
                                    for x in d.get("structure") or []])
-    L += ["", "## Nhận định về dữ liệu"] + [f"- [{f.get('tag', '')}] {_cut(f.get('text'), 400)}" for f in d.get("findings") or []]
+    from .profiler import clean_tag                    # nạp muộn: tránh vòng import
+    L += ["", "## Nhận định về dữ liệu"] + [f"- [{clean_tag(f.get('tag'), f.get('text'))}] {_cut(f.get('text'), 400)}" for f in d.get("findings") or []]
     iss = d.get("issues") or []
-    L += _lines(f"## Vấn đề phát hiện ({_n(len(iss))})", [f"- {r['file']} · {r['col']}: {r['issue']} ({_n(r['n'])})" for r in sorted(iss, key=lambda r: -r["n"])[:12]])
+    L += _lines(f"## Vấn đề phát hiện ({_n(len(iss))})", [f"- {r['file']} · {r['col']}: {r['issue']} ({_n(r['n'])})" + (f" → đề xuất: {_cut(r['fix'], 150)}" if r.get("fix") else "")
+                                                       for r in sorted(iss, key=lambda r: -r["n"])[:12]])
     return "\n".join(L)
 
 
@@ -103,7 +106,7 @@ def facts_2():
         for c in x.columns:
             p = float(x[c].isna().mean())
             if p > 0:
-                miss.append((p, f"- {n} · {c}: còn {p * 100:.1f}% ô thiếu".replace(".", ",")))
+                miss.append((p, f"- {n} · {c}: còn {fmt_pct(p * 100)} ô thiếu"))
     L += _lines("## Cột còn thiếu dữ liệu (cần thận trọng khi phân tích)", [t for _, t in sorted(miss, reverse=True)[:8]])
     return "\n".join(L)
 

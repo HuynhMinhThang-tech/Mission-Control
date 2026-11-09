@@ -6,14 +6,19 @@
   const $ = (s, r = document) => r.querySelector(s);
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const PAL = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
-  const mkf = d => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: d });
-  const f0 = mkf(0), f1 = mkf(1), f2 = mkf(2);
-  const compact = v => { if (v == null || !isFinite(v)) return '—'; const a = Math.abs(v);
-    if (a >= 1e9) return f1.format(v / 1e9) + ' tỷ'; if (a >= 1e6) return f1.format(v / 1e6) + ' triệu'; if (a >= 1e4) return f1.format(v / 1e3) + ' nghìn'; return f1.format(v) };
-  const val = (v, u) => u === '@rate' ? (v == null || !isFinite(v) ? '—' : pct(v)) : u ? compact(v) + ' ' + u : compact(v);        // '@rate': chỉ số tỷ lệ (0..1) hiện dạng %
-  const full = (v, m) => v == null || !isFinite(v) ? '' : m && m.rate ? pct(v) : (m && m.dec === 0 ? f0 : f2).format(v);
-  const fv = (v, m, a) => a === 'count' ? f0.format(v) : (m && m.rate ? pct(v) : compact(v));          // giá trị ngắn trên trục / đầu cột
-  const pct = x => f1.format(x * 100) + '%';
+  /* QUY TẮC SỐ (giống app/utils.py và static/js/fmt.js; sửa ở đâu thì sửa cả ba):
+     nguyên 1.234.567 · lẻ 1.234,50 (luôn 2 chữ số) · tỷ lệ 54,20% · tiền ghi ĐỦ số kèm đơn vị của dữ liệu (1.234.567 đ), không viết tắt nghìn/triệu/tỷ. */
+  const mkf = d => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const f0 = mkf(0), f2 = mkf(2);
+  const ok = v => v != null && v !== '' && typeof v !== 'boolean' && isFinite(+v), isInt = x => Math.abs(x - Math.round(x)) < 1e-9;
+  const num = v => !ok(v) ? '—' : isInt(+v) ? f0.format(Math.round(+v)) : f2.format(+v);
+  const compact = num;                                                                     // tên cũ, nay KHÔNG còn rút gọn
+  const pctv = x => ok(x) ? f2.format(+x) + '%' : '—';                                     // x theo đơn vị %
+  const pct = x => ok(x) ? f2.format(+x * 100) + '%' : '—';                                // x là tỷ lệ 0..1
+  const val = (v, u) => u === '@rate' ? pct(v) : u === '%' ? pctv(v) : !ok(v) ? '—' : u ? num(v) + ' ' + u : num(v);        // '@rate': chỉ số tỷ lệ (0..1) hiện dạng %
+  const full = (v, m) => !ok(v) ? '' : m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : num(v);
+  const fv = (v, m, a) => a === 'count' ? f0.format(v) : (m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : num(v));          // giá trị trên trục / đầu cột
+  const colFmt = vs => vs.some(v => ok(v) && !isInt(+v)) ? (v => ok(v) ? f2.format(+v) : '') : (v => ok(v) ? f0.format(Math.round(+v)) : '');
   const ml = s => { const p = String(s).split('-'); return p.length === 2 && /^\d{4}$/.test(p[0]) ? 'T' + (+p[1]) + '/' + p[0] : s };
   const lc = s => s.charAt(0).toLowerCase() + s.slice(1);
   const stripTong = s => s.replace(/^tổng\s+/i, '');
@@ -113,10 +118,11 @@
     for (let v = a; v <= b + step / 2; v += step) t.push(+v.toFixed(8)); return t.length > 1 ? t : [a, a + step];
   }
   function trendSVG(g, W, m, a, ro) {
-    const H = 250, pl = 58, pr = 14, pt = 12, pb = 30, n = g.length, vs = g.map(r => r.v);
+    const H = 250, pr = 14, pt = 12, pb = 30, n = g.length, vs = g.map(r => r.v);
     const tk = niceTicks(Math.min(...vs, 0), Math.max(...vs, 0)), mn = tk[0], mx = tk[tk.length - 1], sp = (mx - mn) || 1;
+    const tl = tk.map(v => fv(v, m, a)), pl = Math.max(58, Math.max(...tl.map(s => s.length)) * 6.6 + 18);        // số đầy đủ rộng hơn bản rút gọn nên lề trái tự giãn theo nhãn trục
     const X = i => n === 1 ? pl + (W - pl - pr) / 2 : pl + i * (W - pl - pr) / (n - 1), Y = v => pt + (mx - v) / sp * (H - pt - pb);
-    const grid = tk.map(v => { const y = Y(v); return `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}"/><text x="${pl - 10}" y="${y + 4}" text-anchor="end">${esc(fv(v, m, a))}</text>` }).join('');
+    const grid = tk.map((v, ti) => { const y = Y(v); return `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}"/><text x="${pl - 10}" y="${y + 4}" text-anchor="end">${esc(tl[ti])}</text>` }).join('');
     const pts = g.map((r, i) => [X(i), Y(r.v)]), base = Y(Math.max(mn, 0)), every = Math.ceil(n / Math.max(2, Math.floor((W - pl - pr) / 70))), step = n > 1 ? (W - pl - pr) / (n - 1) : 60;
     const id = 'g' + Math.random().toString(36).slice(2, 7), anyS = selOn('t');
     return `<svg viewBox="0 0 ${W} ${H}" role="img"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--acc);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--acc);stop-opacity:0"/></linearGradient></defs>${grid}
@@ -132,7 +138,7 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const u = m ? m.unit : '', v = x => a === 'count' ? f0.format(x) : val(x, u), real = g.filter(r => !r.na), add = a !== 'avg';
     if (type === 'trend') { const f = g[0], l = g[g.length - 1], pk = g.reduce((b, r) => r.v > b.v ? r : b, g[0]);
       const ch = f.v ? (l.v / f.v - 1) : null;
-      return g.length > 1 ? `${ml(f.l)} đến ${ml(l.l)}${ch == null ? '' : (ch >= 0 ? ': tăng ' : ': giảm ') + f1.format(Math.abs(ch) * 100) + '%'} · cao nhất <b>${esc(ml(pk.l))}</b> (${esc(v(pk.v))})` : '' }
+      return g.length > 1 ? `${ml(f.l)} đến ${ml(l.l)}${ch == null ? '' : (ch >= 0 ? ': tăng ' : ': giảm ') + f2.format(Math.abs(ch) * 100) + '%'} · cao nhất <b>${esc(ml(pk.l))}</b> (${esc(v(pk.v))})` : '' }
     const top = (real.length ? real : g).reduce((b, r) => r.v > b.v ? r : b), tot = g.reduce((s, r) => s + Math.max(r.v, 0), 0);
     return add && tot > 0 ? `<b>${esc(top.l)}</b> dẫn đầu, chiếm ${pct(top.v / tot)} tổng` : `Cao nhất: <b>${esc(top.l)}</b> (${esc(v(top.v))})`;
   }
@@ -141,9 +147,10 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const isT = by === 't', ord = isT || (ds.dims.find(d => d.k === by) || {}).ord, u = m ? m.unit : '';
     let rows = ord ? g.slice().sort((x, y) => x.q - y.q) : g.slice().sort((x, y) => (x.na - y.na) || (y.v - x.v));
     const cap = isT ? 24 : 10, cut = rows.length - cap; if (cut > 0) rows = isT ? rows.slice(-cap) : rows.slice(0, cap);
-    const mx = Math.max(...rows.map(r => r.v), 0) || 1;
-    return `<div class="cols">${rows.map(r => `<div class="col ${r.na ? 'na' : ''} ${cls(by, r.q)}" data-k="${by}" data-q="${r.q}" data-tt="${tt({ ...r, l: isT ? ml(r.l) : r.l }, m, a)}">
-<span class="cv">${fv(r.v, m, a)}</span><span class="cb"><i style="height:${Math.max(2, r.v / mx * 100)}%"></i></span><span class="cl" title="${esc(isT ? ml(r.l) : r.l)}">${esc(isT ? ml(r.l) : r.l)}</span></div>`).join('')}</div>${cut > 0 ? `<p class="more">và ${cut} ${isT ? 'kỳ trước đó' : 'nhóm khác'} không hiển thị</p>` : ''}`;
+    const mx = Math.max(...rows.map(r => r.v), 0) || 1, txt = rows.map(r => fv(r.v, m, a)), wide = rows.length > 5 && Math.max(...txt.map(s => s.length)) * 6.4 > 560 / rows.length;
+    const hi = rows.findIndex(r => r.v === mx), lo = rows.reduce((b, r, i) => r.v < rows[b].v ? i : b, 0);
+    return `<div class="cols">${rows.map((r, i) => `<div class="col ${r.na ? 'na' : ''} ${cls(by, r.q)}" data-k="${by}" data-q="${r.q}" data-tt="${tt({ ...r, l: isT ? ml(r.l) : r.l }, m, a)}">
+<span class="cv">${wide && i !== hi && i !== lo ? '' : txt[i]}</span><span class="cb"><i style="height:${Math.max(2, r.v / mx * 100)}%"></i></span><span class="cl" title="${esc(isT ? ml(r.l) : r.l)}">${esc(isT ? ml(r.l) : r.l)}</span></div>`).join('')}</div>${cut > 0 ? `<p class="more">và ${cut} ${isT ? 'kỳ trước đó' : 'nhóm khác'} không hiển thị</p>` : ''}`;
   }
 
   /* ---- danh sách biểu đồ cần vẽ: theo KẾ HOẠCH do người dùng chọn (D.plan); không có kế hoạch thì tự chọn theo dữ liệu như trước ---- */
@@ -200,8 +207,9 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
       return `<td class="hc ${cls(by, g.q)}" data-k="${by}" data-q="${g.q}" style="--v:${Math.round(Math.max(0, Math.min(1, x.v)) * 100)}" data-tt="${esc(g.l + ' · ' + (ms[j].short || ms[j].label) + ': ' + pct(x.v) + ' (' + f0.format(x.rows) + ' lượt)')}">${pct(x.v)}</td>` };
     return `<div class="tw"><table class="heat"><thead><tr><th></th>${ms.map(m => `<th title="${esc(m.label)}">${esc(m.short || m.label)}</th>`).join('')}</tr></thead><tbody>${base.map(g => `<tr><th class="hl ${cls(by, g.q)}" data-k="${by}" data-q="${g.q}" title="${esc(g.l)}">${esc(g.l)}<small>${f0.format(g.rows)}</small></th>${ms.map((m, j) => cell(g, j)).join('')}</tr>`).join('')}</tbody></table></div>` }
   function staticHTML(c, n) {
-    const vs = c.values, labs = c.labels, u = c.unit || '', mx = Math.max(...vs.map(Math.abs), 0) || 1, fmt = v => u ? compact(v) + ' ' + u : compact(v);
-    if (c.kind === 'cols') return `<div class="cols">${labs.map((l, i) => `<div class="col" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="cv">${esc(compact(vs[i]))}</span><span class="cb"><i style="height:${Math.max(2, Math.abs(vs[i]) / mx * 100)}%"></i></span><span class="cl" title="${esc(l)}">${esc(l)}</span></div>`).join('')}</div>`;
+    const vs = c.values, labs = c.labels, u = c.unit || '', mx = Math.max(...vs.map(Math.abs), 0) || 1, fmt = v => val(v, u);
+    const sw = labs.length > 5 && Math.max(...vs.map(v => compact(v).length)) * 6.4 > 560 / labs.length, shi = vs.indexOf(Math.max(...vs)), slo = vs.indexOf(Math.min(...vs));
+    if (c.kind === 'cols') return `<div class="cols">${labs.map((l, i) => `<div class="col" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="cv">${sw && i !== shi && i !== slo ? '' : esc(compact(vs[i]))}</span><span class="cb"><i style="height:${Math.max(2, Math.abs(vs[i]) / mx * 100)}%"></i></span><span class="cl" title="${esc(l)}">${esc(l)}</span></div>`).join('')}</div>`;
     if (c.kind === 'line') { jobs.push({ id: 'stl' + n, g: labs.map((l, i) => ({ q: -1, l, v: vs[i], rows: 0 })), m: null, a: 'sum', ro: true }); return `<div class="trend" id="stl${n}"></div>` }
     return `<div class="bars">${labs.map((l, i) => `<div class="bar" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="bl" title="${esc(l)}">${esc(l)}</span><span class="bt"><i style="width:${Math.max(0, vs[i] / mx * 100)}%"></i></span><span class="bv">${esc(fmt(vs[i]))}</span></div>`).join('')}</div>` }
   /* chế độ chỉnh (chỉ ở bản xem thử trong ứng dụng): mỗi thẻ có nút di chuyển, đổi dạng, ẩn; bản xuất ra không có */
@@ -231,7 +239,8 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, aggOf(m))); const base = groupBy(by, '', 'count');
     let rows = base.map(b => { const o = { l: b.l, rows: b.rows }; mc.forEach(m => { const x = by2[m.k].find(y => y.q === b.q); o[m.k] = x ? x.v : null }); return o });
     rows.sort((x, y) => (typeof x[t.sort] === 'string' ? x[t.sort].localeCompare(y[t.sort], 'vi', { numeric: true }) : (x[t.sort] ?? -Infinity) - (y[t.sort] ?? -Infinity)) * t.dir); rows = rows.slice(0, 60);
-    const cell = (v, k) => k === 'l' ? esc(by === 't' ? ml(v) : v) : k === 'rows' ? f0.format(v) : esc(full(v, mc.find(m => m.k === k)));
+    const cf = {}; mc.forEach(m => { cf[m.k] = m.rate ? pct : m.unit === '%' ? pctv : colFmt(rows.map(r => r[m.k])) });
+    const cell = (v, k) => k === 'l' ? esc(by === 't' ? ml(v) : v) : k === 'rows' ? f0.format(v) : esc(cf[k](v));
     return `<section class="card c12"><div class="ch row"><div><h3>Bảng chi tiết</h3><p>Tổng hợp theo từng nhóm, bấm tiêu đề cột để sắp xếp.</p></div>
 <label class="pill"><span class="k">Nhóm theo</span><select data-tb="by">${keys().map(k => `<option value="${k}" ${k === by ? 'selected' : ''}>${esc(L[k])}</option>`).join('')}</select></label></div>
 <div class="tw"><table><thead><tr>${head.map(([k, l, n]) => `<th class="${n ? 'n' : ''}" data-sort="${k}">${esc(l)}${t.sort === k ? (t.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead>
@@ -262,7 +271,7 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
       case 'distinct': if (!(by in L)) return null; return [lab('Số ' + lc(L[by])), f0.format(groupBy(by, '', 'count').filter(g => !g.na).length), ''];
       case 'missing': if (!m) return null; return [lab('Chưa có dữ liệu'), K.rows ? pct(Math.max(0, 1 - K.Cn[j] / K.rows)) : '—', esc(m.short || m.label)];
       case 'latest': { if (!m || !ds.time) return null; const a = aggOf(m), g = groupBy('t', m.k, a).sort((x, y) => x.q - y.q); if (!g.length) return null; const l = g[g.length - 1], p = g[g.length - 2], ch = p && p.v ? l.v / p.v - 1 : null;
-        return [lab(mName(m, a) + ' kỳ gần nhất'), val(l.v, m.unit), esc(ml(l.l)) + (ch == null ? '' : ` · ${ch >= 0 ? 'tăng' : 'giảm'} ${f1.format(Math.abs(ch) * 100)}% so với ${esc(ml(p.l))}`)] }
+        return [lab(mName(m, a) + ' kỳ gần nhất'), val(l.v, m.unit), esc(ml(l.l)) + (ch == null ? '' : ` · ${ch >= 0 ? 'tăng' : 'giảm'} ${f2.format(Math.abs(ch) * 100)}% so với ${esc(ml(p.l))}`)] }
       case 'top': { if (!m || !(by in L)) return null; const a = aggOf(m), g = groupBy(by, m.k, a).filter(r => !r.na); if (!g.length) return null; const t0 = g.reduce((b, r) => r.v > b.v ? r : b, g[0]); return [lab(L[by] + ' cao nhất'), t0.l, `${esc(mName(m, a))}: ${esc(val(t0.v, m.unit))}`] }
     }
     return null;
@@ -331,8 +340,12 @@ ${ds.cube ? `<div class="note">Dữ liệu lớn (${f0.format(ds.n_src)} dòng) 
     if (!el) { b.style.display = 'none'; return } b.textContent = el.dataset.tt; b.style.display = 'block'; b.style.left = Math.min(e.clientX + 14, innerWidth - 300) + 'px'; b.style.top = (e.clientY + 16) + 'px' });
   document.addEventListener('mousedown', e => { document.querySelectorAll('details.sl[open]').forEach(d => { if (!d.contains(e.target)) { d.open = false; openK.delete(d.dataset.sl) } }) });
   window.addEventListener('message', e => { const m = e.data; if (e.origin !== location.origin || !m || m.type !== 'mc-plan' || !Array.isArray(m.plan)) return;
-    const was = JSON.stringify([D.bp && D.bp.layout, D.bp && D.bp.blocks]); D.plan = m.plan; if (m.bp && typeof m.bp === 'object') D.bp = m.bp;
+    const was = JSON.stringify([D.bp && D.bp.layout, D.bp && D.bp.blocks]); D.plan = m.plan; if (m.bp && typeof m.bp === 'object') { D.bp = m.bp; applyFont(m.bp.font) }
     if (!ds) return; const y = window.scrollY; if (JSON.stringify([D.bp && D.bp.layout, D.bp && D.bp.blocks]) !== was) $('#app').innerHTML = ''; render(); window.scrollTo(0, y) });
+  /* đổi phông tức thì khi người dùng chọn ở thư viện (bản xem thử): cập nhật biến CSS và nạp phông web nếu cần */
+  function applyFont(k) { const F = (D.fonts || {})[k]; if (!F) return; let s = document.getElementById('fontvars');
+    if (!s) { s = document.createElement('style'); s.id = 'fontvars'; document.head.appendChild(s) } s.textContent = ':root{--font:' + F.body + ';--fh:' + F.head + '}';
+    let l = document.getElementById('fontlink'); if (F.url) { if (!l) { l = document.createElement('link'); l.id = 'fontlink'; l.rel = 'stylesheet'; document.head.appendChild(l) } if (l.getAttribute('href') !== F.url) l.href = F.url } else if (l) l.removeAttribute('href') }
   let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (ds) paintTrends() }, 120) });
   if (!D.datasets.length) { $('#app').innerHTML = `<div class="wrap"><h1>${esc(D.title)}</h1><div class="note">Không có bảng dữ liệu phù hợp để dựng bảng điều khiển tương tác (cần ít nhất một cột phân loại hoặc cột ngày tháng).</div></div>` } else init(0);
 })();

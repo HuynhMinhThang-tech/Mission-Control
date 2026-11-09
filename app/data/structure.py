@@ -10,7 +10,7 @@ import re
 import unicodedata
 
 import numpy as np
-from ..utils import to_num_if_mostly
+from ..utils import fmt_pct, to_num_if_mostly
 import pandas as pd
 
 PERIOD = re.compile(r"^(t|th|q|quý|tháng)\s?\d{1,2}$|^(19|20)\d{2}$", re.I)
@@ -214,7 +214,7 @@ def analyze(raw, plain, merged=0):
                     actions += notes
                     if checked:
                         pct = ok / checked * 100
-                        actions.append(f"Đối chiếu với cột Tổng: {ok}/{checked} dòng khớp ({pct:.0f}%)")
+                        actions.append(f"Đối chiếu với cột Tổng: {ok}/{checked} dòng khớp ({fmt_pct(pct)})")
                         if pct < 80:
                             issues.append(f"Cột Tổng không khớp tổng các kỳ ở {checked - ok}/{checked} dòng, cần kiểm tra lại số liệu gốc")
         except Exception as e:  # noqa: BLE001

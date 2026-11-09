@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from .. import numfmt
-from .common import PRI_ORDER, chart_rows, facts
+from .common import PRI_ORDER, chart_rows, facts, unit_of
 
 
 def build_md(F):
@@ -13,7 +13,7 @@ def build_md(F):
     for c in F["charts"]:
         rows = chart_rows(F["dfs"][c["task"]], c["x"], c["y"])
         L += ["", f"### {c.get('insight') or c['title']}", f"*{c['title']}* — nguồn: {F['table_titles'][c['task']]}"]
-        L += [f"- {x}" for x in facts(rows, c["kind"])]
+        L += [f"- {x}" for x in facts(rows, c["kind"], unit_of(c))]
     L += ["", "## Phát hiện chính"]
     ok, n = numfmt.verify_counts(F["insights"])
     if n:

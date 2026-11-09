@@ -7,9 +7,10 @@ RULE = ("NGÔN NGỮ: viết TOÀN BỘ bằng tiếng Việt có dấu (tiêu �
         "Không xen tiếng Anh (không viết insight, dashboard, KPI, count, avg, total, ratio...). Tên cột kết quả phải đọc tự nhiên như người Việt viết, "
         "viết hoa chữ cái đầu, có dấu cách, ví dụ 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'; tuyệt đối không dùng snake_case hay chữ IN HOA. "
         "Chỉ giữ nguyên tên riêng, mã và giá trị gốc có trong dữ liệu. "
-        "SỐ VÀ ĐƠN VỊ: dùng dấu chấm ngăn nghìn, dấu phẩy thập phân (1.234.567,5); tiền viết bằng chữ Việt: '2,24 tỷ đồng', '850 triệu đồng' (tuyệt đối không viết trillion, billion, million, VND; "
-        "không dùng 'điểm' làm đơn vị tiền); tỷ lệ viết '57,3%'. Mọi con số PHẢI sao chép từ bảng kết quả được cung cấp, không tự cộng trừ nhẩm, không làm tròn lệch; "
-        "giá trị KPI là chuỗi đã định dạng kiểu Việt (vd '11,77 tỷ đồng').")
+        "SỐ VÀ ĐƠN VỊ (MỘT quy tắc cho mọi con số): dấu chấm ngăn nghìn, dấu phẩy thập phân. Số nguyên không có phần thập phân (1.234.567); số thập phân và tỷ lệ luôn đúng 2 chữ số sau dấu phẩy (1.234,50 · 57,30%). "
+        "TIỀN ghi ĐỦ số, có dấu ngăn nghìn, kèm đơn vị theo dữ liệu, ký hiệu 'đ' (vd '2.240.813.537 đ', '850.000 đ'); TUYỆT ĐỐI không viết tắt 'nghìn', 'triệu', 'tỷ' cho số tiền và không viết trillion, billion, million, VND, đồng; "
+        "không dùng 'điểm' làm đơn vị tiền. Mọi con số PHẢI sao chép từ bảng kết quả được cung cấp, không tự cộng trừ nhẩm, không làm tròn lệch; "
+        "giá trị KPI là chuỗi đã định dạng đúng quy tắc trên (vd '11.773.398.767 đ', '54,20%', '14.500').")
 
 COLNAME_RULE = ("TÊN CỘT của `result` PHẢI là tiếng Việt có dấu, tự nhiên (vd 'Cấp bậc', 'Số lượng nhân sự', 'Lương trung bình', 'Tỷ trọng (%)'): "
                 "đặt tên ngay khi tổng hợp hoặc đổi tên ở cuối code bằng result = result.rename(columns={...}). Không dùng tên tiếng Anh, snake_case hay chữ IN HOA.")

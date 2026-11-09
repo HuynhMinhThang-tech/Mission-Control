@@ -37,7 +37,7 @@ def ft(pg, sel, text):
 
 def acc(pg):
     """Chấp nhận bước rồi duyệt bản tổng hợp để Agent kế tiếp chạy."""
-    pg.click("[data-a=ok]"); idle(pg); pg.wait_for_selector(".memo.dr [data-a=mok]"); pg.click("[data-a=mok]"); idle(pg)
+    pg.click("[data-a=ok]"); idle(pg); pg.wait_for_selector(".memo.draft [data-a=mok]"); pg.click("[data-a=mok]"); idle(pg)
 
 
 def idle(pg, t=90):
@@ -88,13 +88,18 @@ with sync_playwright() as p:
     pg.click("[data-dk='kind:cat']")
     check("phân bố: lọc theo loại biến", pg.locator(".dc").count() == 3 and pg.locator(".dc svg.hs").count() == 0)
     pg.click("[data-dk='kind:all']")
-    pg.click("[data-a=ok]"); idle(pg); pg.wait_for_selector(".memo.dr [data-a=mok]")
-    check("chấp nhận bước 1: ở lại bước, hiện bản tổng hợp chờ duyệt; bước 2 chưa chạy", pg.evaluate("() => V") == 1 and pg.evaluate("() => ST.st[2]") == "pending" and "Bản tổng hợp · Bước 1" in pg.locator(".memo.dr .md").inner_text()
-          and pg.locator("#stepper .st.memo").count() == 1 and pg.locator("#stepper [data-v='2']").is_disabled())
+    pg.click("[data-a=ok]"); idle(pg); pg.wait_for_selector(".memo.draft [data-a=mok]")
+    check("chấp nhận bước 1: ở lại bước, hiện bản tổng hợp chờ duyệt; bước 2 chưa chạy", pg.evaluate("() => V") == 1 and pg.evaluate("() => ST.st[2]") == "pending" and "Bản tổng hợp · Bước 1" in pg.locator(".memo.draft .md").inner_text()
+          and pg.locator("#stepper .st.mp").count() == 1 and pg.locator("#stepper [data-v='2']").is_disabled())
+    # bản tổng hợp nằm Ở CUỐI bước (dưới nội dung), bố cục dọc đúng (không bị .dr làm thành hàng ngang)
+    lay = pg.evaluate("""() => { const m = document.querySelector('#stage .memo'), k = document.querySelector('#stage .kpis, #stage .dc, #stage .tw'); const kids = [...m.children].map(e => e.getBoundingClientRect());
+      return { below: m.getBoundingClientRect().top > k.getBoundingClientRect().top, stacked: kids.every((r, i) => i === 0 || r.top >= kids[i - 1].top), wide: m.getBoundingClientRect().width > 300, fs: parseFloat(getComputedStyle(m).fontSize) } }""")
+    check("bản tổng hợp nằm dưới nội dung bước, các phần xếp dọc, cỡ chữ bình thường", lay["below"] and lay["stacked"] and lay["wide"] and lay["fs"] >= 12, str(lay))
+    fx = pg.evaluate("() => [...document.querySelectorAll('#stage details')].map(d => d.innerText).join('\\n')")
     pg.click("[data-a=med]"); pg.wait_for_selector(".tpd.mono .tpt"); v0 = pg.input_value(".tpd .tpt"); pg.fill(".tpd .tpt", v0 + "\n- Ghi chú của tôi từ giao diện."); pg.click(".tpd0"); idle(pg)
-    check("sửa trực tiếp bản tổng hợp trong panel: lưu và hiện ngay", "Ghi chú của tôi từ giao diện" in pg.locator(".memo.dr .md").inner_text() and pg.evaluate("() => ST.memo[1].edited"))
-    pg.click("[data-a=mfbt]"); ft(pg, "textarea[data-i=mfb]", "nhấn mạnh dữ liệu thiếu"); pg.click("[data-a=mrw]"); idle(pg); pg.wait_for_selector(".memo.dr [data-a=mprev]")
-    check("nhờ AI viết lại theo góp ý: có bản mới, có nút quay lại bản trước", "Theo góp ý" in pg.locator(".memo.dr .md").inner_text() and "Ghi chú của tôi từ giao diện" in pg.locator(".memo.dr .md").inner_text())
+    check("sửa trực tiếp bản tổng hợp trong panel: lưu và hiện ngay", "Ghi chú của tôi từ giao diện" in pg.locator(".memo.draft .md").inner_text() and pg.evaluate("() => ST.memo[1].edited"))
+    pg.click("[data-a=mfbt]"); ft(pg, "textarea[data-i=mfb]", "nhấn mạnh dữ liệu thiếu"); pg.click("[data-a=mrw]"); idle(pg); pg.wait_for_selector(".memo.draft [data-a=mprev]")
+    check("nhờ AI viết lại theo góp ý: có bản mới, có nút quay lại bản trước", "Theo góp ý" in pg.locator(".memo.draft .md").inner_text() and "Ghi chú của tôi từ giao diện" in pg.locator(".memo.draft .md").inner_text())
     pg.click("[data-a=mok]"); idle(pg); pg.wait_for_selector(".cg")
     check("duyệt bản tổng hợp: sang bước 2 và bước 2 đã chạy; bản bước 1 thu gọn, đã duyệt", pg.evaluate("() => V") == 2 and pg.evaluate("() => ST.st[2]") == "await" and pg.evaluate("() => ST.memo[1].status") == "approved")
     # ---- Mục 2: bước Làm sạch MỘT thẻ cho mỗi cột, không còn thẻ 'Gộp giá trị...' riêng
@@ -173,6 +178,14 @@ with sync_playwright() as p:
     pg.select_option("select[data-bp=layout]", "story"); pg.wait_for_timeout(300)
     check("đổi kiểu bố cục: áp dụng ngay (CSS theo kiểu), khung không tải lại", ifr("!!d.querySelector('.wrap.flx.lay-story')") and pg.evaluate("() => document.querySelector('iframe.dashf').contentWindow.__m") == "giu")
     pg.select_option("select[data-bp=layout]", "auto"); pg.wait_for_timeout(200)
+    # phông chữ: mặc định giống Claude (tiêu đề chữ có chân, nội dung Inter); đổi ở thư viện thì bản xem thử đổi ngay, khung không tải lại
+    fv0 = ifr("getComputedStyle(d.documentElement).getPropertyValue('--fh') + '|' + getComputedStyle(d.documentElement).getPropertyValue('--font')")
+    check("phông mặc định 'Giống Claude': tiêu đề Source Serif 4, nội dung Inter", "Source Serif 4" in fv0.split("|")[0] and "Inter" in fv0.split("|")[1], fv0)
+    check("ô chọn phông có đủ các bộ phông, mặc định là 'Giống Claude'", pg.locator("select[data-bp=font] option").count() >= 5 and pg.locator("select[data-bp=font]").input_value() == "claude")
+    pg.select_option("select[data-bp=font]", "bevn"); pg.wait_for_timeout(300)
+    fv1 = ifr("getComputedStyle(d.documentElement).getPropertyValue('--font')")
+    check("đổi phông ở thư viện: bản xem thử đổi ngay, khung không tải lại", "Be Vietnam Pro" in fv1 and pg.evaluate("() => document.querySelector('iframe.dashf').contentWindow.__m") == "giu", fv1)
+    pg.select_option("select[data-bp=font]", "claude"); pg.wait_for_timeout(200)
     # chỉnh ngay trên bản xem thử: ẩn / di chuyển
     c_on0 = pg.locator("#libin input[data-dp]:checked").count()
     titles0 = ifr("[...d.querySelectorAll('#gr section.card[data-cid] h3')].map(h => h.textContent)")

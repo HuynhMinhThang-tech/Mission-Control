@@ -14,6 +14,7 @@ Ngoài biểu đồ thường (type 'chart'), plan còn có: 'score' (bảng đi
 BẢN THIẾT KẾ (`bp`) quyết định phần còn lại của trang, trước đây cứng trong live.js: các thẻ KPI nào (không bắt buộc có "Số bản ghi"),
 kiểu bố cục, có bảng chi tiết hay không, những khối chữ nào hiện. AI đề xuất, người duyệt bật/tắt; không có `bp` thì trang dựng như trước."""
 from .. import labels as lb
+from . import fonts
 from .interactive import build_datasets
 
 KINDS = ("bars", "cols", "donut", "trend")
@@ -356,7 +357,8 @@ def validate_bp(bp, cat):
     blocks = bp.get("blocks") if isinstance(bp.get("blocks"), dict) else {}
     return {"layout": bp.get("layout") if bp.get("layout") in LAYOUTS else "auto", "kpis": kp[: MAX_KPIS * max(1, len(cat))],
             "table": {"on": bool(tb.get("on", True)) if isinstance(tb, dict) else bool(tb) if tb is not None else True},
-            "blocks": {k: bool(blocks.get(k, True)) for k in ("ans", "ins", "act", "risk")}}
+            "blocks": {k: bool(blocks.get(k, True)) for k in ("ans", "ins", "act", "risk")},
+            "font": fonts.norm(bp.get("font"))}                # phông của báo cáo HTML và bảng điều khiển (xem export/fonts.py)
 
 
 def default_bp(cat):
@@ -390,7 +392,7 @@ def default_bp(cat):
 
 def bp_from_ai(raw, cat):
     """Đề xuất của AI theo NHÃN ({layout, kpis:[{ds, kind, measure, by, label}], table, blocks}) -> bản thiết kế theo khóa. Phần AI bỏ trống thì dùng luật."""
-    base = default_bp(cat) or {"layout": "auto", "kpis": [], "table": {"on": False}, "blocks": {}}
+    base = default_bp(cat) or {"layout": "auto", "kpis": [], "table": {"on": False}, "blocks": {}, "font": fonts.DEFAULT}
     if not isinstance(raw, dict):
         return base
     kp = []

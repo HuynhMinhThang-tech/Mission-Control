@@ -1,7 +1,7 @@
 /* Báo cáo phân tích (HTML tĩnh): cùng hệ thống thiết kế với bảng điều khiển tương tác. */
 :root{--bg:#F5F6FA;--panel:#fff;--p2:#F3F4F9;--ink:#0F172A;--sub:#5B6478;--mute:#94A3B8;--line:#E6E9F0;--pri:#4F46E5;--soft:#EEF0FF;--pri-ink:#3730A3;--mut:#C9CDF3;
   --ok:#047857;--okb:#E3F6EE;--warn:#B45309;--warnb:#FEF1DC;--bad:#B91C1C;--badb:#FDEAEA;--shadow:0 1px 2px rgba(15,23,42,.04);
-  --font:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+  --fh:var(--font);--font:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
 @media(prefers-color-scheme:dark){:root{--bg:#0A0F1F;--panel:#121A31;--p2:#182140;--ink:#E7EBF7;--sub:#9AA5BE;--mute:#6C7893;--line:#212B49;--pri:#8B93FF;--soft:#1B2250;--pri-ink:#C7CBFF;--mut:#38427A;
   --ok:#4ADE9F;--okb:#12352B;--warn:#F5B454;--warnb:#392A12;--bad:#FF8A8A;--badb:#3A1A1E;--shadow:none}}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:70px}
@@ -12,7 +12,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 var(--font);-
 .hd{padding:56px 0 26px}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;font-size:12.5px;letter-spacing:.04em;color:var(--pri);font-weight:600}
 .eyebrow:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--pri)}
-.hd h1{margin:0 0 14px;font-weight:700;font-size:36px;line-height:1.2;letter-spacing:-.02em;max-width:26ch}
+.hd h1{font-family:var(--fh);margin:0 0 14px;font-weight:700;font-size:36px;line-height:1.2;letter-spacing:-.02em;max-width:26ch}
 .hd .q{margin:0;max-width:78ch;color:var(--sub);font-size:15.5px}.hd .q b{color:var(--ink);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.chip{font-size:12.5px;font-weight:500;border-radius:999px;padding:4px 13px;background:var(--panel);border:1px solid var(--line);color:var(--sub)}
 
@@ -22,12 +22,12 @@ nav.tabs .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:10px;padding-bot
 nav.tabs a{padding:6px 14px;color:var(--sub);text-decoration:none;font-weight:500;font-size:13.5px;white-space:nowrap;border-radius:999px;transition:.15s}
 nav.tabs a:hover{background:var(--soft);color:var(--pri-ink)}
 
-section{margin:44px 0}section>h2{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 16px}
+section{margin:44px 0}section>h2{font-family:var(--fh);font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0 0 16px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 26px;box-shadow:var(--shadow)}
 
 /* câu trả lời */
 .answer{background:var(--soft);border:0;padding:26px 30px}
-.answer .big{font-size:20px;line-height:1.55;margin:0 0 14px;font-weight:600;color:var(--ink);letter-spacing:-.005em}.answer p{margin:0 0 10px;color:var(--sub)}.answer p.big{color:var(--ink)}.answer p:last-child{margin-bottom:0}
+.answer .big{font-family:var(--fh);font-size:20px;line-height:1.55;margin:0 0 14px;font-weight:600;color:var(--ink);letter-spacing:-.005em}.answer p{margin:0 0 10px;color:var(--sub)}.answer p.big{color:var(--ink)}.answer p:last-child{margin-bottom:0}
 
 /* chỉ số */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
@@ -40,7 +40,7 @@ section{margin:44px 0}section>h2{font-size:22px;font-weight:700;letter-spacing:-
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:16px}
 @media(max-width:600px){.grid{grid-template-columns:1fr}.wrap{padding:0 16px}.hd h1{font-size:28px}}
 figure{margin:0}figure.card{padding:22px 24px 18px;display:flex;flex-direction:column}
-figcaption h3{margin:0 0 4px;font-size:16px;line-height:1.4;font-weight:600;letter-spacing:-.005em}figcaption .sub{margin:0 0 14px;color:var(--sub);font-size:13px}
+figcaption h3{font-family:var(--fh);margin:0 0 4px;font-size:16px;line-height:1.4;font-weight:600;letter-spacing:-.005em}figcaption .sub{margin:0 0 14px;color:var(--sub);font-size:13px}
 svg.chart{width:100%;height:auto;display:block}svg .lb{fill:var(--sub);font-size:12.5px;font-family:var(--font)}svg .vl{fill:var(--ink);font-size:12.5px;font-weight:600;font-family:var(--font)}svg .vl.b{font-weight:700}
 svg .bar{fill:var(--mut)}svg .hi{fill:var(--pri)}svg .neg{fill:var(--bad)}svg .ax{stroke:var(--line);stroke-width:1.2}
 svg .area{fill:var(--soft);opacity:.8}svg .ln{fill:none;stroke:var(--pri);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}svg .dot{fill:var(--panel);stroke:var(--pri);stroke-width:1.8}svg .dot.k{fill:var(--pri)}
@@ -51,7 +51,7 @@ svg .area{fill:var(--soft);opacity:.8}svg .ln{fill:none;stroke:var(--pri);stroke
 .ins{display:grid;gap:14px}
 .in{display:grid;grid-template-columns:34px 1fr;gap:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 22px;box-shadow:var(--shadow)}
 .in .n{width:32px;height:32px;border-radius:10px;background:var(--soft);color:var(--pri-ink);display:grid;place-items:center;font-weight:700;font-size:14px}
-.in h3{margin:0 0 6px;font-size:16px;line-height:1.45;font-weight:600}.ev{font-size:13.5px;color:var(--sub);margin:0}.ev b{color:var(--ink);font-weight:600}
+.in h3{font-family:var(--fh);margin:0 0 6px;font-size:16px;line-height:1.45;font-weight:600}.ev{font-size:13.5px;color:var(--sub);margin:0}.ev b{color:var(--ink);font-weight:600}
 .badge{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 10px;border-radius:999px;margin-left:8px;vertical-align:1px}
 .vf-ok{background:var(--okb);color:var(--ok)}.vf-un{background:var(--p2);color:var(--sub)}.vf-bad{background:var(--badb);color:var(--bad)}
 .b-Cao{background:var(--okb);color:var(--ok)}.b-Trung{background:var(--warnb);color:var(--warn)}.b-Thấp{background:var(--p2);color:var(--sub)}

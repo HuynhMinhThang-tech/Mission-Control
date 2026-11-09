@@ -16,6 +16,7 @@ from .. import labels as lb
 from ..data.binary import binary as _binary
 from ..data.quality import to_dt
 from ..utils import E, is_text
+from . import fonts
 
 ASSETS = Path(__file__).parent / "assets"
 NA = "Chưa có dữ liệu"      # nhãn cho ô trống (thay cho "(trống)")
@@ -122,8 +123,8 @@ def _spec(name, df):
     # "avg" = cách tổng hợp MẶC ĐỊNH là trung bình. Chỉ cộng khi nhận ra rõ là cộng được (lb.is_additive); không chắc thì trung bình (an toàn).
     # Người xem vẫn đổi tay được ngay trên thẻ chỉ số của bảng điều khiển.
     out_meas = [({"k": f"m{j}", "label": _pretty(c), "unit": lb.unit(c), "avg": not lb.is_additive(c), "add": lb.is_additive(c),
-                  "dec": 0 if (lb.unit(c) == "đ" or bool((s.dropna() % 1 == 0).all())) else 2} if pos is None else
-                 {"k": f"m{j}", "label": f"Tỷ lệ {pos.lower()} · {_pretty(c)}", "short": _pretty(c), "unit": "@rate", "avg": True, "add": False, "rate": True, "pos": pos, "dec": 1})
+                  "dec": 0 if bool((s.dropna() % 1 == 0).all()) else 2} if pos is None else
+                 {"k": f"m{j}", "label": f"Tỷ lệ {pos.lower()} · {_pretty(c)}", "short": _pretty(c), "unit": "@rate", "avg": True, "add": False, "rate": True, "pos": pos, "dec": 2})
                 for j, (c, s, pos) in enumerate(allm)]
 
     # ---- quá nhiều dòng -> gộp thành khối (sum + đếm) theo các chiều
@@ -188,9 +189,10 @@ def build_dashboard(meta, dfs, plan=None, bp=None, edit=False):
         payload["edit"] = True                   # chỉ bản XEM THỬ ở bước Báo cáo: hiện nút ẩn / đổi dạng / di chuyển trên từng thẻ; bản xuất ra không có
     if bp:
         payload["bp"] = bp                       # bản thiết kế: KPI, bố cục, bảng chi tiết, các khối chữ (xem export/dash_plan.py)
+    payload["fonts"] = fonts.public()            # bảng phông cho bản xem thử: đổi phông tức thì, không dựng lại trang
     css = (ASSETS / "live.css").read_text("utf-8")
     js = (ASSETS / "live.js").read_text("utf-8")
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>Bảng điều khiển · {E(meta["title"])}</title><style>{css}</style></head><body>'
+            f'<title>Bảng điều khiển · {E(meta["title"])}</title><style>{css}</style>{fonts.head_html((bp or {}).get("font"))}</head><body>'
             f'<div id="app"><noscript>Bảng điều khiển cần bật JavaScript để lọc và tương tác.</noscript></div>'
             f'<script id="data" type="application/json">{_safe(payload)}</script><script>{js}</script></body></html>')

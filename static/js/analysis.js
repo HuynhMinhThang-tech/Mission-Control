@@ -8,8 +8,8 @@
 /* ======================= thành phần dùng chung ======================= */
 const KL = { num: ['Định lượng', 'num'], cat: ['Phân loại', 'cat'], date: ['Thời gian', 'date'], id: ['Mã', 'id'], text: ['Văn bản', 'text'], empty: ['Trống', 'text'] };
 const kbadge = k => `<span class="kb ${(KL[k] || KL.text)[1]}">${(KL[k] || KL.text)[0]}</span>`;
-const fnum = v => v == null ? '—' : Math.abs(v) >= 1e6 ? NC(v) : N(v);
-const pcs = (a, b) => (b ? a * 100 / b : 0).toFixed(1).replace('.', ',') + '%';
+const fnum = v => v == null ? '—' : FMT.num(v);
+const pcs = (a, b) => FMT.pct(b ? a * 100 / b : 0);
 const SRC = { spec: ['Bạn ghép biến', 'usr'], ai: ['AI viết code', 'ai'], pick: ['Bạn ghép biến', 'usr'], text: ['AI nhận diện', 'ai'] };
 const srcTag = s => SRC[s] ? `<span class="srt ${SRC[s][1]}">${SRC[s][0]}</span>` : '';
 const colInfo = (cols, name) => { for (const f of (cols || [])) { const c = f.cols.find(x => x.name === name); if (c) return c } return null };
@@ -83,7 +83,7 @@ ${c.top.map(([k, n]) => `<div class="cr"><span class="l" title="${esc(k)}">${esc
 ${c.rest_n ? `<small class="sub">+ ${N(c.rest_n)} giá trị khác (${N(c.rest)} bản ghi)</small>` : ''}` }
   if (c.kind === 'date' && c.labels) { const mx = Math.max(...c.counts, 1);
     return `<div class="uq"><b>${esc(c.min)}</b> → <b>${esc(c.max)}</b> · số bản ghi theo ${esc(c.unit)}</div><div class="dm">${c.counts.map((v, i) => `<i title="${esc(c.labels[i])}: ${N(v)} bản ghi" style="height:${Math.max(4, v / mx * 100)}%"></i>`).join('')}</div>
-<div class="dr"><span>${esc(c.labels[0])}</span><span>${esc(c.labels[c.labels.length - 1])}</span></div>${c.gaps ? `<small class="w">Không có dữ liệu ở ${c.gaps} ${esc(c.unit)} trong khoảng này</small>` : ''}` }
+<div class="dmr"><span>${esc(c.labels[0])}</span><span>${esc(c.labels[c.labels.length - 1])}</span></div>${c.gaps ? `<small class="w">Không có dữ liệu ở ${c.gaps} ${esc(c.unit)} trong khoảng này</small>` : ''}` }
   return `<div class="uq"><b>${N(c.unique)}</b> giá trị khác nhau trên ${N(c.n)} dòng${c.kind === 'id' ? ' · mã định danh, không vẽ phân bố' : ''}</div>${(c.sample || []).length ? `<small class="sub">Ví dụ: ${c.sample.map(x => esc(x.length > 28 ? x.slice(0, 27) + '…' : x)).join(' · ')}</small>` : ''}` }
 function distCard(c) {
   const tot = c.n + c.missing, mp = tot ? c.missing / tot : 0;
@@ -228,6 +228,7 @@ const waitList = (S, i) => { const a = (S.ag && S.ag[i]) || [], k = S.job.runnin
    Mỗi biểu đồ có 2 công tắc: hiện trên Bảng điều khiển · đưa vào Báo cáo + Slide (báo cáo và slide dùng chung một danh sách).
    "+ Thêm" mở ngăn kéo bên phải. Bản xem thử cập nhật ngay, không tải lại khung; rê chuột vào biểu đồ trên bản xem thử để ẩn, đổi dạng, di chuyển. */
 const DKIND = { bars: 'Cột ngang', cols: 'Cột dọc', donut: 'Tròn (cơ cấu)', trend: 'Đường theo thời gian', line: 'Đường', score: 'Bảng điểm tiêu chí', heat: 'Ma trận nhiệt', static: 'Từ phân tích' };
+const FONTS = { claude: 'Giống Claude (mặc định)', app: 'Giống giao diện ứng dụng', inter: 'Hiện đại (Inter)', bevn: 'Tối ưu tiếng Việt (Be Vietnam Pro)', serif: 'Báo chí, chữ có chân (Source Serif 4)', system: 'Phông hệ thống (nhẹ nhất, dùng được ngoại tuyến)' };
 const LAYOUTS = { auto: 'Tự động', overview: 'Tổng quan và xu hướng', rank: 'Xếp hạng các nhóm', compliance: 'Tuân thủ đạt / không đạt', story: 'Kể chuyện (kết luận trước)' };
 const KPIK = { sum: 'Tổng của một chỉ số', avg: 'Trung bình của một chỉ số', rate: 'Tỷ lệ đạt của một tiêu chí', rate_all: 'Tỷ lệ đạt chung', rate_low: 'Tiêu chí có tỷ lệ thấp nhất', count: 'Số bản ghi', distinct: 'Số nhóm khác nhau', latest: 'Kỳ gần nhất so với kỳ trước', top: 'Nhóm cao nhất', missing: 'Tỷ lệ chưa có dữ liệu' };
 const BLOCKS = [['ans', 'Câu trả lời ngắn'], ['ins', 'Phát hiện chính'], ['act', 'Khuyến nghị hành động'], ['risk', 'Rủi ro cần lưu ý']];
@@ -270,9 +271,9 @@ function libRow(r, d, s, T, cat) {
   if (r.k === 'rc') { const { c, i, st } = r, on = s['c' + i] ?? c.recommended, dOn = !!(st && st.on), t = T[c.task], kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [], ks = kindsFor(rows), all = [...new Set([...ks, kd])];
     return `<div class="lrow ${on || dOn ? 'on' : ''}"><div class="lt"><b>${esc(c.title)}</b><small>Từ phân tích · ${esc(t.title)}</small></div>
 <div class="lsw"><label class="sw"><input type="checkbox" data-lb="dash" data-ci="${i}" ${dOn ? 'checked' : ''}><span>Dashboard</span></label><label class="sw"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span>Báo cáo · Slide</span></label></div>
-<details class="cpa" data-s="5" data-o="cpa${i}" ${s['cpa' + i] ? 'open' : ''}><summary>Xem trước và tùy chỉnh</summary><div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
+<details class="cpa" data-s="5" data-o="cpa${i}" ${s['cpa' + i] ? 'open' : ''}><summary>Xem trước và tùy chỉnh</summary><div class="cpb"><div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
 <div class="seg" role="group" aria-label="Loại biểu đồ">${all.map(k => `<button type="button" class="${k === kd ? 'on' : ''}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k])}">${KIND[k]}</button>`).join('')}</div>
-<div class="hint">Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div></details></div>` }
+<div class="axes"><label>Nhãn${sel$(5, 'x' + i, t.cols, x)}</label><label>Giá trị${sel$(5, 'y' + i, numCols(t), y)}</label></div></div></details></div>` }
   const it = r.it, tag = it.type === 'static' ? 'Từ phân tích' : it.src === 'user' ? 'Bạn thêm' : 'AI gợi ý', kd = it.type === 'score' || it.type === 'heat' ? DKIND[it.type] : (DKIND[it.kind] || '');
   return `<div class="lrow ${it.on ? 'on' : ''}"><div class="lt"><b>${esc(dpTitle(it, cat))}</b><small>${tag}${kd ? ' · ' + kd : ''}${cat.length > 1 && it.ds ? ' · ' + esc(it.ds) : ''}${it.m === '*' ? ' · theo chỉ số đang chọn' : ''}${it.type === 'static' ? ' · không đổi theo bộ lọc' : ''}${it.why && it.src === 'ai' ? ' · ' + esc(it.why) : ''}</small></div>
 <div class="lsw"><label class="sw"><input type="checkbox" data-dp="${esc(it.id)}" ${it.on ? 'checked' : ''}><span>Dashboard</span></label>${it.src !== 'ai' ? `<button type="button" class="rm" data-dpa="rm" data-v="${esc(it.id)}" title="Bỏ khỏi thư viện" aria-label="Bỏ khỏi thư viện">${ico('trash', 15)}</button>` : ''}</div></div>` }
@@ -281,6 +282,7 @@ function libInner(d, s, T, r3) {
   const kp = bp.kpis || [], blk = bp.blocks || {};
   return `<div class="lh"><b>Thư viện biểu đồ</b><small>${nDash} trên bảng điều khiển · ${nRep} trong báo cáo</small></div>
 <div class="ask" style="padding:6px 0 0"><label for="rt5">Tiêu đề báo cáo</label><input id="rt5" data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
+<label class="lsel">Phông chữ báo cáo và bảng điều khiển<select data-bp="font">${Object.entries(FONTS).map(([v, l]) => `<option value="${v}" ${(bp.font || 'claude') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><small class="sub">Bản trình chiếu PowerPoint luôn dùng Arial.</small></label>
 ${d.dash ? `<label class="lsel">Kiểu bố cục bảng điều khiển<select data-bp="layout">${Object.entries(LAYOUTS).map(([v, l]) => `<option value="${v}" ${bp.layout === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
 <details class="lsec" data-s="5" data-o="sec_ch" ${s.sec_ch === false ? '' : 'open'}><summary>Biểu đồ <small>${rows.length}</small></summary>${rows.map(r => libRow(r, d, s, T, cat)).join('') || '<small class="sub">Chưa có biểu đồ nào.</small>'}
 <button type="button" class="btn g sm lbtn" data-dw="open" data-t="data">+ Thêm biểu đồ</button></details>
@@ -339,7 +341,7 @@ function dwHTML() { const S = S_(), d = S.d[5], s = sel(5), T = S.d[3].result.ta
 <div class="seg" role="tablist">${[['data', 'Từ dữ liệu'], ['an', 'Từ phân tích'], ['kpi', 'Thẻ KPI']].map(([k, l]) => `<button type="button" role="tab" class="${DW.t === k ? 'on' : ''}" data-dw="tab" data-v="${k}">${l}</button>`).join('')}</div>
 <div class="dwb">${DW.t === 'data' ? dwData(d, s) : DW.t === 'an' ? dwAnalysis(d, s, T) : dwKpi(d, s)}</div>` }
 function dwPaint() { if (!DW.el) return; const y = DW.el.querySelector('.dwb') ? DW.el.querySelector('.dwb').scrollTop : 0; DW.el.firstElementChild.innerHTML = dwHTML(); const b = DW.el.querySelector('.dwb'); if (b) b.scrollTop = y }
-function dwOpen(t) { if (DW.el) return; DW.t = t || 'data'; const ov = document.createElement('div'); ov.className = 'ov dr'; ov.innerHTML = '<div class="dlg drw" role="dialog" aria-modal="true" aria-label="Thêm vào bảng điều khiển"></div>'; document.body.appendChild(ov); DW.el = ov; dwPaint();
+function dwOpen(t) { if (DW.el) return; DW.t = t || 'data'; const ov = document.createElement('div'); ov.className = 'ov dwr'; ov.innerHTML = '<div class="dlg drw" role="dialog" aria-modal="true" aria-label="Thêm vào bảng điều khiển"></div>'; document.body.appendChild(ov); DW.el = ov; dwPaint();
   ov.addEventListener('click', e => { if (e.target === ov) dwClose() }); DW.key = e => { if (e.key === 'Escape') { e.stopPropagation(); dwClose() } }; document.addEventListener('keydown', DW.key, true) }
 function dwClose() { if (!DW.el) return; document.removeEventListener('keydown', DW.key, true); DW.el.remove(); DW.el = null }
 function dwAddPlan(it) { const S = S_(), d = S.d[5], s = sel(5), plan = dpState(d, s); if (plan.some(x => x.id === it.id) || plan.length >= 16) return false; plan.push(it); libPaint(); return true }
@@ -395,6 +397,7 @@ document.addEventListener('change', e => {
   if (t.dataset.bpk && !RO()) { const S = S_(), bp = bpState(S.d[5], sel(5)), k = (bp.kpis || []).find(x => x.id === t.dataset.bpk); if (k) k.on = t.checked; libPaint(); return }
   if (t.dataset.bpb && !RO()) { const S = S_(), bp = bpState(S.d[5], sel(5)), k = t.dataset.bpb; if (k === 'table') bp.table = { on: t.checked }; else { bp.blocks = bp.blocks || {}; bp.blocks[k] = t.checked } libPaint(); return }
   if (t.dataset.bp === 'layout' && !RO()) { bpState(S_().d[5], sel(5)).layout = t.value; libPaint(); return }
+  if (t.dataset.bp === 'font' && !RO()) { bpState(S_().d[5], sel(5)).font = t.value; libPaint(); return }
   if (t.dataset.dwi !== undefined && !RO()) { const S = S_(), d = S.d[5], k = t.dataset.dwi, v = t.value, b = DW.b, f = DW.f, kp = DW.k;
     if (k === 'q') { DW.q = v; dwPaint(); const q = DW.el && DW.el.querySelector('[data-dwi="q"]'); if (q) { q.focus(); q.setSelectionRange(v.length, v.length) } return }
     if (b && ['by', 'm', 'agg', 'kind'].includes(k)) { b[k] = v; if (k === 'by' || k === 'm') b.kind = ''; if (k === 'm') { const c = catOf(d).find(x => x.name === b.ds), x = c && c.meas.find(y => y.k === v); b.agg = x && x.avg ? 'avg' : 'sum' } }

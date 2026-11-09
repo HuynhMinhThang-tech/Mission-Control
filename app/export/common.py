@@ -5,7 +5,7 @@ import re
 import pandas as pd
 
 from .. import labels, numfmt
-from ..utils import compact, vn
+from ..utils import fmt_pct, fmt_val, vn
 
 pp = numfmt.pretty_period          # 2026-03-01 -> T3/2026 (nhãn kỳ gọn, không bị chồng chữ trên trục)
 
@@ -75,39 +75,38 @@ def is_time_like(rows):
     return sum(bool(_TIME.match(l)) for l, _ in rows) / len(rows) >= 0.6
 
 
-def scale(rows):
-    """Chọn mẫu số để nhãn số trên slide gọn (tỷ / triệu / nghìn)."""
-    m = max([abs(v) for _, v in rows] or [0])
-    if m >= 1e9:
-        return 1e9, "tỷ"
-    if m >= 1e6:
-        return 1e6, "triệu"
-    if m >= 1e4:
-        return 1e3, "nghìn"
-    return 1.0, ""
+_UNIT_ALIAS = {"đồng": "đ", "vnd": "đ", "vnđ": "đ", "đ": "đ", "phần trăm": "%", "%": "%"}
 
 
-def facts(rows, kind="bars"):
-    """Vài con số nổi bật TÍNH TRỰC TIẾP từ dữ liệu biểu đồ (không do AI viết)."""
+def unit_of(c):
+    """Đơn vị của biểu đồ theo DỮ LIỆU (đ, %, kg...). Mọi cách viết tiền (đồng, VNĐ) gộp về một ký hiệu 'đ'."""
+    u = str((c or {}).get("unit") or "").strip()
+    return _UNIT_ALIAS.get(u.lower(), u)
+
+
+def facts(rows, kind="bars", unit=""):
+    """Vài con số nổi bật TÍNH TRỰC TIẾP từ dữ liệu biểu đồ (không do AI viết). Số ghi đủ, theo quy tắc số chung (utils.py), kèm đơn vị của dữ liệu."""
     if not rows:
         return []
+    f = lambda v: fmt_val(v, unit)          # noqa: E731
     out = []
     if is_time_like(rows) and kind in ("cols", "line"):
         a, b = rows[0], rows[-1]
-        s = f"{pp(a[0])} → {pp(b[0])}: {compact(a[1])} → {compact(b[1])}"
+        s = f"{pp(a[0])} → {pp(b[0])}: {f(a[1])} → {f(b[1])}"
         if a[1]:
-            s += f" ({(b[1] / a[1] - 1) * 100:+.1f}%)".replace(".", ",")
+            ch = (b[1] / a[1] - 1) * 100
+            s += f" ({'+' if ch > 0 else ''}{fmt_pct(ch)})"
         out.append(s)
         hi = max(rows, key=lambda r: r[1])
         lo = min(rows, key=lambda r: r[1])
-        out.append(f"Cao nhất: {pp(hi[0])} ({compact(hi[1])})")
-        out.append(f"Thấp nhất: {pp(lo[0])} ({compact(lo[1])})")
+        out.append(f"Cao nhất: {pp(hi[0])} ({f(hi[1])})")
+        out.append(f"Thấp nhất: {pp(lo[0])} ({f(lo[1])})")
         return out
     hi = max(rows, key=lambda r: r[1])
     lo = min(rows, key=lambda r: r[1])
-    out.append(f"Cao nhất: {hi[0]} ({compact(hi[1])})")
-    out.append(f"Thấp nhất: {lo[0]} ({compact(lo[1])})")
+    out.append(f"Cao nhất: {hi[0]} ({f(hi[1])})")
+    out.append(f"Thấp nhất: {lo[0]} ({f(lo[1])})")
     tot = sum(v for _, v in rows)
     if all(v >= 0 for _, v in rows) and tot > 0 and len(rows) > 1:
-        out.append(f"{hi[0]} chiếm {vn(hi[1] / tot * 100, 1)}% tổng ({compact(tot)})")
+        out.append(f"{hi[0]} chiếm {fmt_pct(hi[1] / tot * 100)} tổng ({f(tot)})")
     return out

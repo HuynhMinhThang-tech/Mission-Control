@@ -3,25 +3,22 @@
 
 Vì sao cần: AI hay viết "2.24 trillion VNĐ", "2 241 813 537 điểm", "2240813537.5" - sai ngôn ngữ, sai đơn vị, không có dấu ngăn nghìn,
 và đôi khi sai cả độ lớn. Ở đây mọi văn bản đi qua `fix_text` trước khi hiển thị; số lớn còn được đối chiếu với các bảng kết quả (`audit`).
-Kiểu số Việt Nam: 1.234.567,5 · tiền lớn viết 2,24 tỷ đồng · tỷ lệ 57,3%.
+Quy tắc số (một nơi duy nhất, xem utils.py): số nguyên 1.234.567 · số lẻ và tỷ lệ luôn 2 chữ số sau dấu phẩy (1.234,50 · 57,30%) ·
+tiền ghi ĐỦ số kèm đơn vị của dữ liệu (2.240.813.537 đ), không viết tắt nghìn/triệu/tỷ.
 """
 import re
 
 import numpy as np
 import pandas as pd
 
-from .utils import vn
+from .utils import fmt_dec, fmt_pct, fmt_val, vn
 
 # ------------------------------------------------------------------ định dạng --
 MONEY_WORDS = re.compile(r"doanh thu|doanh số|chi phí|lợi nhuận|\bgiá\b|tiền|thu nhập|vốn|ngân sách|lương|đóng góp|chi tiêu|thanh toán|khoản thu", re.I)
 
 
 def money_vi(v, nd=2):
-    """1.250.000.000 -> '1,25 tỷ' · 2,4e12 -> '2,4 nghìn tỷ' (không kèm 'đồng')."""
-    a = abs(v)
-    for d, u in ((1e12, " nghìn tỷ"), (1e9, " tỷ"), (1e6, " triệu"), (1e3, " nghìn")):
-        if a >= d:
-            return vn(v / d, nd) + u
+    """Tiền ghi ĐỦ số, có dấu ngăn nghìn (1250000000 -> '1.250.000.000'); không viết tắt tỷ/triệu/nghìn."""
     return vn(v, nd)
 
 
@@ -29,22 +26,25 @@ def num_vi(v, nd=2):
     return vn(v, nd)
 
 
-def pct_vi(ratio, nd=1):
-    return vn(ratio * 100, nd) + "%"
+def pct_vi(ratio, nd=2):
+    return fmt_pct(ratio * 100, nd)
 
 
 # ------------------------------------------------------------------ giá trị đã biết --
 class Known:
     """Tập mọi con số có trong các bảng kết quả (từng ô + tổng từng cột), để đối chiếu số trong văn bản."""
 
-    def __init__(self, values=()):
+    def __init__(self, values=(), direct=None):
         arr = np.asarray([float(v) for v in values if v is not None and np.isfinite(v)], dtype=float)
         self.a = np.unique(np.abs(arr)) if arr.size else arr
+        dv = values if direct is None else direct                     # direct: chỉ ô và tổng cột (không gồm số suy ra), dùng để "chốt" số làm tròn của AI về đúng số trong bảng
+        da = np.asarray([float(v) for v in dv if v is not None and np.isfinite(v)], dtype=float)
+        self.d = np.unique(np.abs(da)) if da.size else da
         self.frames = []                         # các bảng kết quả (DataFrame) để đối chiếu từng ô được trích, xem check_cells
 
     @classmethod
     def from_dfs(cls, dfs):
-        vals, frames = [], []
+        vals, frames, direct = [], [], []
         for df in (dfs.values() if isinstance(dfs, dict) else dfs or []):
             if df is None or not hasattr(df, "columns"):
                 continue
@@ -55,13 +55,24 @@ class Known:
                     continue
                 vals.extend(s.tolist()[:2000])
                 vals.append(float(s.sum()))
+                direct.extend(s.tolist()[:2000])
+                direct.append(float(s.sum()))
                 if 2 <= len(s) <= 40:                                       # số suy ra hợp lệ: chênh lệch và tổng hai giá trị cùng cột (vd tháng này so với tháng trước)
                     a = s.to_numpy(dtype=float)
                     vals.extend((a[:, None] - a[None, :]).ravel().tolist())
                     vals.extend((a[:, None] + a[None, :]).ravel().tolist())
-        k = cls(vals)
+        k = cls(vals, direct)
         k.frames = frames
         return k
+
+    def snap(self, x, tol):
+        """Giá trị TRỰC TIẾP trong bảng (một ô hoặc tổng một cột) gần x nhất trong sai số tol; None nếu không có."""
+        if not self.d.size:
+            return None
+        x = abs(float(x))
+        i = int(np.searchsorted(self.d, x))
+        c = [float(self.d[j]) for j in (i - 1, i) if 0 <= j < self.d.size and abs(self.d[j] - x) <= tol]
+        return min(c, key=lambda v: abs(v - x)) if c else None
 
     def has(self, x, tol=None):
         """Có giá trị nào trong bảng khớp x (sai số tol, tối thiểu nửa đơn vị làm tròn)? Dung sai CHẶT: lệch cả một chữ số là phải bị bắt."""
@@ -85,7 +96,13 @@ _RE_RAW = re.compile(r"(?<![\d.,])(?!0\d)(\d{4,})(?:\.(\d+))?(?![\d.,]*\d)")
 _RE_DEC = re.compile(r"(?<![\d.,])(\d{1,3})\.(\d+)(?!\d|\.\d)")
 _RE_DIEM = re.compile(r"(\d[\d.,]{5,})(\s+)điểm\b")
 _RE_CUR = re.compile(r"\bVN[DĐ]\b", re.I)
-_RE_PCT_SP = re.compile(r"(\d)\s+%")
+_SC = {"nghìn tỷ": 1e12, "tỷ": 1e9, "triệu": 1e6, "nghìn": 1e3}
+_RE_SCALED = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+\.\d{1,2}|\d+(?:,\d+)?)\s*(nghìn tỷ|tỷ|triệu|nghìn)(?!\w)(?:\s*(đồng|đ|VN[DĐ])(?!\w))?", re.I)
+_RE_PCT = re.compile(r"(?<![\d.,])(?<!\d-)(?<!\d–)(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*%")
+_RE_CDEC = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+|\d+),(\d+)(?!\d)(?!,\d)")
+# "5.000 đồng" / "5000đ" / "5000 VNĐ" -> "5.000 đ" (một ký hiệu tiền); không đụng "5 đồng nghiệp", "3 đội"
+_NOT_MONEY = r"(?!\s+(?:nghiệp|loạt|thời|ý|bộ|đều|nhất|chí|hành|tình|bào|minh|phục|hạng|nghĩa|tâm|bạn|lòng))"
+_RE_DONG = re.compile(r"(?<=\d)\s*(?:đồng|VN[DĐ]|đ)(?!\w)" + _NOT_MONEY, re.I)
 
 
 def _to_float_en(s):
@@ -113,17 +130,51 @@ def fix_text(text, known=None):
             return m.group(0)
         cands = [v * _EN_UNIT[word]] + ([v * 1e9] if word == "trillion" else [])      # AI hay gọi nhầm "tỷ" là trillion
         pick = next((c for c in cands if known and known.has(c, c * 0.003)), cands[0])
-        return money_vi(pick) + (" đồng" if cur else "")
+        pick = (known.snap(pick, pick * 0.003) if known else None) or pick            # có đúng số trong bảng thì dùng số đó
+        return fmt_val(pick, "đ") if cur else vn(pick)
+
+    money_ctx = bool(MONEY_WORDS.search(s))
+
+    def scaled(m):
+        """'2,24 tỷ đồng' -> '2.240.813.537 đ': tiền ghi đủ số. Chỉ đổi khi có đơn vị tiền, hoặc câu nói về tiền (trừ 'nghìn' vì hay chỉ số người/lượt)."""
+        num, word, cur = m.group(1), m.group(2).lower(), m.group(3)
+        if not cur and not (money_ctx and word != "nghìn"):
+            return m.group(0)
+        try:
+            dec = len(num.split(",")[1]) if "," in num else len(num.split(".")[1]) if re.fullmatch(r"\d+\.\d{1,2}", num) else 0
+            v = float(num) if re.fullmatch(r"\d+\.\d{1,2}", num) else float(num.replace(".", "").replace(",", "."))
+        except (ValueError, IndexError):
+            return m.group(0)
+        v *= _SC[word]
+        tol = min(0.5 * 10 ** -dec * _SC[word], v * 0.005)
+        v = (known.snap(v, tol) if known else None) or v
+        return fmt_val(v, "đ")
+
+    def pct(m):
+        tok = m.group(1)
+        try:
+            x = float(tok) if re.fullmatch(r"\d+\.\d+", tok) and not re.fullmatch(r"\d{1,3}\.\d{3}", tok) else float(tok.replace(".", "").replace(",", "."))
+        except ValueError:
+            return m.group(0)
+        return fmt_pct(x)
 
     s = _RE_EN.sub(en, s)
+    s = _RE_SCALED.sub(scaled, s)
     s = _RE_GRP.sub(lambda m: _grp(m.group(0)), s)
     s = _RE_RAW.sub(_raw, s)
+    s = _RE_PCT.sub(pct, s)                                     # mọi tỷ lệ % luôn đúng 2 chữ số sau dấu phẩy
     s = _RE_DEC.sub(_dec, s)
-    s = _RE_CUR.sub("đồng", s)
-    s = _RE_PCT_SP.sub(r"\1%", s)
-    if MONEY_WORDS.search(s):                                   # "2.241.813.537 điểm" trong câu nói về tiền -> đồng
-        s = _RE_DIEM.sub(r"\1\2đồng", s)
+    s = _RE_CDEC.sub(_cdec, s)                                  # số thập phân đã có dấu phẩy: đủ 2 chữ số
+    s = _RE_CUR.sub("đ", s)
+    s = _RE_DONG.sub(" đ", s)
+    if money_ctx:                                               # "2.241.813.537 điểm" trong câu nói về tiền -> đ
+        s = _RE_DIEM.sub(r"\1\2đ", s)
     return s
+
+
+def _two(x):
+    """Số lẻ đúng 2 chữ số sau dấu phẩy; số rất nhỏ (làm tròn ra 0,00) giữ 4 chữ số để không mất thông tin."""
+    return fmt_dec(x, 4).rstrip("0").rstrip(",") if x and round(x, 2) == 0 else fmt_dec(x, 2)
 
 
 def _grp(tok):
@@ -148,11 +199,17 @@ def _dec(m):
     ip, fp = m.group(1), m.group(2)
     if len(fp) == 3 and ip != "0":
         return m.group(0)                                       # 2.240 có thể là hai nghìn hai trăm bốn mươi: giữ nguyên
-    if ip == "0" and len(fp) > 4:
-        fp = f"{float('0.' + fp):.4f}"[2:].rstrip("0") or "0"
-    elif len(fp) > 2 and ip != "0":
-        fp = f"{float('0.' + fp):.2f}"[2:].rstrip("0") or "0"
-    return f"{ip},{fp}"
+    return _two(float(f"{ip}.{fp}"))
+
+
+def _cdec(m):
+    ip, fp = m.group(1), m.group(2)
+    if len(fp) == 2 or (len(fp) == 3 and ip != "0"):
+        return m.group(0)                                       # đã đủ 2 chữ số / "1,234" có thể là kiểu Mỹ của 1234: giữ nguyên
+    try:
+        return _two(float(ip.replace(".", "") + "." + fp))
+    except ValueError:
+        return m.group(0)
 
 
 _SKIP_KEYS = {"code", "cmd", "name", "file", "col", "column", "id", "src", "kind", "x", "y", "task", "tag", "priority", "confidence"}
@@ -188,7 +245,7 @@ def _parse_vi_or_en(s):
 
 
 def fix_kpi(k, known=None):
-    """Một KPI {label, value, delta}: giá trị toàn số được định dạng kiểu Việt (có dấu ngăn nghìn; tiền lớn viết tỷ/triệu)."""
+    """Một KPI {label, value, delta}: giá trị toàn số được định dạng theo quy tắc số chung (nguyên 1.234 · lẻ 1.234,50 · % 54,20% · tiền ghi đủ kèm đ)."""
     k = dict(k)
     label, val = str(k.get("label") or ""), k.get("value")
     if isinstance(val, (int, float)) and not isinstance(val, bool):
@@ -203,11 +260,11 @@ def fix_kpi(k, known=None):
                 if unit == "%" or (not unit and pctish and abs(x) <= 100):
                     ratio = not unit and abs(x) <= 1          # "Tỷ lệ hoàn trả = 0.0697" là tỷ lệ 0-1, không phải 0,07%
                     shown = x * 100 if ratio else x
-                    val = vn(shown, 2 if abs(shown) < 10 else 1) + "%"
+                    val = fmt_pct(shown)
                 elif unit in ("đ", "đồng", "vnd", "vnđ") or MONEY_WORDS.search(label):
-                    val = (money_vi(x) + " đồng") if abs(x) >= 1e6 else (vn(x, 0) + " đồng")
+                    val = fmt_val(x, "đ")                   # tiền ghi đủ số, đơn vị đ
                 else:
-                    val = vn(x, 0 if float(x).is_integer() or abs(x) >= 1000 else 2)
+                    val = vn(x)
             except ValueError:
                 pass
         else:
@@ -534,11 +591,11 @@ def headline(rows, kind, metric, time_like=False):
             ch = b[1] / a[1] - 1
             if abs(ch) < 0.005:
                 return f"{m} ổn định từ {pretty_period(a[0])} đến {pretty_period(b[0])}"
-            return f"{m} {'tăng' if ch > 0 else 'giảm'} {vn(abs(ch) * 100, 1)}% từ {pretty_period(a[0])} đến {pretty_period(b[0])}"
+            return f"{m} {'tăng' if ch > 0 else 'giảm'} {fmt_pct(abs(ch) * 100)} từ {pretty_period(a[0])} đến {pretty_period(b[0])}"
     hi = max(rows, key=lambda r: r[1])
     tot = sum(v for _, v in rows)
     if len(rows) > 1 and all(v >= 0 for _, v in rows) and tot > 0:
-        return f"{pretty_period(hi[0])} dẫn đầu {metric[:1].lower() + metric[1:]}, chiếm {vn(hi[1] / tot * 100, 1)}% tổng"
+        return f"{pretty_period(hi[0])} dẫn đầu {metric[:1].lower() + metric[1:]}, chiếm {fmt_pct(hi[1] / tot * 100)} tổng"
     return f"{pretty_period(hi[0])} có {metric[:1].lower() + metric[1:]} cao nhất"
 
 

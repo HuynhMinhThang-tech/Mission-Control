@@ -38,7 +38,7 @@ def make_final():
             "tables": d3["tables"], "table_titles": [t["title"] for t in d3["tables"]], "tasks": tasks,
             "summary": d4["summary"], "insights": d4["insights"], "actions": d4["actions"], "risks": d4.get("risks", []),
             "narrative": numfmt.fix_text(d5["narrative"], known), "method": method, "applied": A.get("applied", []), "files": A["files"],
-            "period": period, "quality": A["d"].get(2, {}).get("pv")}
+            "period": period, "quality": A["d"].get(2, {}).get("pv"), "font": (fin.get("bp") or {}).get("font")}
 
 
 def live_meta(title=None):

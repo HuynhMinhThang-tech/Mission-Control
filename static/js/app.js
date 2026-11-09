@@ -2,7 +2,14 @@
 const $ = id => document.getElementById(id), esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STEPS = [{ t: 'Dữ liệu và bối cảnh', i: 'database' }, { t: 'Kiểm tra và mô tả dữ liệu', i: 'search' }, { t: 'Làm sạch dữ liệu', i: 'sparkles' }, { t: 'Phân tích', i: 'chart' },
   { t: 'Phát hiện và hành động', i: 'bulb' }, { t: 'Báo cáo', i: 'file' }, { t: 'Duyệt và xuất file', i: 'shield' }];
-const N = v => Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 }), NC = v => new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+const N = FMT.num, NC = FMT.num;   /* quy tắc số duy nhất: static/js/fmt.js (nguyên 1.234 · lẻ 1.234,50 · % 54,20% · không viết tắt nghìn/triệu/tỷ) */
+/* nhãn nhận định hợp lệ + phương án xử lý dự phòng cho bản lưu cũ chưa có cột `fix` (bản mới do máy chủ tính, xem data/quality.py) */
+const TAGS = ['Chất lượng', 'Cấu trúc', 'Phù hợp', 'Ghép tệp', 'Mô tả', 'Lưu ý'];
+const cleanTag = (tag, text) => { tag = String(tag ?? '').replace(/\s+/g, ' ').trim(); if (TAGS.includes(tag)) return tag; const h = String(text ?? '').trim().toLowerCase(); return TAGS.find(x => h.startsWith(x.toLowerCase())) || 'Lưu ý' };
+const FIX0 = { 'Dòng trùng lặp': 'Xóa dòng trùng, giữ lại 1 bản. Kiểm tra trước: hai khoản giống hệt nhau có thể là hai giao dịch có thật', 'Giá trị thiếu': 'Điền giá trị thay thế hoặc xóa dòng thiếu, tùy cột', 'Thừa khoảng trắng': 'Cắt khoảng trắng đầu/cuối ô',
+  'Không nhất quán hoa/thường': 'Chuẩn hóa về một kiểu chữ để cùng một giá trị không bị tách thành nhiều nhóm', 'Số đang lưu dạng text': 'Bỏ dấu ngăn nghìn và ký hiệu tiền tệ rồi chuyển cột sang kiểu số', 'Ngày đang lưu dạng text': 'Chuyển cột sang kiểu ngày (đọc theo thứ tự ngày/tháng/năm) để lọc và nhóm theo thời gian',
+  'Ngày sai định dạng': 'Thống nhất một định dạng ngày rồi chuyển sang kiểu ngày; kiểm tra tay các ô không đọc được', 'Giá trị viết khác nhau': 'Gộp các cách viết khác nhau về một giá trị chuẩn (bước Làm sạch, phần Gộp giá trị)',
+  'Ngoại lai (IQR)': 'Kiểm tra từng giá trị: sửa nếu là lỗi nhập, giữ nếu có thật. Chỉ cắt ngoại lai khi chắc chắn, vì có thể mất dữ liệu đúng', 'Giá trị âm': 'Xác định số âm có hợp lý không (hoàn tiền, điều chỉnh). Nếu không, gắn cờ để rà lại; nếu có, giữ và tách riêng khi phân tích' };
 const pad = n => String(n).padStart(2, '0');
 const fmtDate = d => d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '—';
 const fmtTime = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` : '—';
@@ -32,7 +39,9 @@ const vfNote = x => (x.calc_mismatch || []).length ? 'Phép tính không khớp:
 const ISOD = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$/;
 const fdt = s => { const m = ISOD.exec(s); return m ? (m[4] + m[5] + m[6] === '000000' ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`) : s };   // 2026-01-01T00:00:00.000 -> 01/01/2026
 const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : fdt(String(c)));
-const tableOf = t => t.err && !t.cols.length ? `<div class="note">${esc(t.title)}: ${esc(t.err)}</div>` : tbl(t.cols, t.rows.slice(0, 30).map(r => r.map(cell)));
+const tableOf = t => { if (t.err && !t.cols.length) return `<div class="note">${esc(t.title)}: ${esc(t.err)}</div>`;
+  const cf = t.cols.map((_, j) => FMT.colFmt(t.rows.map(r => r[j]).filter(v => typeof v === 'number')));   // cột có số lẻ thì mọi ô đều 2 chữ số, cột số nguyên thì không có phần thập phân
+  return tbl(t.cols, t.rows.slice(0, 30).map(r => r.map((c, j) => c === null ? cell(c) : typeof c === 'number' ? esc(cf[j](c)) : cell(c)))) };
 const numCols = t => t.cols.filter((c, i) => t.rows.some(r => typeof r[i] === 'number'));
 const PAL = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
 const TIME = /^(\d{4}[-\/]\d{1,2}|\d{1,2}[-\/]\d{4}|Q[1-4]|T\d{1,2}|Tháng|W\d|\d{4}$)/i;
@@ -45,7 +54,7 @@ const line = rows => { rows = rows.slice(-24); if (rows.length < 2) return bar(r
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(pp(rows[0][0]))}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(pp(rows[rows.length - 1][0]))}</text></svg>` };
 const donut = rows => { rows = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]); if (rows.length < 2) return bar(rows); if (rows.length > 7) { const rest = rows.slice(6).reduce((s, r) => s + r[1], 0); rows = [...rows.slice(0, 6), ['Khác', rest]] }
   const tot = rows.reduce((s, r) => s + r[1], 0) || 1; let acc = 0; const g = rows.map((r, i) => { const a = acc / tot * 100; acc += r[1]; return `${PAL[i % 7]} ${a}% ${acc / tot * 100}%` }).join(',');
-  return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative"><div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div></div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${N(r[1] / tot * 100)}%</b></div>`).join('')}</div></div>` };
+  return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative"><div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div></div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${FMT.pct(r[1] / tot * 100)}</b></div>`).join('')}</div></div>` };
 const KIND = { bars: 'Cột ngang', cols: 'Cột dọc', line: 'Đường', donut: 'Tròn' };
 const kindSel = (s, k, cur) => `<select data-s="${s}" data-k="${k}">${Object.entries(KIND).map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
 function chartRows(c, T) { const t = T[c.task]; if (!t) return null; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return null;
@@ -139,8 +148,8 @@ function vcBlock(v, aw) {
       const tag = man[k] ? `<span class="tag me">gộp vào «${esc(man[k])}» (bạn chọn)</span>` : strong.has(k) ? `<span class="tag st">trùng «${esc(strong.get(k))}»</span>` : weak.has(k) ? `<span class="tag wk">nghi là «${esc(weak.get(k))}»</span>` : '';
       const pick = aw ? (k === '(thiếu)' ? '' : `<select class="mmsel" data-mm="${ci}" data-val="${esc(k)}" aria-label="Gộp «${esc(k)}» vào"><option value="">Giữ nguyên</option>${opts.filter(o => o[0] !== k).map(o => `<option value="${esc(o[0])}" ${man[k] === o[0] ? 'selected' : ''}>${esc(o[0])}</option>`).join('')}</select>`) : '';
       const cell = `<span class="vv">${esc(k)}</span>${tag}`;
-      return aw ? [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%', pick]
-                : [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%'] });
+      return aw ? [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, FMT.pct(n * 100 / (c.total || 1)), pick]
+                : [cell, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, FMT.pct(n * 100 / (c.total || 1))] });
     return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Gộp vào'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` };
   const flagged = new Set((v.findings || []).map(f => f.file + '\u0001' + f.col));
   const card = (c, ci, f) => {
@@ -178,7 +187,7 @@ function uniTable(d, c, ci, aw, s, eff) {
       : g ? `<span class="tag wk">nghi là «${esc(g.to)}»</span>${aw ? `<button class="lnk" data-a="mmacc" data-mm="${ci}" data-val="${esc(k)}" data-to="${esc(g.to)}">Nhận gợi ý</button>` : ''}` : '';
     const names = vals.filter(x => x !== k); if (to && !names.includes(to)) names.push(to);
     const pick = aw && k !== '(thiếu)' ? `<select class="mmsel" data-mm="${ci}" data-val="${esc(k)}" aria-label="Gộp «${esc(k)}» vào"><option value="">Giữ nguyên</option>${names.map(x => `<option value="${esc(x)}" ${to === x ? 'selected' : ''}>Gộp vào «${esc(x)}»</option>`).join('')}</select>` : '';
-    const base = [`<span class="vv">${esc(k)}</span>${tag}`, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, (n * 100 / (c.total || 1)).toFixed(1).replace('.', ',') + '%'];
+    const base = [`<span class="vv">${esc(k)}</span>${tag}`, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, FMT.pct(n * 100 / (c.total || 1))];
     return aw ? [...base, pick] : base });
   return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Xử lý'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` }
 function uniCard(c, ci, f, ops, d, aw, s, pv, fx) {
@@ -274,7 +283,7 @@ function memoBox(i) {
   const ttl = i === 0 ? 'Đề bài' : STEPS[i].t, dl = `<button class="btn g sm" data-a="mdl" data-v="${i}">${ico('download', 14)} Tải .md</button>`;
   if (m.status === 'writing') return `<div class="memo wr" role="status"><span class="spin"></span><div><b>Đang viết bản tổng hợp của bước này…</b><small>Viết xong sẽ đến lượt bạn đọc, sửa và duyệt trước khi Agent kế tiếp chạy.</small></div></div>`;
   if (m.status === 'approved' || RO()) return `<details class="memo ok"><summary>${ico('check', 14)} Bản tổng hợp · ${esc(ttl)} <span class="tag">${m.src === 'auto' ? 'tự ghép từ phần bạn nhập' : m.edited ? 'đã duyệt · có chỉnh sửa' : 'đã duyệt'}</span></summary><div class="md">${mdHtml(m.md)}</div><div class="act">${dl}</div></details>`;
-  return `<div class="memo dr"><div class="mh"><b>${ico('file', 16)} Bản tổng hợp · ${esc(ttl)}</b><span class="tag">Chờ bạn duyệt</span></div>
+  return `<div class="memo draft"><div class="mh"><b>${ico('file', 16)} Bản tổng hợp · ${esc(ttl)}</b><span class="tag">Chờ bạn duyệt</span></div>
 <p class="sub">Đây là những gì bước này đã chốt. Agent kế tiếp sẽ đọc đúng bản này làm ngữ cảnh. Hãy kiểm tra, sửa cho đúng ý rồi duyệt.</p>
 ${m.err ? `<div class="note">${esc(m.err)}</div>` : ''}${(m.warn || []).length ? `<div class="note">Có số không trùng với số hệ thống đã ghi nhận: <b>${m.warn.map(esc).join(', ')}</b>. Hãy kiểm tra lại trước khi duyệt.</div>` : ''}
 <div class="md">${mdHtml(m.md)}</div>
@@ -294,9 +303,9 @@ const VIEW = [
 <label for="dec">Bạn cần ra quyết định gì từ kết quả này? (không bắt buộc)</label><textarea id="dec" data-i="dec" data-pn="Quyết định cần đưa ra" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: có tăng ngân sách quảng cáo tháng sau không?">${esc(dec)}</textarea>
 <label for="lev">Bạn có thể thay đổi những gì? (không bắt buộc)</label><textarea id="lev" data-i="lev" data-pn="Những gì bạn có thể thay đổi" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: giá bán, ngân sách quảng cáo, lịch làm việc">${esc(lev)}</textarea></div>
 ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 16) + 'Bắt đầu phân tích</button></div>'}` },
-  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), f.tag)).join('')}
+  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), cleanTag(f.tag, f.text))).join('')}
 ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
-<details><summary>Danh sách vấn đề phát hiện (${d.issues.length})</summary>${d.issues.length ? tbl(['Tệp', 'Cột', 'Vấn đề', 'Số lượng'], d.issues.map(r => [esc(r.file), esc(r.col), esc(r.issue), N(r.n)])) : 'Không phát hiện vấn đề tự động.'}</details>` },
+<details><summary>Danh sách vấn đề phát hiện (${d.issues.length})</summary>${d.issues.length ? tbl(['Tệp', 'Cột', 'Vấn đề', 'Số lượng', 'Phương án đề xuất xử lý'], d.issues.map(r => [esc(r.file), esc(r.col), esc(r.issue), N(r.n), `<span class="wrapc">${esc(r.fix || FIX0[r.issue] || 'Xem lại thủ công')}</span>`])) : 'Không phát hiện vấn đề tự động.'}</details>` },
   () => { const S = S_(), d = S.d[2], s = sel(2), aw = S.st[2] === 'await' && !RO();
     if (s.needPv && aw) { s.needPv = false; pvClean().then(() => stage()) }
     const pv = (aw && s.pv) || d.pv, fx = pv.fx || d.pv.fx || {};
@@ -354,15 +363,19 @@ function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card
   if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div><div class="wls" id="waitList">${waitList(S, i)}</div>`;
   else if (s === 'error') h += `<h2>${STEPS[i].t}</h2><div class="note">Lỗi: ${esc(S.err && S.err.msg)}</div><div class="act"><button class="btn" data-a="retry">Thử lại</button></div>`;
   else if (s === 'pending' && i > 0) h += `<p class="lead">Bước này chưa chạy.</p>`;
-  else { h += memoBox(i); try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += actions(i, s) }
-  $('stage').innerHTML = h + '</div>'; applyRO() }
+  else { try { h += VIEW[i]() } catch (e) { h += `<div class="note">Không hiển thị được bước này: ${esc(e.message)}<details><summary>Chi tiết kỹ thuật</summary><pre class="errpre">${esc(e.stack || e.message)}</pre></details><div class="act"><button class="btn g sm" data-a="rerender">Thử hiển thị lại</button></div></div>`; console.error(e) } h += memoBox(i); h += actions(i, s) }
+  $('stage').innerHTML = h + '</div>'; applyRO(); memoReveal(i) }
+/* Bản tổng hợp nằm cuối bước: khi nó vừa xuất hiện (đang viết / chờ duyệt) thì cuộn tới đó để người dùng thấy ngay, các lần vẽ lại sau không cuộn nữa */
+const MEMO_SEEN = {};
+function memoReveal(i) { const m = S_().memo && S_().memo[i], st = m ? m.status : ''; if (RO() || !m || st === 'approved') { MEMO_SEEN[i] = st; return }
+  if (MEMO_SEEN[i] === st) return; MEMO_SEEN[i] = st; const el = document.querySelector('#stage .memo'); if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: st === 'writing' ? 'center' : 'start' })) }
 function applyRO() { $('vFlow').classList.toggle('ro', RO()); if (!RO()) return;
   document.querySelectorAll('#stage input,#stage select').forEach(e => e.disabled = true);
   document.querySelectorAll('#stage textarea').forEach(e => e.readOnly = true);
   document.querySelectorAll('#stage button[data-a]:not([data-a="tab"]):not([data-a="mdl"])').forEach(e => e.disabled = true) }
 function stepper() { const S = S_(); $('stepper').innerHTML = STEPS.map((p, i) => { const s = S.st[i];
   const mp = i > 0 && i < 6 && S.memo && S.memo[i] && S.memo[i].status !== 'approved';      // đã chấp nhận nhưng bản tổng hợp chưa duyệt
-  return `<button class="st ${s}${mp ? ' memo' : ''} ${i === V ? 'view' : ''}" data-a="go" data-v="${i}" ${mp ? 'title="Chờ bạn duyệt bản tổng hợp"' : ''} ${s === 'pending' && i > 0 ? 'disabled' : ''}><span class="n">${s === 'running' ? '<span class="spin sm"></span>' : s === 'done' ? ico(mp ? 'file' : 'check', 14) : ico(p.i, 14)}</span><span class="t">${p.t}</span></button>` }).join('') }
+  return `<button class="st ${s}${mp ? ' mp' : ''} ${i === V ? 'view' : ''}" data-a="go" data-v="${i}" ${mp ? 'title="Chờ bạn duyệt bản tổng hợp"' : ''} ${s === 'pending' && i > 0 ? 'disabled' : ''}><span class="n">${s === 'running' ? '<span class="spin sm"></span>' : s === 'done' ? ico(mp ? 'file' : 'check', 14) : ico(p.i, 14)}</span><span class="t">${p.t}</span></button>` }).join('') }
 
 /* ---------- Lịch sử ---------- */
 function histRow(h) {
@@ -473,7 +486,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'new') {
     if (ST.job.running) { notify('Đang có tác vụ chạy, hãy chờ xong rồi tạo phân tích mới.', 'warn'); return }
     if (!R && ST.st[0] === 'done' && !ST.approved && !(await askConfirm('Phân tích hiện tại chưa được duyệt sẽ bị bỏ. Tiếp tục?', 'Tạo phân tích mới'))) return;
-    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; U.dec = ''; U.lev = ''; U.mfb = ''; MFB = false; $('q').value = ''; all(); toTop() } }
+    if (await post('/api/new')) { R = null; V = 0; NAV = 'flow'; TAB = 'dash'; FB = false; SEL = {}; U.ctx = ''; U.fbt = ''; U.dec = ''; U.lev = ''; U.mfb = ''; MFB = false; for (const k in MEMO_SEEN) delete MEMO_SEEN[k]; $('q').value = ''; all(); toTop() } }
   else if (a === 'pv') { const o = PV[v] = PV[v] || { src: 'current' }; o.open = !o.open; stage(); if (o.open) { await pvLoad(v, o.src); stage() } }
   else if (a === 'pvsrc') { PV[v].src = b.dataset.x; stage(); await pvLoad(v, b.dataset.x); stage() }
   else if (a === 'sample') { await post('/api/sample') }
@@ -503,7 +516,7 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'mrw') { const x = U.mfb.trim(); if (!x) return; U.mfb = ''; MFB = false; await post('/api/memo/' + v + '/rewrite', { feedback: x }) }
   else if (a === 'mprev') { const m = ST.memo[+v]; if (m && m.prev) await post('/api/memo/' + v + '/save', { md: m.prev }) }
   else if (a === 'mdl') dlMemo(+v)
-  else if (a === 'redo') { FB = false; await post('/api/redo/' + V) }
+  else if (a === 'redo') { FB = false; delete MEMO_SEEN[V]; await post('/api/redo/' + V) }
   else if (a === 'a3code') { const d = ST.d[3], s = sel(3); keepSnap(3); if (!(await post('/api/a3/code', { ids: d.menu.filter(m => s['a' + m.id] ?? m.recommended).map(m => m.id), custom: s.anc || '', specs: (s.specs || []).map(x => x.spec) }))) delete KEEP[3] }
   else if (a === 'a3exec') { const d = ST.d[3], s = sel(3); keepSnap(3); await post('/api/a3/exec', { codes: d.tasks.map((t, i) => s['code' + i] ?? t.code) }) }
   else if (a === 'a3re') { await post('/api/a3/reselect') }
