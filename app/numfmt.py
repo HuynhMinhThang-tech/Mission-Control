@@ -231,7 +231,20 @@ _PURE_NUM = re.compile(r"^\s*([-+−]?)\s*(\d[\d.,\s\u202f\u00a0]*)\s*(%|đ|đ�
 _PCT_LABEL = re.compile(r"tỷ lệ|tỷ trọng|phần trăm|tăng trưởng|\(%\)|%", re.I)
 
 
-def _parse_vi_or_en(s):
+def _near(known, x, rel=0.002):
+    """Bảng kết quả có đúng giá trị x không (sai số tương đối chặt, khác Known.has vốn dung sai rộng)?"""
+    a = getattr(known, "a", None)
+    if a is None or not a.size:
+        return False
+    x = abs(float(x))
+    i = int(np.searchsorted(a, x))
+    return any(0 <= j < a.size and abs(a[j] - x) <= max(x * rel, 1e-9) for j in (i - 1, i))
+
+
+def _parse_vi_or_en(s, known=None):
+    """Chuỗi số -> số. '936.000' chỉ có MỘT dấu chấm và đúng 3 chữ số sau nó: theo quy tắc số của ứng dụng (dấu chấm ngăn nghìn) đó là 936 nghìn,
+    không phải 936,000. Chỉ đọc là số thập phân khi bảng kết quả có giá trị đó mà không có giá trị nghìn. Trước đây luôn đọc là thập phân nên
+    KPI '936.000 đ' hiện thành '936 đ'."""
     s = re.sub(r"[\s\u202f\u00a0]", "", s)
     if "," in s and "." in s:
         s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
@@ -241,6 +254,9 @@ def _parse_vi_or_en(s):
         s = s.replace(",", "")
     elif "," in s:
         s = s.replace(",", ".") if not re.fullmatch(r"\d{1,3},\d{3}", s) else s.replace(",", "")
+    elif re.fullmatch(r"[1-9]\d{0,2}\.\d{3}", s):
+        th, dec = float(s.replace(".", "")), float(s)
+        return dec if _near(known, dec) and not _near(known, th) else th
     return float(s)
 
 
@@ -248,27 +264,32 @@ def fix_kpi(k, known=None):
     """Một KPI {label, value, delta}: giá trị toàn số được định dạng theo quy tắc số chung (nguyên 1.234 · lẻ 1.234,50 · % 54,20% · tiền ghi đủ kèm đ)."""
     k = dict(k)
     label, val = str(k.get("label") or ""), k.get("value")
+    x, unit, matched = None, "", False
     if isinstance(val, (int, float)) and not isinstance(val, bool):
-        val = repr(val)
-    if isinstance(val, str):
+        if np.isfinite(val):
+            x, matched = float(val), True                    # số thật: dùng đúng giá trị, không qua chuỗi (936.0 hay 1234.567 không bị đoán là kiểu Việt Nam)
+        else:
+            val = repr(val)
+    if x is None and isinstance(val, str):
         m = _PURE_NUM.match(val)
         if m:
+            matched = True
             try:
-                x = _parse_vi_or_en(m.group(2)) * (-1 if m.group(1) else 1)
+                x = _parse_vi_or_en(m.group(2), known) * (-1 if m.group(1) else 1)
                 unit = (m.group(3) or "").lower()
-                pctish = _PCT_LABEL.search(label) and not MONEY_WORDS.search(label)
-                if unit == "%" or (not unit and pctish and abs(x) <= 100):
-                    ratio = not unit and abs(x) <= 1          # "Tỷ lệ hoàn trả = 0.0697" là tỷ lệ 0-1, không phải 0,07%
-                    shown = x * 100 if ratio else x
-                    val = fmt_pct(shown)
-                elif unit in ("đ", "đồng", "vnd", "vnđ") or MONEY_WORDS.search(label):
-                    val = fmt_val(x, "đ")                   # tiền ghi đủ số, đơn vị đ
-                else:
-                    val = vn(x)
             except ValueError:
-                pass
+                x = None
+    if x is not None:
+        pctish = _PCT_LABEL.search(label) and not MONEY_WORDS.search(label)
+        if unit == "%" or (not unit and pctish and abs(x) <= 100):
+            ratio = not unit and abs(x) <= 1                  # "Tỷ lệ hoàn trả = 0.0697" là tỷ lệ 0-1, không phải 0,07%
+            val = fmt_pct(x * 100 if ratio else x)
+        elif unit in ("đ", "đồng", "vnd", "vnđ") or MONEY_WORDS.search(label):
+            val = fmt_val(x, "đ")                             # tiền ghi đủ số, đơn vị đ
         else:
-            val = fix_text(val, known)
+            val = vn(x)
+    elif not matched and isinstance(val, str):
+        val = fix_text(val, known)
     k["value"] = val if val is not None else ""
     if k.get("delta"):
         k["delta"] = fix_text(str(k["delta"]), known)

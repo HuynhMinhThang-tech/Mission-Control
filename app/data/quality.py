@@ -15,11 +15,48 @@ def norm_key(v):
     return re.sub(r"[\W_]+", " ", t.lower()).strip()
 
 
-def to_dt(s):
+_ISO_START = re.compile(r"^\d{4}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*\d{1,2}")                       # 2026-01-03 (năm đứng trước: không mơ hồ)
+_DMY_START = re.compile(r"^(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{2,4})")                  # 05/01/2026 (mơ hồ giữa ngày/tháng và tháng/ngày)
+
+
+def _parse_dt(x, dayfirst):
     try:
-        return pd.to_datetime(s, errors="coerce", format="mixed")
+        return pd.to_datetime(x, errors="coerce", format="mixed", dayfirst=dayfirst)
     except (TypeError, ValueError):
-        return pd.to_datetime(s, errors="coerce")
+        return pd.to_datetime(x, errors="coerce", dayfirst=dayfirst)
+
+
+def day_order(t):
+    """Thứ tự ngày-tháng của các giá trị dạng d/m/y trong `t` (Series chữ): (ngày_trước_tháng, chắc_chắn).
+    Có giá trị mà số đầu > 12 thì chắc chắn NGÀY/THÁNG; có số thứ hai > 12 thì chắc chắn THÁNG/NGÀY; không có gì chứng minh thì mặc định
+    NGÀY/THÁNG (chuẩn Việt Nam) và chắc_chắn=False để giao diện nói rõ điều này."""
+    m = t.astype(str).str.strip().str.extract(_DMY_START)
+    a, b = pd.to_numeric(m[0], errors="coerce"), pd.to_numeric(m[1], errors="coerce")
+    if (a > 12).any():
+        return True, True
+    if (b > 12).any():
+        return False, True
+    return True, False
+
+
+def to_dt(s):
+    """Đọc cột chữ thành ngày. Dạng năm-trước (2026-01-03) đọc đúng kiểu ISO; dạng d/m/y đọc theo NGÀY/THÁNG (Việt Nam), chỉ đổi sang
+    THÁNG/NGÀY khi dữ liệu chứng minh được (xem day_order). Trước đây mọi chuỗi đọc theo kiểu Mỹ nên 05/01/2026 thành 1 tháng 5."""
+    if not isinstance(s, pd.Series) or pd.api.types.is_datetime64_any_dtype(s) or not is_text(s):
+        return _parse_dt(s, False)
+    idx = s.index
+    t = s.reset_index(drop=True)
+    t = t.where(t.isna(), t.astype(str).str.strip())
+    iso = t.str.match(_ISO_START, na=False)
+    rest = t.notna() & ~iso
+    parts = []
+    if iso.any():
+        parts.append(_parse_dt(t[iso], False))
+    if rest.any():
+        parts.append(_parse_dt(t[rest], day_order(t[rest])[0]))
+    out = pd.concat(parts).reindex(t.index) if parts else pd.to_datetime(t, errors="coerce")
+    out.index = idx
+    return out
 
 
 def is_text(s):

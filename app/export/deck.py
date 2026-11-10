@@ -2,6 +2,7 @@
 """Bản trình chiếu PPTX theo phong cách consultant (16:9, answer-first):
 bìa → tóm tắt điều hành → chỉ số → mỗi biểu đồ 1 slide với tiêu đề là KẾT LUẬN + "so what"
 → insight → khuyến nghị → rủi ro & quyết định cần có → phụ lục (phương pháp, dữ liệu)."""
+import contextvars
 import io
 
 from lxml import etree
@@ -16,11 +17,20 @@ from pptx.util import Inches, Pt
 
 from .. import numfmt
 from ..utils import fmt_pct, vn
+from . import fonts
 from .common import PRI_ORDER, chart_rows, facts, pp, trunc, unit_of
 
 NAVY, PRI, SOFT, INK, SUB, LINE, BG = "0F172A", "4F46E5", "EEF2FF", "1F2937", "5B6275", "E5E7EB", "F8FAFC"
 OK, WARN, BAD, MUTE, WHITE = "0F8F6A", "B76A00", "D6304A", "B4BAD6", "FFFFFF"
-FONT = "Arial"   # một họ chữ duy nhất cho toàn bộ deck (hỗ trợ tiếng Việt tốt, có sẵn trên Windows/Mac)
+# Phông của deck: (tiêu đề, nội dung) theo bộ phông người dùng chọn ở thư viện (xem fonts.pptx). Đặt theo từng lần dựng bằng ContextVar nên hai người
+# xuất báo cáo cùng lúc với hai phông khác nhau không lẫn của nhau.
+_FONTS = contextvars.ContextVar("deck_fonts", default=fonts.pptx(None))
+
+
+def FONT(head=False):
+    return _FONTS.get()[0 if head else 1]
+
+
 # Thang cỡ chữ thống nhất
 SZ_TITLE, SZ_BODY, SZ_SMALL, SZ_CAP = 24, 14, 12, 10
 DONUT_PAL = ["4F46E5", "0EA5E9", "10B981", "F59E0B", "EF4444", "8B5CF6", "64748B"]
@@ -49,8 +59,8 @@ def rect(s, x, y, w, h, fill=None, line=None, shape=MSO_SHAPE.RECTANGLE):
     return sh
 
 
-def text(s, x, y, w, h, content, size=14, bold=False, color=INK, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, after=0):
-    """content: str | list[str | (str, dict)]"""
+def text(s, x, y, w, h, content, size=14, bold=False, color=INK, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, after=0, head=False):
+    """content: str | list[str | (str, dict)]. head=True: phông tiêu đề (chữ có chân), còn lại phông nội dung."""
     tb = s.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
     tf = tb.text_frame
     tf.word_wrap = True
@@ -65,7 +75,7 @@ def text(s, x, y, w, h, content, size=14, bold=False, color=INK, align=PP_ALIGN.
         r = para.add_run()
         r.text = t
         f = r.font
-        f.name, f.size = FONT, Pt(o.get("size", size))
+        f.name, f.size = FONT(head), Pt(o.get("size", size))
         f.bold = o.get("bold", bold)
         f.color.rgb = rgb(o.get("color", color))
     return tb
@@ -98,7 +108,7 @@ def _cell(cell, txt, size=12, bold=False, color=INK, fill=WHITE, align=PP_ALIGN.
     p.alignment = align
     r = p.add_run()
     r.text = txt
-    r.font.name, r.font.size, r.font.bold = FONT, Pt(size), bold
+    r.font.name, r.font.size, r.font.bold = FONT(), Pt(size), bold
     r.font.color.rgb = rgb(color)
 
 
@@ -134,7 +144,9 @@ class Deck:
         rect(s, MX, .55, .08, .9, fill=PRI)
         if kicker:
             text(s, MX + .2, .38, CW - .2, .3, kicker.upper(), size=11, bold=True, color=PRI)
-        text(s, MX + .2, .66, CW - .2, .95, trunc(title, 125), size=SZ_TITLE, bold=True, color=NAVY, anchor=MSO_ANCHOR.TOP)
+        t = trunc(title, 125)
+        sz = SZ_TITLE if len(t) <= 85 else 22 if len(t) <= 110 else 20        # phông chữ có chân rộng hơn Arial: tiêu đề dài co nhẹ để luôn nằm trong 2 dòng
+        text(s, MX + .2, .66, CW - .2, .95, t, size=sz, bold=True, color=NAVY, anchor=MSO_ANCHOR.TOP, head=True)
         rect(s, MX, 7.0, CW, .01, fill=LINE)
         text(s, MX, 7.05, CW - 1, .3, f"{trunc(self.F['title'], 70)}   |   {self.F['date']}", size=SZ_CAP, color=SUB)
         text(s, W - MX - 1, 7.05, 1, .3, str(self.n), size=10, color=SUB, align=PP_ALIGN.RIGHT)
@@ -151,7 +163,7 @@ def cover(d):
     d.n += 1
     rect(s, 0, 0, W, H, fill=NAVY)
     rect(s, MX, 2.0, .12, 2.0, fill=PRI)
-    text(s, MX + .35, 1.9, 10.5, 2.3, trunc(F["title"], 120), size=38, bold=True, color=WHITE, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, MX + .35, 1.9, 10.5, 2.3, trunc(F["title"], 120), size=38 if len(F["title"]) <= 60 else 32, bold=True, color=WHITE, anchor=MSO_ANCHOR.MIDDLE, head=True)
     text(s, MX + .35, 4.45, 10.5, 1.0, "Câu hỏi: " + trunc(F["question"], 220), size=17, color="C7CCF5")
     meta = [F["date"]] + ([F["period"]] if F.get("period") else [])
     text(s, MX + .35, 6.3, 11, .4, "   |   ".join(meta) + "   |   Dựa trên " + ", ".join(trunc(n, 34) for n in list(dict.fromkeys(str(f["name"]).split("::")[0] for f in F["files"]))[:3]), size=12, color="9CA3D9")
@@ -163,7 +175,7 @@ def exec_summary(d):
     s = d.slide(trunc(first, 130), "Tóm tắt điều hành")
     lw = 7.6
     rect(s, MX, 1.85, lw, 1.95, fill=SOFT)
-    text(s, MX + .2, 1.95, lw - .4, 1.8, trunc(F["summary"], 420), size=15, color=NAVY, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, MX + .2, 1.95, lw - .4, 1.8, trunc(F["summary"], 420), size=15, color=NAVY, anchor=MSO_ANCHOR.MIDDLE, head=True)
     text(s, MX, 4.0, lw, .35, "Những phát hiện chính", size=13, bold=True, color=PRI)
     items = [f"{i + 1}.  {trunc(x['title'], 135)}" for i, x in enumerate(F["insights"][:3])]
     text(s, MX, 4.35, lw, 2.2, items, size=13, color=INK, after=7)
@@ -213,7 +225,7 @@ def _point_label(ser, i, text, size, color=None, pos=None):
     tf = dl.text_frame
     tf.text = text
     r = tf.paragraphs[0].runs[0]
-    r.font.size, r.font.bold, r.font.name = Pt(size), True, FONT
+    r.font.size, r.font.bold, r.font.name = Pt(size), True, FONT()
     if color:
         r.font.color.rgb = rgb(color)
     if pos is not None:
@@ -229,7 +241,7 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
     ctype = CT.DOUGHNUT if donut else CT.LINE_MARKERS if line else CT.COLUMN_CLUSTERED if kind == "cols" else CT.BAR_CLUSTERED
     ch = s.shapes.add_chart(ctype, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
     ch.has_title = False
-    ch.font.size, ch.font.name = Pt(SZ_SMALL), FONT
+    ch.font.size, ch.font.name = Pt(SZ_SMALL), FONT()
     ch.font.color.rgb = rgb(INK)
     pl = ch.plots[0]
     ser = pl.series[0]
@@ -238,7 +250,7 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
         ch.has_legend = True
         ch.legend.position = XL_LEGEND_POSITION.RIGHT
         ch.legend.include_in_layout = False
-        ch.legend.font.size, ch.legend.font.name = Pt(SZ_SMALL), FONT
+        ch.legend.font.size, ch.legend.font.name = Pt(SZ_SMALL), FONT()
         for i in range(len(rows)):
             pt = ser.points[i]
             pt.format.fill.solid()
@@ -278,7 +290,7 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
     va.visible = False
     va.has_major_gridlines = False
     ca.has_major_gridlines = False
-    ca.tick_labels.font.size, ca.tick_labels.font.name = Pt(SZ_SMALL), FONT
+    ca.tick_labels.font.size, ca.tick_labels.font.name = Pt(SZ_SMALL), FONT()
     ca.format.line.color.rgb = rgb(LINE)
     if kind == "bars":
         ca.reverse_order = True
@@ -380,17 +392,21 @@ def appendix(d):
 
 
 def build_pptx(F):
-    d = Deck(F)
-    cover(d)
-    exec_summary(d)
-    kpi_slide(d)
-    chart_slides(d)
-    if F["insights"]:
-        insight_slides(d)
-    if F["actions"]:
-        action_slides(d)
-    decision_slide(d)
-    appendix(d)
-    b = io.BytesIO()
-    d.p.save(b)
-    return b.getvalue()
+    tok = _FONTS.set(fonts.pptx(F.get("font")))
+    try:
+        d = Deck(F)
+        cover(d)
+        exec_summary(d)
+        kpi_slide(d)
+        chart_slides(d)
+        if F["insights"]:
+            insight_slides(d)
+        if F["actions"]:
+            action_slides(d)
+        decision_slide(d)
+        appendix(d)
+        b = io.BytesIO()
+        d.p.save(b)
+        return b.getvalue()
+    finally:
+        _FONTS.reset(tok)

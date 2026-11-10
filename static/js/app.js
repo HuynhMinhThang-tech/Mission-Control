@@ -18,14 +18,14 @@ const fmtDur = (a, b) => { if (!a || !b) return '—'; let s = Math.max(0, Math.
 let ST = null, R = null, SAVEV = 0, V = 0, NAV = 'flow', TAB = 'dash', FB = false, BUSY = false, UPL = false, SEL = {}, T0 = {};
 const U = { ctx: '', fbt: '', dec: '', lev: '', mfb: '' };
 const S_ = () => R || ST, RO = () => !!R;
-const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : { g }; return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
+const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : seed(i, d, { g }); return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
 
 /* ---------- thành phần hiển thị ---------- */
 const bar = (rows, u = '') => { if (!rows.length) return ''; const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, sg = rows.some(r => r[1] < 0);
   return rows.map(([l, v]) => `<div class="br"><span class="l" title="${esc(l)}">${esc(l)}</span><span class="tr"><span class="bf ${v < 0 ? 'neg' : ''}" style="width:${Math.abs(v) / m * 100}%"></span></span><span class="v">${sg ? (v > 0 ? '+' : v < 0 ? '−' : '') : ''}${N(Math.abs(v))}${esc(u)}</span></div>`).join('') };
 const cols = rows => { rows = rows.slice(-14); const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, hi = rows.findIndex(r => Math.abs(r[1]) === m);
   return `<div class="cols">${rows.map(([l, v], i) => `<div><i class="${i === hi ? 'hi' : ''}" style="height:${Math.abs(v) / m * 80}px"></i>${esc(String(l).slice(0, 8))}<br>${NC(v)}</div>`).join('')}</div>` };
-const fv = v => { const s = String(v ?? '').trim(); return /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô -> 11.773.398.767,5
+const fv = v => { const s = String(v ?? '').trim(); return /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s : /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô của máy -> 11.773.398.767,50; chuỗi ĐÃ có dấu chấm ngăn nghìn (936.000, 1.250) giữ nguyên, không đọc lại thành số lẻ
 const kp = a => `<div class="kpis">${a.filter(x => String(x[1] ?? '').trim()).map(([l, v, d]) => `<div class="kpi"><b>${esc(fv(v))}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
 const kpo = a => kp(a.map(k => [k.label, k.value, k.delta]));
 const tbl = (h, r) => `<div class="tw"><table><thead><tr>${h.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${r.map(x => `<tr>${x.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -190,13 +190,25 @@ function uniTable(d, c, ci, aw, s, eff) {
     const base = [`<span class="vv">${esc(k)}</span>${tag}`, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, FMT.pct(n * 100 / (c.total || 1))];
     return aw ? [...base, pick] : base });
   return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Xử lý'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` }
+/* Cột chữ nhưng thực chất là NGÀY hoặc SỐ: không gộp giá trị như biến phân loại. Chỉ cho biết đọc được bao nhiêu, các cách viết, ô nào không đọc được. */
+function kindTable(c) {
+  const i = c.info || {}, sum = (a) => (a || []).reduce((t, r) => t + r[1], 0), rows = [['Đọc được', `${N(i.ok)}/${N(i.n)} ô · ${FMT.pct(i.ok * 100 / (i.n || 1))}`]];
+  if (c.kind === 'date') {
+    if (i.min) rows.push(['Khoảng thời gian', `${esc(i.min)} → ${esc(i.max)}`]);
+    rows.push(['Thứ tự ngày–tháng', i.order === 'dm' ? (i.sure ? 'Ngày/tháng (dữ liệu có ngày lớn hơn 12 xác nhận)' : 'Ngày/tháng (mặc định chuẩn Việt Nam; dữ liệu chưa đủ để kiểm chứng)') : 'Tháng/ngày (dữ liệu có ngày lớn hơn 12 xác nhận)']);
+  } else if (i.min != null) rows.push(['Khoảng giá trị', `${N(i.min)} → ${N(i.max)}`]);
+  const fm = c.kind === 'date' && (i.formats || []).length ? tbl(['Cách viết ngày (ví dụ)', 'Số ô'], i.formats.map(([k, n]) => [`<span class="vv">${esc(k)}</span>`, N(n)]))
+    + (i.nfmt > i.formats.length ? `<small class="sub">…và ${N(i.nfmt - i.formats.length)} cách viết khác</small>` : '') : '';
+  const bad = (i.bad || []).length ? tbl([c.kind === 'date' ? 'Không đọc được thành ngày (sẽ thành ô trống)' : 'Không đọc được thành số (sẽ thành ô trống)', 'Số ô'], i.bad.map(([k, n]) => [`<span class="vv">${esc(k)}</span>`, N(n)]))
+    + (i.bad_n > sum(i.bad) ? `<small class="sub">…và ${N(i.bad_n - sum(i.bad))} ô khác</small>` : '') : '';
+  return `<p class="sub"><code>${esc(c.cmd)}</code></p>${tbl(['Chỉ số', 'Kết quả'], rows)}${fm}${bad}` }
 function uniCard(c, ci, f, ops, d, aw, s, pv, fx) {
-  const key = VKEY(c), eff = aw ? vcEff(d, c, s.mm) : ((d.merged || {})[key] || {}), nEff = Object.keys(eff).length, cf = (pv.colfx || {})[key];
+  const key = VKEY(c), typed = c.kind === 'date' || c.kind === 'num', eff = aw ? vcEff(d, c, s.mm) : ((d.merged || {})[key] || {}), nEff = Object.keys(eff).length, cf = (pv.colfx || {})[key];
   const found = [...new Set(ops.map(o => o.found).filter(Boolean))].join('; '), sug = Object.keys(vcSuggest(d, c)).length;
-  return `<div class="cg"><div class="cgh"><b>${esc(c.col)}</b><span class="tag">${esc(c.file)}</span><span class="sub">${N(c.distinct)} giá trị khác nhau${c.missing ? ` · ${N(c.missing)} ô thiếu` : ''}</span>
+  return `<div class="cg"><div class="cgh"><b>${esc(c.col)}</b><span class="tag">${esc(c.file)}</span>${typed ? `<span class="tag kd">${c.kind === 'date' ? 'Cột ngày' : 'Cột số'} · đang lưu dạng chữ</span>` : ''}<span class="sub">${N(c.distinct)} giá trị khác nhau${c.missing ? ` · ${N(c.missing)} ô thiếu` : ''}</span>
 ${found ? `<span class="found">Phát hiện: ${esc(found)}</span>` : ''}${nEff ? `<span class="found ok">${nEff} giá trị được gộp</span>` : ''}</div>
 ${f && f.text ? `<p class="why0">${esc(f.text)}</p>` : ''}
-<details class="vcd" ${(f || nEff || sug) ? 'open' : ''}><summary>${aw && sug ? 'Bảng đếm giá trị và gộp giá trị' : 'Bảng đếm giá trị của cột này'}</summary>${uniTable(d, c, ci, aw, s, eff)}</details>
+<details class="vcd" ${(f || nEff || sug) ? 'open' : ''}><summary>${typed ? (c.kind === 'date' ? 'Kết quả đọc ngày của cột này' : 'Kết quả đọc số của cột này') : aw && sug ? 'Bảng đếm giá trị và gộp giá trị' : 'Bảng đếm giá trị của cột này'}</summary>${typed ? kindTable(c) : uniTable(d, c, ci, aw, s, eff)}</details>
 ${nEff && cf ? `<div class="fx">${ico('check', 14)}<span>Kết quả cho cột này: <b>${esc(cf)}</b></span></div>` : ''}
 ${ops.map(o => opCard(o, d, aw, s, fx)).join('')}</div>` }
 function cleanUni(d, aw, s, pv, fx) {
@@ -284,10 +296,10 @@ function memoBox(i) {
   if (m.status === 'writing') return `<div class="memo wr" role="status"><span class="spin"></span><div><b>Đang viết bản tổng hợp của bước này…</b><small>Viết xong sẽ đến lượt bạn đọc, sửa và duyệt trước khi Agent kế tiếp chạy.</small></div></div>`;
   if (m.status === 'approved' || RO()) return `<details class="memo ok"><summary>${ico('check', 14)} Bản tổng hợp · ${esc(ttl)} <span class="tag">${m.src === 'auto' ? 'tự ghép từ phần bạn nhập' : m.edited ? 'đã duyệt · có chỉnh sửa' : 'đã duyệt'}</span></summary><div class="md">${mdHtml(m.md)}</div><div class="act">${dl}</div></details>`;
   return `<div class="memo draft"><div class="mh"><b>${ico('file', 16)} Bản tổng hợp · ${esc(ttl)}</b><span class="tag">Chờ bạn duyệt</span></div>
-<p class="sub">Đây là những gì bước này đã chốt. Agent kế tiếp sẽ đọc đúng bản này làm ngữ cảnh. Hãy kiểm tra, sửa cho đúng ý rồi duyệt.</p>
+<p class="sub">Đây là những gì bước này đã chốt. Agent kế tiếp sẽ đọc đúng bản này làm ngữ cảnh. Hãy kiểm tra, sửa cho đúng ý rồi duyệt. Nếu lựa chọn ở bước này chưa đúng, bấm «${i === 5 ? 'Chọn lại biểu đồ' : 'Quay lại chỉnh sửa'}»: các lựa chọn bạn đã chốt được giữ nguyên, AI không chạy lại.</p>
 ${m.err ? `<div class="note">${esc(m.err)}</div>` : ''}${(m.warn || []).length ? `<div class="note">Có số không trùng với số hệ thống đã ghi nhận: <b>${m.warn.map(esc).join(', ')}</b>. Hãy kiểm tra lại trước khi duyệt.</div>` : ''}
 <div class="md">${mdHtml(m.md)}</div>
-<div class="act"><button class="btn" data-a="mok" data-v="${i}">Duyệt và chuyển bước tiếp</button><button class="btn g" data-a="med" data-v="${i}">Sửa trực tiếp</button><button class="btn g" data-a="mfbt">Nhờ AI viết lại</button>${m.prev ? `<button class="btn g" data-a="mprev" data-v="${i}">Quay lại bản trước</button>` : ''}${dl}</div>
+<div class="act"><button class="btn" data-a="mok" data-v="${i}">Duyệt và chuyển bước tiếp</button><button class="btn g" data-a="reopen" data-v="${i}" title="Mở lại bước này với các lựa chọn bạn đã chốt, không chạy lại AI">${i === 5 ? 'Chọn lại biểu đồ' : 'Quay lại chỉnh sửa'}</button><button class="btn g" data-a="med" data-v="${i}">Sửa trực tiếp</button><button class="btn g" data-a="mfbt">Nhờ AI viết lại</button>${m.prev ? `<button class="btn g" data-a="mprev" data-v="${i}">Quay lại bản trước</button>` : ''}${dl}</div>
 ${MFB ? `<div class="fb"><textarea data-i="mfb" data-pn="Góp ý cho bản tổng hợp" placeholder="Bạn muốn AI sửa gì trong bản tổng hợp này?">${esc(U.mfb)}</textarea><button class="btn" style="margin-top:8px" data-a="mrw" data-v="${i}">Gửi và viết lại</button></div>` : ''}</div>` }
 function dlMemo(i) { const m = S_().memo && S_().memo[i]; if (!m) return;
   const u = URL.createObjectURL(new Blob([m.md], { type: 'text/markdown;charset=utf-8' })), x = document.createElement('a'); x.href = u; x.download = `tong_hop_${i === 0 ? 'de_bai' : 'buoc_' + i}.md`; document.body.appendChild(x); x.click(); x.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000) }
@@ -356,8 +368,8 @@ function actions(i, s) { if (RO()) return '';
     else if (ph === 'code') m = '<button class="btn" data-a="a3exec">Thực thi code phân tích</button><button class="btn g" data-a="a3re">Chọn lại danh sách</button>';
     else m = `<button class="btn" data-a="ok">${i === 6 ? 'Duyệt báo cáo' : 'Chấp nhận và tiếp tục'}</button>`;
     const fp = i === 3 ? FBP[ph] : ['Bạn muốn AI chỉnh gì?', 'Gửi và chạy lại'];
-    return fbChips(i) + `<div class="act">${m}${i === 6 ? '' : '<button class="btn g" data-a="adj">Điều chỉnh</button>'}</div>` + (FB && i < 6 ? `<div class="fb"><textarea data-i="fbt" data-pn="Góp ý để điều chỉnh" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
-  if (s === 'done' && !ST.approved) return fbChips(i) + '<div class="act"><button class="btn g" data-a="redo">Làm lại từ bước này</button></div>'; return '' }
+    return fbChips(i) + `<div class="act">${m}${i === 6 ? '<button class="btn g" data-a="reopen" data-v="5" title="Mở lại bước Báo cáo với các lựa chọn bạn đã chốt, không chạy lại AI">Chọn lại biểu đồ</button>' : '<button class="btn g" data-a="adj">Điều chỉnh</button>'}</div>` + (FB && i < 6 ? `<div class="fb"><textarea data-i="fbt" data-pn="Góp ý để điều chỉnh" placeholder="${fp[0]}">${esc(U.fbt)}</textarea><button class="btn" style="margin-top:8px" data-a="fbs">${fp[1]}</button></div>` : '') }
+  if (s === 'done' && !ST.approved) return fbChips(i) + '<div class="act">' + (i === 0 ? '<button class="btn g" data-a="redo">Làm lại từ bước này</button>' : `<button class="btn g" data-a="reopen" data-v="${i}" title="Mở lại bước này với các lựa chọn bạn đã chốt, không chạy lại AI. Các bước sau cần duyệt lại.">${i === 5 ? 'Chọn lại biểu đồ' : 'Mở lại bước này để chỉnh'}</button>`) + '</div>'; return '' }
 
 function stage() { const S = S_(), i = V, s = S.st[i]; let h = '<div class="card">';
   if (s === 'running') h += `<h2>${STEPS[i].t}</h2><div class="wait" role="status"><span class="spin lg"></span><div><b>AI đang xử lý…</b><small id="waitSub"></small></div></div><div class="wls" id="waitList">${waitList(S, i)}</div>`;
@@ -473,7 +485,7 @@ function setTheme() { const r = document.documentElement, d = r.dataset.theme ? 
 function syncIcons() { const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches; $('themeIc').innerHTML = ic(dark ? 'sun' : 'moon') }
 
 /* ---------- sự kiện ---------- */
-const SLOW = new Set(['start', 'ok', 'redo', 'a3code', 'a3exec', 'a3re', 'fbs', 'retry', 'sample', 'rmfile', 'clearfiles', 'sorig', 'sfixed', 'sack', 'viewh', 'delh', 'new']);
+const SLOW = new Set(['start', 'ok', 'redo', 'reopen', 'a3code', 'a3exec', 'a3re', 'fbs', 'retry', 'sample', 'rmfile', 'clearfiles', 'sorig', 'sfixed', 'sack', 'viewh', 'delh', 'new']);
 function setLd(b, on) { if (on) { b.dataset.ld = 1; b.setAttribute('aria-busy', 'true'); if (b.classList.contains('btn')) b.insertAdjacentHTML('afterbegin', '<span class="spin sm ldb"></span>') }
   else { delete b.dataset.ld; b.removeAttribute('aria-busy'); const x = b.querySelector('.ldb'); if (x) x.remove() } }
 document.addEventListener('click', async e => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a, v = b.dataset.v;
@@ -517,6 +529,9 @@ document.addEventListener('click', async e => { const b = e.target.closest('[dat
   else if (a === 'mprev') { const m = ST.memo[+v]; if (m && m.prev) await post('/api/memo/' + v + '/save', { md: m.prev }) }
   else if (a === 'mdl') dlMemo(+v)
   else if (a === 'redo') { FB = false; delete MEMO_SEEN[V]; await post('/api/redo/' + V) }
+  else if (a === 'reopen') { const i = +v, m = ST.memo && ST.memo[i];       // mở lại bước đã chấp nhận (giữ lựa chọn, không chạy lại AI); từ bước 6 thì về bước Báo cáo
+    if (m && m.edited && m.status !== 'approved' && !(await askConfirm('Bản tổng hợp bạn đã sửa tay sẽ bị bỏ khi mở lại bước này. Tiếp tục?', 'Mở lại bước'))) return;
+    FB = false; MFB = false; delete MEMO_SEEN[i]; if (await post('/api/redo/' + i)) { V = i; TAB = i === 5 ? 'dash' : TAB; all(); toTop() } }
   else if (a === 'a3code') { const d = ST.d[3], s = sel(3); keepSnap(3); if (!(await post('/api/a3/code', { ids: d.menu.filter(m => s['a' + m.id] ?? m.recommended).map(m => m.id), custom: s.anc || '', specs: (s.specs || []).map(x => x.spec) }))) delete KEEP[3] }
   else if (a === 'a3exec') { const d = ST.d[3], s = sel(3); keepSnap(3); await post('/api/a3/exec', { codes: d.tasks.map((t, i) => s['code' + i] ?? t.code) }) }
   else if (a === 'a3re') { await post('/api/a3/reselect') }

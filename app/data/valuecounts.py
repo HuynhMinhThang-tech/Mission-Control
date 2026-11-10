@@ -6,7 +6,9 @@ import re
 
 import pandas as pd
 
-from .quality import is_text, norm_key
+from ..utils import vn
+from .describe import kind_of
+from .quality import day_order, is_text, norm_key, to_dt
 
 CMD = "df['cột'].value_counts(dropna=False)"
 MAX_DISTINCT = 300      # cột có nhiều giá trị khác nhau hơn mức này là mã/tên riêng/văn bản tự do -> chỉ đếm, không gom nhóm
@@ -22,8 +24,60 @@ OPPOSITE = [("noi", "ngoai"), ("nam", "nu"), ("truoc", "sau"), ("tren", "duoi"),
             ("dong", "mo"), ("bac", "nam"), ("tay", "dong"), ("trai", "phai")]
 
 
+TYPED = ("date", "num")   # cột chữ nhưng thực chất là NGÀY hoặc SỐ: gộp giá trị kiểu phân loại là vô nghĩa, chỉ cần đọc sang đúng kiểu
+
+
 def _is_cat(s):
     return is_text(s) and not pd.api.types.is_datetime64_any_dtype(s)
+
+
+def _bad(t, ok):
+    return [[str(k)[:60], int(n)] for k, n in t[~ok].value_counts().head(5).items()]
+
+
+def typed_item(f, c, s, kind):
+    """Một cột chữ nhận diện được là NGÀY hay SỐ (cùng cách nhận diện với bước Kiểm tra và mô tả): không đếm giá trị để gộp,
+    mà cho biết đọc được bao nhiêu, những ô nào không đọc được, các cách viết khác nhau, khoảng giá trị."""
+    t = s.dropna().astype(str).str.strip()
+    t = t[t != ""]
+    item = {"file": f, "col": str(c), "kind": kind, "total": int(len(s)), "distinct": int(s.nunique()), "missing": int(s.isna().sum()),
+            "more": 0, "variants": [], "weak": [], "skipped": None, "top": []}
+    if kind == "date":
+        item["cmd"] = f"pd.to_datetime(df['{c}'], errors='coerce')"
+        d = to_dt(t)
+        ok = d.notna()
+        dm, sure = day_order(t)
+        shape = t.str.replace(r"\d", "9", regex=True)[ok]
+        fm = t[ok].groupby(shape).agg(["size", "first"]).sort_values("size", ascending=False)
+        item["info"] = {"ok": int(ok.sum()), "n": int(len(t)), "bad_n": int((~ok).sum()), "bad": _bad(t, ok), "nfmt": int(len(fm)),
+                         "formats": [[str(r["first"])[:40], int(r["size"])] for _, r in fm.head(5).iterrows()],
+                         "min": f"{d.min():%d/%m/%Y}" if ok.any() else None, "max": f"{d.max():%d/%m/%Y}" if ok.any() else None,
+                         "order": "dm" if dm else "md", "sure": bool(sure)}
+    else:
+        item["cmd"] = f"pd.to_numeric(df['{c}'], errors='coerce')"
+        n = pd.to_numeric(t.str.replace(r"[,\s]", "", regex=True), errors="coerce")
+        ok = n.notna()
+        item["info"] = {"ok": int(ok.sum()), "n": int(len(t)), "bad_n": int((~ok).sum()), "bad": _bad(t, ok),
+                         "min": float(n.min()) if ok.any() else None, "max": float(n.max()) if ok.any() else None}
+    return item
+
+
+def kind_text(c):
+    """Câu nhận định có sẵn (do code viết, không nhờ AI) cho cột ngày / số lưu dạng chữ."""
+    i = c["info"]
+    if c["kind"] == "date":
+        out = [f"Cột ngày đang lưu dạng chữ, đọc được {vn(i['ok'])}/{vn(i['n'])} ô."]
+        if i["nfmt"] > 1:
+            out.append(f"Có {i['nfmt']} cách viết ngày khác nhau (ví dụ «{i['formats'][0][0]}» và «{i['formats'][1][0]}»).")
+        if i["bad_n"]:
+            out.append(f"{vn(i['bad_n'])} ô không đọc được thành ngày (ví dụ «{i['bad'][0][0]}»), sẽ thành ô trống.")
+        out.append("Đây là cột ngày nên không gộp giá trị như biến phân loại; cách xử lý đúng là chuyển sang kiểu ngày thật.")
+    else:
+        out = [f"Cột số đang lưu dạng chữ, đọc được {vn(i['ok'])}/{vn(i['n'])} ô."]
+        if i["bad_n"]:
+            out.append(f"{vn(i['bad_n'])} ô không đọc được thành số (ví dụ «{i['bad'][0][0]}»), sẽ thành ô trống.")
+        out.append("Đây là cột số nên không gộp giá trị như biến phân loại; cách xử lý đúng là chuyển sang kiểu số thật.")
+    return " ".join(out)
 
 
 def _canon(items):
@@ -145,9 +199,13 @@ def report(dfs):
             s = d[c]
             if not _is_cat(s) or len(cols) >= MAX_COLS:
                 continue
+            kind = kind_of(str(c), s)[0]
+            if kind in TYPED:
+                cols.append(typed_item(f, c, s, kind))
+                continue
             vc = s.value_counts(dropna=False)
             distinct = int(s.nunique())
-            item = {"file": f, "col": str(c), "cmd": f"df['{c}'].value_counts(dropna=False)", "total": int(len(s)), "distinct": distinct,
+            item = {"file": f, "col": str(c), "kind": kind, "cmd": f"df['{c}'].value_counts(dropna=False)", "total": int(len(s)), "distinct": distinct,
                     "missing": int(s.isna().sum()), "more": max(0, len(vc) - TOP), "variants": [], "skipped": None,
                     "top": [["(thiếu)" if pd.isna(k) else str(k)[:80], int(n)] for k, n in vc.head(TOP).items()], "weak": []}
             if distinct > MAX_DISTINCT:
@@ -193,6 +251,9 @@ def for_llm(rep, budget=9000):
     """Kết quả đếm giá trị dạng văn bản gọn để đưa cho AI tổng hợp."""
     lines = []
     for c in rep:
+        if c.get("kind") in TYPED:
+            lines.append(f"- {c['file']} · {c['col']}: {kind_text(c)}")
+            continue
         if c["skipped"]:
             lines.append(f"- {c['file']} · {c['col']}: {c['distinct']} giá trị khác nhau trên {c['total']} dòng (bỏ qua, quá nhiều giá trị)")
             continue
@@ -228,9 +289,10 @@ def view(rep, ai):
             said[(x.get("file"), x.get("column"))] = x["finding"].strip()
     finds = []
     for c in rep:
-        t = said.get((c["file"], c["col"]))
-        if c["variants"] or c["weak"] or t:
-            finds.append({"file": c["file"], "col": c["col"], "text": t or (auto_text(c) if c["variants"] else weak_text(c)), "ng": len(c["variants"]), "groups": c["variants"][:6],
+        typed = c.get("kind") in TYPED
+        t = kind_text(c) if typed else said.get((c["file"], c["col"]))
+        if typed or c["variants"] or c["weak"] or t:
+            finds.append({"file": c["file"], "col": c["col"], "text": t or (auto_text(c) if c["variants"] else weak_text(c)), "kind": c.get("kind", "cat"), "ng": len(c["variants"]), "groups": c["variants"][:6],
                           "nw": len(c["weak"]), "weak": c["weak"][:6]})
     finds.sort(key=lambda f: -(f["ng"] + f["nw"]))
     ov = ai.get("overview") if isinstance(ai.get("overview"), str) else ""

@@ -6,7 +6,8 @@ Bộ mặc định «Giống Claude» dùng cặp gần nhất đều hỗ trợ
 nội dung chữ không chân (Inter, gần Anthropic Sans). Người dùng đổi được ở thư viện biểu đồ (bước Báo cáo); lựa chọn nằm trong bản thiết kế `bp.font`.
 
 Phông tải từ Google Fonts khi mở trực tuyến; ngoại tuyến thì dùng phông hệ thống trong chuỗi dự phòng (trang vẫn đọc tốt).
-Bản trình chiếu PPTX luôn dùng Arial vì PowerPoint không nhúng được phông web."""
+Bản trình chiếu PPTX không dùng được phông web (PowerPoint không nhúng được, máy không cài thì bị thay bằng phông mặc định) nên dùng cặp phông
+CÓ SẴN trên Windows/macOS gần với bộ phông đã chọn: tiêu đề chữ có chân -> Georgia, nội dung chữ không chân -> Segoe UI (xem _PPT, pptx())."""
 from urllib.parse import quote_plus
 
 DEFAULT = "claude"
@@ -24,8 +25,19 @@ _SPEC = {
 }
 
 
+# key -> (phông tiêu đề, phông nội dung) CHO POWERPOINT. Phải là phông có sẵn trên máy người mở; JS (static/js/analysis.js, PPT_FONTS) hiển thị đúng bảng này
+# (tests/pptx_font_test.py so khớp hai bên). "system" giữ Arial như trước cho ai muốn phông trung tính nhất.
+_PPT = {"claude": ("Georgia", "Segoe UI"), "app": ("Georgia", "Segoe UI"), "inter": ("Segoe UI", "Segoe UI"), "bevn": ("Segoe UI", "Segoe UI"),
+        "serif": ("Georgia", "Georgia"), "system": ("Arial", "Arial")}
+
+
 def norm(key):
     return key if key in _SPEC else DEFAULT
+
+
+def pptx(key):
+    """(phông tiêu đề, phông nội dung) của bản PowerPoint theo bộ phông đã chọn."""
+    return _PPT[norm(key)]
 
 
 def _stack(name, kind):
@@ -42,7 +54,7 @@ def url(key):
 
 def public():
     """Bảng đầy đủ cho trang (bản xem thử đổi phông tức thì không cần dựng lại)."""
-    return {k: {"label": v[0], "head": _stack(*v[1]), "body": _stack(*v[2]), "url": url(k)} for k, v in _SPEC.items()}
+    return {k: {"label": v[0], "head": _stack(*v[1]), "body": _stack(*v[2]), "url": url(k), "ppt": list(_PPT[k])} for k, v in _SPEC.items()}
 
 
 def head_html(key):

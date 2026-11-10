@@ -39,6 +39,17 @@ function keepSnap(i) {
   if (i === 4) { (d.insights || []).forEach((x, j) => k.t['i' + j] = x.title); (d.actions || []).forEach((x, j) => k.t['a' + j] = x.text) }
   if (i === 5) { (d.charts || []).forEach((c, j) => k.t[j] = [c.task, c.x, c.y].join('|')); k.title = d.title }
   KEEP[i] = k }
+/* Mở lại bước Báo cáo đã chấp nhận (kể cả sau khi tải lại trang, khi bộ nhớ lựa chọn đã mất): bắt đầu từ lựa chọn bạn đã CHỐT, không quay về mặc định của AI. */
+function seed(i, d, n) {
+  if (i !== 5 || !d || !d.final) return n;
+  const f = d.final, key = c => [c.task, c.x, c.y].join('|'), kept = {}, kp = ((S_().d[3] || {}).result || {}).kpis || [];
+  (f.charts || []).forEach(c => kept[key(c)] = c);
+  (d.charts || []).forEach((c, j) => { const k = kept[key(c)]; n['c' + j] = !!k; if (k && k.kind) n['k' + j] = k.kind });
+  kp.forEach((k, j) => { n['p' + j] = (f.kpis || []).includes(j) });
+  if (f.title && f.title !== d.title) n.rt = f.title;
+  if (Array.isArray(f.dash)) n.dash = f.dash.map(x => ({ ...x }));
+  if (f.bp) n.bp = JSON.parse(JSON.stringify(f.bp));
+  return n }
 function carry(i, d, n) {
   const k = KEEP[i]; if (!k) return n; delete KEEP[i]; const o = k.s;
   if (i === 2) { const byT = {}; Object.entries(k.t).forEach(([id, t]) => byT[t] = id);
@@ -200,15 +211,15 @@ function a3Menu(d, s) {
   const ang = m => m.angle || m.type || 'Phân tích', names = [...new Set(d.menu.map(ang))].sort((p, q) => (q === 'Góc nhìn mới') - (p === 'Góc nhìn mới')), grp = names.map(t => [t, d.menu.filter(m => ang(m) === t)]);
   return `<h2>Phân tích</h2><p class="lead">Chọn các phân tích AI đề xuất và/hoặc tự ghép biến ở bên dưới. Sau đó hệ thống viết code, chạy trên dữ liệu đã làm sạch, và cho bạn xem kết quả trước khi đi tiếp.</p>${adjBanner(d)}
 <div class="a3h"><b>AI đề xuất (${d.menu.length})</b><span><button type="button" class="lnk" data-a="a3sel" data-v="all">Chọn tất cả</button> · <button type="button" class="lnk" data-a="a3sel" data-v="none">Bỏ chọn</button></span></div>
-${grp.map(([t, ms]) => `<div class="a3g"><h4>${t === 'Phân tích' ? 'Khác' : t === 'Góc nhìn mới' ? '✦ Góc nhìn mới' : t} <small>${ms.length}</small></h4><div class="a3c">${ms.map(card).join('')}</div></div>`).join('')}
+<div class="gx">${grp.map(([t, ms]) => `<div class="a3g${ms.length > 1 ? ' multi' : ''}"><h4>${t === 'Phân tích' ? 'Khác' : t === 'Góc nhìn mới' ? '✦ Góc nhìn mới' : t} <small>${ms.length}</small></h4><div class="a3c">${ms.map(card).join('')}</div></div>`).join('')}</div>
 <div class="a3more"><button type="button" class="btn g sm" data-a="a3more">${ico('sparkles', 15)} Cho tôi góc nhìn khác</button><small>AI nghĩ thêm các mục khác hẳn những mục trên; lựa chọn của bạn được giữ nguyên.</small></div>
 ${bBuilder(d, s)}
 <div class="frm" style="margin-top:14px"><label>Yêu cầu riêng khác (không bắt buộc, AI sẽ viết code theo ý bạn)</label><textarea data-s="3" data-i="anc" data-pn="Yêu cầu riêng khác" placeholder="Mô tả điều bạn muốn phân tích thêm, AI sẽ viết code theo ý bạn">${esc(s.anc || '')}</textarea></div>
 <div class="a3sum"><b>Sẽ chạy:</b> ${nA} gợi ý của AI · ${nS} phân tích bạn ghép${(s.anc || '').trim() ? ' · 1 yêu cầu riêng' : ''}</div>` }
 function a3Code(d, s) {
   return `<h2>Phân tích</h2><p class="lead">Đã chuẩn bị ${d.tasks.length} phân tích. Mỗi phân tích cho thấy <b>làm gì</b> và <b>dùng biến nào</b>. Mở “Xem / sửa code” nếu muốn chỉnh trước khi chạy.</p>${adjBanner(d)}
-${d.tasks.map((t, i) => `<div class="tk"><div class="tkh"><span class="no">${i + 1}</span><b>${esc(t.title)}</b>${srcTag(t.src)}${adjTag(d, t.title)}</div>${t.goal ? `<p class="tg2">${esc(t.goal)}</p>` : ''}${varChips(t.vars, d.cols)}
-<details data-o="o${i}" data-s="3" ${s['o' + i] ? 'open' : ''}><summary>Xem / sửa code</summary><textarea data-s="3" data-i="code${i}" data-pn="Sửa code · ${esc(t.title)}" data-mono class="code">${esc(s['code' + i] ?? t.code)}</textarea></details></div>`).join('')}
+<div class="gx">${d.tasks.map((t, i) => `<div class="tk"><div class="tkh"><span class="no">${i + 1}</span><b>${esc(t.title)}</b>${srcTag(t.src)}${adjTag(d, t.title)}</div>${t.goal ? `<p class="tg2">${esc(t.goal)}</p>` : ''}${varChips(t.vars, d.cols)}
+<details data-o="o${i}" data-s="3" ${s['o' + i] ? 'open' : ''}><summary>Xem / sửa code</summary><textarea data-s="3" data-i="code${i}" data-pn="Sửa code · ${esc(t.title)}" data-mono class="code">${esc(s['code' + i] ?? t.code)}</textarea></details></div>`).join('')}</div>
 <div class="note">Code chạy trong môi trường cô lập (không import, không đọc/ghi tệp). Phân tích “Bạn ghép biến” được hệ thống sinh code trực tiếp từ biến bạn chọn.</div>` }
 function resCard(t, i, r, d) {
   const ch = (r.charts || []).filter(c => c.task === i), rows = t.rows || [], tk = (d.tasks || [])[i] || {};
@@ -220,7 +231,7 @@ ${varChips(t.vars || tk.vars, d.cols)}${tk.code ? `<details><summary>Cách tính
 function a3Result(d, s) {
   const r = d.result, T = r.tables;
   return `<h2>Phân tích</h2>${kpo(r.kpis)}${adjBanner(d)}${(r.findings || []).length ? `<h3 class="sh3">Điểm chính</h3>${r.findings.map(f => fnd(esc(f.text), f.tag)).join('')}` : ''}
-<h3 class="sh3">Kết quả từng phân tích <small>${T.length}</small></h3>${T.map((t, i) => resCard(t, i, r, d)).join('')}` }
+<h3 class="sh3">Kết quả từng phân tích <small>${T.length}</small></h3><div class="gx gx-wide">${T.map((t, i) => resCard(t, i, r, d)).join('')}</div>` }
 const waitList = (S, i) => { const a = (S.ag && S.ag[i]) || [], k = S.job.running && S.job.step === i ? S.job.k : 99; return a.length ? a.map((x, j) => `<div class="wl ${j < k ? 'ok' : j === k ? 'on' : ''}"><i>${j < k ? '✓' : j === k ? '<span class="spin sm"></span>' : ''}</i>${esc(x)}</div>`).join('') : '' };
 
 /* ======================= 4. THƯ VIỆN BIỂU ĐỒ (bước Báo cáo) =======================
@@ -228,6 +239,7 @@ const waitList = (S, i) => { const a = (S.ag && S.ag[i]) || [], k = S.job.runnin
    Mỗi biểu đồ có 2 công tắc: hiện trên Bảng điều khiển · đưa vào Báo cáo + Slide (báo cáo và slide dùng chung một danh sách).
    "+ Thêm" mở ngăn kéo bên phải. Bản xem thử cập nhật ngay, không tải lại khung; rê chuột vào biểu đồ trên bản xem thử để ẩn, đổi dạng, di chuyển. */
 const DKIND = { bars: 'Cột ngang', cols: 'Cột dọc', donut: 'Tròn (cơ cấu)', trend: 'Đường theo thời gian', line: 'Đường', score: 'Bảng điểm tiêu chí', heat: 'Ma trận nhiệt', static: 'Từ phân tích' };
+const PPT_FONTS = { claude: ['Georgia', 'Segoe UI'], app: ['Georgia', 'Segoe UI'], inter: ['Segoe UI', 'Segoe UI'], bevn: ['Segoe UI', 'Segoe UI'], serif: ['Georgia', 'Georgia'], system: ['Arial', 'Arial'] };   // phải khớp app/export/fonts.py (_PPT); tests/pptx_font_test.py so khớp
 const FONTS = { claude: 'Giống Claude (mặc định)', app: 'Giống giao diện ứng dụng', inter: 'Hiện đại (Inter)', bevn: 'Tối ưu tiếng Việt (Be Vietnam Pro)', serif: 'Báo chí, chữ có chân (Source Serif 4)', system: 'Phông hệ thống (nhẹ nhất, dùng được ngoại tuyến)' };
 const LAYOUTS = { auto: 'Tự động', overview: 'Tổng quan và xu hướng', rank: 'Xếp hạng các nhóm', compliance: 'Tuân thủ đạt / không đạt', story: 'Kể chuyện (kết luận trước)' };
 const KPIK = { sum: 'Tổng của một chỉ số', avg: 'Trung bình của một chỉ số', rate: 'Tỷ lệ đạt của một tiêu chí', rate_all: 'Tỷ lệ đạt chung', rate_low: 'Tiêu chí có tỷ lệ thấp nhất', count: 'Số bản ghi', distinct: 'Số nhóm khác nhau', latest: 'Kỳ gần nhất so với kỳ trước', top: 'Nhóm cao nhất', missing: 'Tỷ lệ chưa có dữ liệu' };
@@ -282,7 +294,7 @@ function libInner(d, s, T, r3) {
   const kp = bp.kpis || [], blk = bp.blocks || {};
   return `<div class="lh"><b>Thư viện biểu đồ</b><small>${nDash} trên bảng điều khiển · ${nRep} trong báo cáo</small></div>
 <div class="ask" style="padding:6px 0 0"><label for="rt5">Tiêu đề báo cáo</label><input id="rt5" data-s="5" data-i="rt" value="${esc(s.rt ?? d.title)}"></div>
-<label class="lsel">Phông chữ báo cáo và bảng điều khiển<select data-bp="font">${Object.entries(FONTS).map(([v, l]) => `<option value="${v}" ${(bp.font || 'claude') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><small class="sub">Bản trình chiếu PowerPoint luôn dùng Arial.</small></label>
+<label class="lsel">Phông chữ báo cáo và bảng điều khiển<select data-bp="font">${Object.entries(FONTS).map(([v, l]) => `<option value="${v}" ${(bp.font || 'claude') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><small class="sub">PowerPoint không nhúng được phông web nên dùng phông có sẵn trên máy: ${(h => h[0] === h[1] ? 'mọi chữ ' + h[0] : 'tiêu đề ' + h[0] + ', nội dung ' + h[1])(PPT_FONTS[bp.font || 'claude'] || PPT_FONTS.claude)}.</small></label>
 ${d.dash ? `<label class="lsel">Kiểu bố cục bảng điều khiển<select data-bp="layout">${Object.entries(LAYOUTS).map(([v, l]) => `<option value="${v}" ${bp.layout === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
 <details class="lsec" data-s="5" data-o="sec_ch" ${s.sec_ch === false ? '' : 'open'}><summary>Biểu đồ <small>${rows.length}</small></summary>${rows.map(r => libRow(r, d, s, T, cat)).join('') || '<small class="sub">Chưa có biểu đồ nào.</small>'}
 <button type="button" class="btn g sm lbtn" data-dw="open" data-t="data">+ Thêm biểu đồ</button></details>

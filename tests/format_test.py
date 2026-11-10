@@ -223,4 +223,22 @@ check(providers.check_pair("https://generativelanguage.googleapis.com/v1beta/ope
 check(providers.BY_ID["gemini"]["base_url"].startswith("https://generativelanguage.googleapis.com/v1beta/openai") and providers.provider_of_url("https://api.anthropic.com/v1/") == "anthropic",
       "mỗi nhà cung cấp có Base URL mặc định riêng; nhận ra nhà cung cấp từ địa chỉ")
 
+# ------------------------------------------------------------------ 7. KPI '936.000' không được thành '936' --
+# Ca thật: AI trả KPI "936.000" (kiểu Việt Nam, 936 nghìn) nhưng hệ thống đọc thành 936,000 nên thẻ KPI hiện "936 đ"; báo cáo cũng sai theo.
+kv = lambda label, v, k=None: numfmt.fix_kpi({"label": label, "value": v}, k)["value"]          # noqa: E731
+check(kv("Tổng chi tiêu trong 9 ngày", "936.000") == "936.000 đ" and kv("Chi tiêu trung bình mỗi ngày", "104.000") == "104.000 đ",
+      "KPI tiền '936.000' / '104.000' hiện đủ 936.000 đ / 104.000 đ (không còn 936 đ / 104 đ)")
+check(kv("Tổng chi tiêu", "936.000 đ") == "936.000 đ", "KPI '936.000 đ' (đã có đơn vị) giữ nguyên 936.000 đ")
+check(kv("Số giao dịch", "1.250") == "1.250" and kv("Số giao dịch", "1.250.000") == "1.250.000", "KPI số đếm '1.250' là một nghìn hai trăm năm mươi, không phải 1,25")
+check(kv("Số tiền", 936000.0) == "936.000 đ" and kv("Điểm trung bình", 936.123) == "936,12" and kv("Điểm trung bình", 4.5) == "4,50",
+      "giá trị là SỐ THẬT thì dùng đúng giá trị (936.123 là 936,12, không bị đoán là kiểu Việt Nam)")
+check(kv("Tỷ trọng chi tiêu sinh hoạt", "84.51%") == "84,51%" and kv("Tổng chi tiêu", "1,234.56") == "1.234,56 đ" and kv("Tổng chi tiêu", "936,000") == "936.000 đ",
+      "các kiểu viết khác vẫn đúng: 84.51% · 1,234.56 · 936,000")
+check(kv("Điểm trung bình", "12.500", numfmt.Known([12.5, 3.0, 8.2])) == "12,50" and kv("Doanh thu", "12.500", numfmt.Known([12500, 3.0])) == "12.500 đ",
+      "chuỗi mơ hồ '12.500': bảng kết quả chỉ có 12,5 thì là số lẻ; có 12500 thì là mười hai nghìn năm trăm")
+a = numfmt.fix_kpi({"label": "Tổng chi tiêu", "value": "936.000"})
+check(numfmt.fix_kpi(a)["value"] == a["value"] == "936.000 đ", "định dạng KPI hai lần (khi chạy phân tích rồi khi xuất báo cáo) ra cùng một kết quả")
+check([k["value"] for k in numfmt.fix_kpis([{"label": "Tổng chi tiêu", "value": "936.000"}, {"label": "Chi tiêu trung bình mỗi ngày", "value": "104.000"}])] == ["936.000 đ", "104.000 đ"],
+      "fix_kpis (đường mà bước Phân tích và bước xuất báo cáo cùng dùng) cho đúng 936.000 đ và 104.000 đ")
+
 print(f"\nTẤT CẢ {n_ok} KIỂM TRA ĐỀU ĐẠT")

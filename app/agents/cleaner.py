@@ -37,7 +37,9 @@ PROMPT = (
     "BẮT BUỘC xét kỹ MỌI cột có ít giá trị khác nhau (danh mục như phòng ban, cấp bậc, khu vực, trạng thái, loại): nếu cùng một đối tượng xuất hiện dưới nhiều tên "
     "(viết tắt như 'CV' và 'Chuyên viên', 'NV' và 'Nhân viên', 'BGĐ' và 'Ban Giám đốc'; thêm bớt chữ như 'P. Kinh doanh' và 'Kinh doanh'; gõ sai; khác dấu hay hoa thường) thì PHẢI đề xuất gộp về một tên chuẩn "
     "đang có trong cột (ưu tiên tên đầy đủ, rõ nghĩa). Chỉ để nguyên khi thật sự là hai đối tượng khác nhau. Danh sách 'NGHI là một' ở trên là gợi ý, bạn là người quyết định. "
-    "TUYỆT ĐỐI không gộp hai giá trị đều có nhiều bản ghi và cùng cỡ nhau khi chúng có thể khác nghĩa (vd Nội và Ngoại, Nam và Nữ, Trước và Sau, Đạt và Không đạt, Tăng và Giảm): gõ sai thường chỉ xuất hiện ít lần.")
+    "TUYỆT ĐỐI không gộp hai giá trị đều có nhiều bản ghi và cùng cỡ nhau khi chúng có thể khác nghĩa (vd Nội và Ngoại, Nam và Nữ, Trước và Sau, Đạt và Không đạt, Tăng và Giảm): gõ sai thường chỉ xuất hiện ít lần.\n"
+    "Cột được ghi rõ là cột NGÀY hoặc cột SỐ đang lưu dạng chữ thì KHÔNG phải biến phân loại: tuyệt đối không dùng standardize_text cho cột đó; "
+    "ngày thì dùng to_datetime, số thì dùng to_numeric.")
 
 
 def fold_standardize(ops, rep):
@@ -49,7 +51,7 @@ def fold_standardize(ops, rep):
             out.append(o)
             continue
         c = by.get((o.get("file"), o.get("column")))
-        if c is None:
+        if c is None or c.get("kind") in vcm.TYPED:        # cột ngày / số lưu dạng chữ không phải biến phân loại: không gộp giá trị
             continue
         valid = set(A["raw"][o["file"]][o["column"]].dropna().astype(str)) if o["column"] in A["raw"][o["file"]].columns else set()
         mp = vcm.clean_mapping(o.get("mapping"), valid)
@@ -83,7 +85,24 @@ def fold_standardize(ops, rep):
     for o in out:
         if isinstance(o, dict) and o.get("op") == "standardize_text":
             o["mapping"] = dict(list(vcm.resolve(o["mapping"]).items())[:vcm.MAX_MAP])
-    return [o for o in out if not (isinstance(o, dict) and o.get("op") == "standardize_text" and not o["mapping"])]
+    out = [o for o in out if not (isinstance(o, dict) and o.get("op") == "standardize_text" and not o["mapping"])]
+    return out + date_ops(out, rep)
+
+
+def date_ops(ops, rep):
+    """Cột ngày đang lưu dạng chữ luôn có MỘT thao tác riêng của nó (chuẩn hóa sang kiểu ngày thật), kể cả khi AI bỏ sót."""
+    have = {(o.get("file"), o.get("column")) for o in ops if isinstance(o, dict) and o.get("op") == "to_datetime"}
+    out = []
+    for c in rep:
+        if c.get("kind") != "date" or (c["file"], c["col"]) in have:
+            continue
+        i = c["info"]
+        order = ("Các ngày dạng d/m/y được đọc theo thứ tự NGÀY/THÁNG (chuẩn Việt Nam)" + ("." if i["sure"] else ", vì dữ liệu không có ngày nào chứng minh thứ tự ngược lại."))\
+            if i["order"] == "dm" else "Dữ liệu có ngày chứng minh thứ tự THÁNG/NGÀY nên được đọc theo kiểu đó."
+        out.append({"file": c["file"], "op": "to_datetime", "column": c["col"], "recommended": i["ok"] > 0 and i["bad_n"] <= 0.2 * max(i["n"], 1),
+                    "reason": "Cột đang lưu ngày dạng chữ nên không lọc, sắp xếp hay tính theo thời gian đúng được. Chuyển sang kiểu ngày thật để phân tích theo ngày, tuần, tháng. " + order,
+                    "risk": ("Ô không đọc được thành ngày sẽ thành ô trống." + ("" if i["sure"] or i["order"] != "dm" else " Nếu dữ liệu của bạn ghi THÁNG/NGÀY thì các ngày từ 1 đến 12 sẽ bị đọc ngược; hãy kiểm tra trước khi chọn."))})
+    return out
 
 
 def map_view(o):
