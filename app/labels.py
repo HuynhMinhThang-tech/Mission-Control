@@ -25,6 +25,7 @@ PHRASES = {
     "hoan tra": "hoàn trả", "tra hang": "trả hàng", "cap bac": "cấp bậc", "cap bac thanh vien": "cấp bậc thành viên", "thanh vien": "thành viên",
     "diem tich luy": "điểm tích lũy", "danh gia": "đánh giá", "luong co ban": "lương cơ bản", "phu cap": "phụ cấp", "phong ban": "phòng ban",
     "nhan vien": "nhân viên", "chuc vu": "chức vụ", "gioi tinh": "giới tính", "ngay sinh": "ngày sinh", "ngay vao lam": "ngày vào làm",
+    "dang ky": "đăng ký", "ngay dang ky": "ngày đăng ký", "ngay tham gia": "ngày tham gia", "ngay tao": "ngày tạo", "ngay kich hoat": "ngày kích hoạt",
     "kenh ban": "kênh bán", "kenh ban hang": "kênh bán hàng", "nguon": "nguồn", "chuong trinh khuyen mai": "chương trình khuyến mãi", "khuyen mai": "khuyến mãi",
     "giam gia": "giảm giá", "tien thuong": "tiền thưởng", "ma giam gia": "mã giảm giá", "ton kho": "tồn kho", "kho hang": "kho hàng", "kich thuoc": "kích thước", "mau sac": "màu sắc",
     "ghi chu": "ghi chú", "nam sinh": "năm sinh", "thoi gian": "thời gian", "thoi gian giao": "thời gian giao", "ngan sach": "ngân sách",

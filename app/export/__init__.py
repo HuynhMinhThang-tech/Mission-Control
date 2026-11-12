@@ -21,11 +21,22 @@ def memo_zip():
     return zip_files()
 
 
+def period_of(d1):
+    """Kỳ của dữ liệu cho báo cáo: lấy từ ngày PHÁT SINH (ngày đặt hàng, giao dịch...), không lấy ngày sinh / đăng ký. Không có thì None (không in kỳ sai).
+    Bản lưu cũ chưa có khóa `period` thì dùng KPI «Khoảng ngày» như trước để vẫn xem lại được."""
+    per = d1.get("period")
+    if per:
+        return f"{per['min']} → {per['max']}"
+    if "period" in d1:
+        return None
+    return next((k["value"] for k in d1.get("kpis") or [] if k.get("label") == "Khoảng ngày"), None)
+
+
 def make_final():
     d3, d4, d5 = A["d"][3]["result"], A["d"][4], A["d"][5]
     fin = d5["final"]
     kpi_all = d3["kpis"]
-    period = next((k["value"] for k in A["d"][1]["kpis"] if k["label"] == "Khoảng ngày"), None)
+    period = period_of(A["d"][1])
     tasks = [{"title": t["title"], "goal": t.get("goal", "")} for t in A["d"][3]["tasks"]]
     method = f"Làm sạch: {', '.join(A.get('applied', [])) or 'không áp dụng'}. Phân tích: {', '.join(t['title'] for t in tasks)}."
     known = numfmt.Known.from_dfs(A["x"][3])

@@ -390,3 +390,30 @@ button.vc{cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-fam
 /* Cột chữ dài trong bảng (vd «Phương án đề xuất xử lý»): xuống dòng thay vì kéo bảng ngang */
 .wrapc{display:block;white-space:normal;min-width:240px;max-width:460px;line-height:1.45;color:var(--ink)}
 .lsel small{font-weight:500;color:var(--sub)}
+/* ---- Bước 1 nhiều bảng: khối tổng quan */
+.ovw{margin:6px 0 16px}.ovw h3{margin:0 0 6px;font-size:15px}.ovw h3 small{color:var(--sub);font-weight:500}.ovw>.sub{margin:0 0 8px;color:var(--sub);font-size:12.5px;max-width:84ch}.ovw td small{color:var(--sub)}
+.tag.ok{background:var(--okb);color:var(--ok)}.seg button small{opacity:.7;margin-left:6px}
+/* ---- Bảng đếm giá trị (bước Làm sạch): cao tối đa ~12 dòng, dài hơn thì cuộn trong bảng; hàng tiêu đề đứng yên khi cuộn */
+.vcd .tw{max-height:min(580px,70vh);overflow:auto}.vcd .tw thead th{position:sticky;top:0;z-index:1;box-shadow:0 1px 0 var(--line)}.vcs-hint{display:block;margin:-6px 0 8px}
+/* ---- Thẻ phân tích đề xuất: MỌI thẻ cao bằng nhau; phần tiêu đề (ô chọn + tên) đứng yên, nội dung dài hơn thì cuộn TRONG thẻ nên các khối luôn cân xứng */
+.mc3{--mc-h:320px;display:flex;flex-direction:column;height:var(--mc-h);box-sizing:border-box}.mc3 .mch{flex:none}
+.mc3 .mcb{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:6px;padding:0 4px 16px 0;scrollbar-width:thin;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent)}   /* vệt mờ ở đáy: còn nội dung phía dưới thì thấy ngay, kể cả khi thanh cuộn tự ẩn */.mc3 .mcb>:first-child{margin-top:0}
+/* ---- Bộ ghép biến: chọn biến ở HAI khung (phân loại + thời gian | định lượng), nhiều bảng, hệ thống gợi ý cách xem */
+.bstep{display:flex;gap:10px;align-items:flex-start;margin:16px 0 8px}.bstep:first-of-type{margin-top:6px}
+.bstep .bn{width:22px;height:22px;border-radius:50%;background:var(--pri);color:var(--panel);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;margin-top:1px}
+.bstep b{font-size:14px}.bstep small{display:block;color:var(--sub);font-size:12px;font-weight:400}
+.bq{margin-left:auto;min-width:180px;max-width:100%;padding:6px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--p2);font:inherit;font-size:12.5px}.bq:focus{outline:none;border-color:var(--pri)}
+.brl{margin:0 0 8px;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}.brl span{background:var(--p2);border-radius:8px;padding:2px 8px}.brl small{color:var(--sub)}
+.bboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px;align-items:start}
+.bpanel{border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.bph{padding:9px 12px;border-bottom:1px solid var(--line);background:var(--p2);display:flex;flex-direction:column;gap:1px}.bph b small{color:var(--sub);font-weight:500;margin-left:4px}.bph>small{color:var(--sub);font-size:11.5px}
+.bpl{max-height:300px;overflow:auto;padding:4px 12px 12px;scrollbar-width:thin}
+.bgh{display:flex;gap:8px;align-items:baseline;margin:12px 0 6px;font-size:12px;position:sticky;top:0;background:var(--panel);padding:2px 0;z-index:1}.bgh small{color:var(--sub)}
+.bcs{display:flex;flex-wrap:wrap;gap:6px}
+button.vc.bv{padding:3px 10px;font-size:12px}button.vc.bv i{margin-left:2px}button.vc.bv .ck{font-style:normal;font-weight:800}
+button.vc.bv.on{box-shadow:0 0 0 2px var(--pri) inset;font-weight:700}
+.bselbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--p2);min-height:42px}.bselbar>small{color:var(--sub)}
+.vc.bsc{display:inline-flex;gap:6px;align-items:center;padding:2px 4px 2px 10px;font-size:12px;cursor:default}.vc.bsc small{color:var(--sub);font-weight:500}.vc.bsc select{padding:0 4px;font-size:11.5px;border-radius:6px}
+.vc.bsc .rm{border:0;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;padding:0 6px;opacity:.7}.vc.bsc .rm:hover{opacity:1}
+.btp button{position:relative}.btp button.off{opacity:.55;cursor:not-allowed;background:var(--p2)}
+.seg button.on small{color:inherit;opacity:.85}

@@ -2,6 +2,7 @@
 """AGENT 3 · Hoạch định phân tích → viết code pandas → tổng hợp kết quả (bước 4)."""
 from .. import labels as lb
 from ..data import analysis_spec as S, lenses
+from ..data import relations as R
 from ..data.quality import schema
 from ..data.sandbox import autofix_code, describe_error, df_table, prepare, run_code
 from ..errors import UserError
@@ -90,7 +91,7 @@ def menu(fb="", avoid=()):
         m["id"] = f"m{k}"
     _menu_vars(items)
     # `cols`: danh sách biến thật (kèm kiểu) cho bộ ghép biến ở giao diện
-    put(3, {"phase": "menu", "menu": items, "cols": S.columns_meta(A["clean"]), "tasks": None, "result": None})
+    put(3, {"phase": "menu", "menu": items, "cols": S.columns_meta(A["clean"]), "rel": R.relations(A["clean"]), "tasks": None, "result": None})
 
 
 def more(fb=""):

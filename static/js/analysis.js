@@ -96,9 +96,10 @@ ${c.rest_n ? `<small class="sub">+ ${N(c.rest_n)} giá trị khác (${N(c.rest)}
     return `<div class="uq"><b>${esc(c.min)}</b> → <b>${esc(c.max)}</b> · số bản ghi theo ${esc(c.unit)}</div><div class="dm">${c.counts.map((v, i) => `<i title="${esc(c.labels[i])}: ${N(v)} bản ghi" style="height:${Math.max(4, v / mx * 100)}%"></i>`).join('')}</div>
 <div class="dmr"><span>${esc(c.labels[0])}</span><span>${esc(c.labels[c.labels.length - 1])}</span></div>${c.gaps ? `<small class="w">Không có dữ liệu ở ${c.gaps} ${esc(c.unit)} trong khoảng này</small>` : ''}` }
   return `<div class="uq"><b>${N(c.unique)}</b> giá trị khác nhau trên ${N(c.n)} dòng${c.kind === 'id' ? ' · mã định danh, không vẽ phân bố' : ''}</div>${(c.sample || []).length ? `<small class="sub">Ví dụ: ${c.sample.map(x => esc(x.length > 28 ? x.slice(0, 27) + '…' : x)).join(' · ')}</small>` : ''}` }
-function distCard(c) {
+const dateRole = (file, col) => ((S_().d[1] || {}).dates || []).find(x => x.file === file && x.col === col);
+function distCard(c, file) {
   const tot = c.n + c.missing, mp = tot ? c.missing / tot : 0;
-  return `<div class="dc"><div class="dch"><b title="${esc(c.col)}">${esc(c.label && c.label !== c.col ? c.label : c.col)}</b>${kbadge(c.kind)}${c.missing ? `<span class="tag ${mp > .05 ? 'w' : ''}" title="${N(c.missing)} ô trống">thiếu ${pcs(c.missing, tot)}</span>` : ''}</div>${distBody(c)}${c.note ? `<small class="sub">${esc(c.note)}</small>` : ''}</div>` }
+  return `<div class="dc"><div class="dch"><b title="${esc(c.col)}">${esc(c.label && c.label !== c.col ? c.label : c.col)}</b>${kbadge(c.kind)}${(() => { const r = c.kind === 'date' && dateRole(file, c.col); return r && r.role !== 'event' ? `<span class="tag w" title="Thuộc tính của khách hàng, không phải thời gian diễn ra dữ liệu">${(ROLE_TAG[r.role] || ROLE_TAG.other)[0]}</span>` : '' })()}${c.missing ? `<span class="tag ${mp > .05 ? 'w' : ''}" title="${N(c.missing)} ô trống">thiếu ${pcs(c.missing, tot)}</span>` : ''}</div>${distBody(c)}${c.note ? `<small class="sub">${esc(c.note)}</small>` : ''}</div>` }
 function distPanel(d) {
   if (!d.dist || !d.dist.length) return '';
   const f = d.dist.find(x => x.file === DIST.file) || d.dist[0]; DIST.file = f.file;
@@ -107,9 +108,9 @@ function distPanel(d) {
   if (!FL.some(([k]) => k === DIST.kind)) DIST.kind = 'all';
   const cols = f.cols.filter(c => DIST.kind === 'all' || (DIST.kind === 'id' ? ['id', 'text'].includes(c.kind) : c.kind === DIST.kind)), LIM = 12, shown = DIST.more ? cols : cols.slice(0, LIM);
   return `<div class="dpn"><div class="dph"><div><h3>Phân bố từng biến</h3><p>Biến <b>định lượng</b>: biểu đồ cột (histogram) cho thấy giá trị tập trung ở đâu, vạch xanh là trung vị, vạch đứt là trung bình. Biến <b>phân loại</b>: các giá trị duy nhất và số lần xuất hiện. Biến <b>thời gian</b>: số bản ghi theo kỳ.</p></div></div>
-<div class="dfl">${d.dist.length > 1 ? `<span class="seg" role="group" aria-label="Bảng dữ liệu">${d.dist.map(x => `<button type="button" class="${x.file === f.file ? 'on' : ''}" data-dk="file:${esc(x.file)}">${esc(String(x.file).replace(/\.[^.]+$/, ''))}</button>`).join('')}</span>` : ''}
+<div class="dfl">${d.dist.length > 1 ? `<span class="seg" role="group" aria-label="Bảng dữ liệu">${d.dist.map(x => `<button type="button" class="${x.file === f.file ? 'on' : ''}" data-dk="file:${esc(x.file)}" title="${esc(x.file)}">${esc(dlabel(x.file, d.dist))}<small>${N(x.rows)} dòng</small></button>`).join('')}</span>` : ''}
 <span class="seg" role="group" aria-label="Loại biến">${FL.map(([k, l]) => `<button type="button" class="${DIST.kind === k ? 'on' : ''}" data-dk="kind:${k}">${l} <small>${cnt[k]}</small></button>`).join('')}</span><small class="sub">${N(f.rows)} dòng${f.skipped ? ` · chỉ mô tả ${f.cols.length} cột đầu, còn ${f.skipped} cột nữa` : ''}</small></div>
-<div class="dg">${shown.map(distCard).join('') || '<p class="sub">Không có biến thuộc loại này.</p>'}</div>
+<div class="dg">${shown.map(c => distCard(c, f.file)).join('') || '<p class="sub">Không có biến thuộc loại này.</p>'}</div>
 ${cols.length > LIM ? `<div class="act"><button type="button" class="btn g sm" data-dk="more">${DIST.more ? 'Thu gọn' : `Xem thêm ${cols.length - LIM} biến`}</button></div>` : ''}</div>` }
 
 /* ======================= 1. BỘ GHÉP BIẾN ======================= */
@@ -118,84 +119,95 @@ const BTYPES = [['compare', 'So sánh theo nhóm', 'Chỉ số chia theo nhóm. 
   ['rate', 'Tỷ lệ đạt / tuân thủ', 'Tỷ lệ Đạt của cột Đạt / Không đạt, theo nhóm hoặc thời gian'], ['pareto', 'Xếp hạng và 80/20', 'Nhóm nào tạo ra phần lớn tổng']];
 const BAGG = [['sum', 'Tổng'], ['mean', 'Trung bình'], ['median', 'Trung vị'], ['min', 'Nhỏ nhất'], ['max', 'Lớn nhất'], ['count', 'Đếm có giá trị'], ['nunique', 'Đếm giá trị khác nhau']];
 const BGRAIN = [['day', 'Ngày'], ['week', 'Tuần'], ['month', 'Tháng'], ['quarter', 'Quý'], ['year', 'Năm']];
-const bFile = (d, b) => (d.cols || []).find(f => f.file === b.file) || (d.cols || [])[0];
 const isNum = c => c.kind === 'num', isTime = c => c.kind === 'date', isDim = c => (c.kind === 'cat' || (c.kind === 'num' && c.unique <= 20)) && c.unique >= 2 && c.unique <= 60;
-function bState(d, s) {
-  if (!s.b) { const f = (d.cols || [])[0]; s.b = { mode: 'pick', type: 'compare', file: f ? f.file : '', m: [{ col: '', agg: 'sum' }, { col: '', agg: 'sum' }], by: ['', ''], tc: '', grain: 'month', x: '', y: '', c: '', rc: [], rg: 'none' }; bDefaults(d, s.b) }
-  return s.b }
-function bDefaults(d, b) {                                  // chọn sẵn các biến hợp lý để người dùng chỉ việc chỉnh
-  const f = bFile(d, b); if (!f) return; const nums = f.cols.filter(isNum).sort((p, q) => (q.unit ? 1 : 0) - (p.unit ? 1 : 0) || q.unique - p.unique), dims = f.cols.filter(isDim).sort((p, q) => (p.kind === 'cat' ? 0 : 1) - (q.kind === 'cat' ? 0 : 1)), tms = f.cols.filter(isTime);
-  if (!b.m[0].col) b.m[0].col = nums[0] ? nums[0].name : '*'; if (!b.by[0] && dims[0]) b.by[0] = dims[0].name; if (!b.tc && tms[0]) b.tc = tms[0].name;
-  if (b.type === 'rate' && !b.rc.length) b.rc = f.cols.filter(c => c.bin).slice(0, 3).map(c => c.name);
-  if (!b.x && nums[0]) b.x = nums[0].name; if (!b.y && nums[1]) b.y = nums[1].name; if (!b.c && f.cols.length) b.c = (dims[0] || nums[0] || f.cols[0]).name }
-function bSpec(b) {
-  const m = b.m.filter(x => x.col !== '').map(x => x.col === '*' ? { col: null, agg: 'count' } : { col: x.col, agg: x.agg });
-  if (b.type === 'compare') return { type: 'compare', file: b.file, measures: m, by: b.by.filter(Boolean) };
-  if (b.type === 'trend') return { type: 'trend', file: b.file, measures: m.slice(0, 1), time: { col: b.tc, grain: b.grain }, by: b.by[0] ? [b.by[0]] : [] };
-  if (b.type === 'cross') return { type: 'cross', file: b.file, measures: m.slice(0, 1), by: b.by.slice(0, 2).filter(Boolean) };
-  if (b.type === 'rate') return { type: 'rate', file: b.file, cols: b.rc, ...(b.rg === 'time' ? { time: { col: b.tc, grain: b.grain === 'week' ? 'month' : b.grain } } : b.rg === 'by' && b.by[0] ? { by: [b.by[0]] } : {}) };
-  if (b.type === 'pareto') return { type: 'pareto', file: b.file, measures: [m[0] && m[0].col ? { col: m[0].col, agg: 'sum' } : { col: null, agg: 'count' }], by: b.by[0] ? [b.by[0]] : [] };
-  if (b.type === 'correlate') return { type: 'correlate', file: b.file, x: b.x, y: b.y };
-  return { type: 'distribution', file: b.file, col: b.c } }
-function bMissing(b) {
-  if (b.type === 'rate') return !b.rc.length ? 'Chọn ít nhất một tiêu chí Đạt / Không đạt.' : b.rg === 'by' && !b.by[0] ? 'Chọn nhóm để chia.' : b.rg === 'time' && !b.tc ? 'Bảng này chưa có cột thời gian để chọn.' : '';
-  if (b.type === 'pareto') return b.by[0] ? '' : 'Chọn biến để xếp hạng.';
-  if (b.type === 'compare') return b.by[0] ? '' : 'Chọn ít nhất một biến để chia nhóm.';
-  if (b.type === 'trend') return b.tc ? '' : 'Bảng này chưa có cột thời gian để chọn.';
-  if (b.type === 'cross') return b.by[0] && b.by[1] ? (b.by[0] === b.by[1] ? 'Hai biến hàng và cột phải khác nhau.' : '') : 'Chọn đủ hai biến phân loại (hàng và cột).';
-  if (b.type === 'correlate') return b.x && b.y ? (b.x === b.y ? 'Hai biến phải khác nhau.' : '') : 'Chọn đủ hai biến số.';
-  return b.c ? '' : 'Chọn biến cần xem phân bố.' }
+/* Bộ ghép biến: chọn biến ở HAI khung (phân loại + thời gian | định lượng), có thể từ NHIỀU bảng (sheet); hệ thống gợi ý cách xem và tự nối bảng. */
+const vk = v => v.f + '\u0001' + v.c, BMAXD = 6, BMAXM = 4;
+const bCol = (d, v) => v.c === '*' ? { name: '*', label: 'Đếm số bản ghi', kind: 'num', unique: 0, missing: 0 } : (((d.cols || []).find(f => f.file === v.f) || {}).cols || []).find(c => c.name === v.c);
+function bState(d, s) { if (!s.b) s.b = { mode: 'pick', vars: [], agg: {}, type: '', manual: false, grain: 'month', q: '' }; return s.b }
+function bSel(d, b) {                                          // phân loại các biến đang chọn
+  const rows = b.vars.map(v => ({ ...v, col: bCol(d, v) })).filter(v => v.col), dims = rows.filter(v => v.role === 'dim'), meas = rows.filter(v => v.role === 'meas');
+  return { dims, meas, times: dims.filter(v => isTime(v.col)), cats: dims.filter(v => !isTime(v.col)), bins: dims.filter(v => v.col.bin), nums: meas.filter(v => v.c !== '*'), count: meas.some(v => v.c === '*') } }
+/* cách xem nào dùng được với biến đã chọn, và lý do khi chưa dùng được */
+const BNEED = { compare: ['Chọn ít nhất 1 biến phân loại (khung bên trái)', x => x.cats.length >= 1], trend: ['Chọn 1 biến thời gian (khung bên trái)', x => x.times.length >= 1],
+  cross: ['Chọn 2 biến phân loại khác nhau (khung bên trái)', x => x.cats.length >= 2], correlate: ['Chọn 2 biến định lượng (khung bên phải)', x => x.nums.length >= 2],
+  distribution: ['Chọn 1 biến phân loại hoặc định lượng', x => x.cats.length + x.nums.length >= 1], rate: ['Chọn ít nhất 1 cột Đạt / Không đạt (khung bên trái)', x => x.bins.length >= 1],
+  pareto: ['Chọn 1 biến phân loại (khung bên trái)', x => x.cats.length >= 1] };
+function bAuto(x) {                                            // cách xem phù hợp nhất với những gì đã chọn
+  if (x.bins.length && !x.nums.length && !x.count && !x.times.length && x.cats.length === x.bins.length) return 'rate';
+  if (x.nums.length >= 2 && !x.cats.length && !x.times.length) return 'correlate';
+  if (x.times.length) return 'trend'; if (x.cats.length >= 2) return 'cross'; if (x.cats.length) return 'compare';
+  return x.nums.length ? 'distribution' : '' }
+function bType(d, b) { const x = bSel(d, b); let t = b.type; if (!b.manual || !t || !BNEED[t][1](x)) { t = bAuto(x); b.manual = false } b.type = t; return [t, x] }
+function bSpec(d, b, t, x) {                                   // spec gửi server: mỗi biến là {file, col}; server tự nối bảng và chọn bảng chính
+  const ref = v => ({ file: v.f, col: v.c }), mm = x.meas.map(v => v.c === '*' ? { col: null, agg: 'count' } : { col: ref(v), agg: b.agg[vk(v)] || (v.col.avg ? 'mean' : 'sum') }), grp = x.cats.find(v => !v.col.bin);
+  switch (t) {
+    case 'compare': return { type: t, measures: mm.slice(0, 3), by: x.cats.slice(0, 2).map(ref) };
+    case 'trend': return { type: t, measures: mm.slice(0, 1), time: { col: ref(x.times[0]), grain: b.grain }, by: x.cats[0] ? [ref(x.cats[0])] : [] };
+    case 'cross': return { type: t, measures: mm.slice(0, 1), by: x.cats.slice(0, 2).map(ref) };
+    case 'correlate': return { type: t, x: ref(x.nums[0]), y: ref(x.nums[1]) };
+    case 'distribution': return { type: t, col: ref(x.nums[0] || x.cats[0]) };
+    case 'rate': return { type: t, cols: x.bins.map(ref), ...(x.times[0] ? { time: { col: ref(x.times[0]), grain: b.grain === 'week' ? 'month' : b.grain } } : grp ? { by: [ref(grp)] } : {}) };
+    case 'pareto': return { type: t, measures: [x.nums[0] ? { col: ref(x.nums[0]), agg: 'sum' } : { col: null, agg: 'count' }], by: [ref(x.cats[0])] } }
+  return null }
 let BTM = 0;
-function bValidate() {                                       // hỏi server: spec hợp lệ không, tiêu đề / mô tả là gì (cùng một nơi quyết định, không lặp logic ở trình duyệt)
+function bValidate() {                                         // hỏi server: spec hợp lệ không, nối bảng nào với bảng nào, tiêu đề / mô tả là gì (một nơi quyết định, không lặp logic ở giao diện)
   clearTimeout(BTM); BTM = setTimeout(async () => {
-    const d = S_().d[3]; if (!d || V !== 3) return; const s = sel(3); if (!s.b || d.phase !== 'menu') return; const b = s.b, miss = bMissing(b), sp = bSpec(b), key = JSON.stringify(sp);
-    if (miss) s.bprev = { key, ok: false, error: miss }; else { const r = await api('/api/a3/spec', { spec: sp }); if (!r) return; s.bprev = { key, ok: r.ok, spec: r.spec, error: r.error } }
-    const el = document.getElementById('bprev'); if (el) el.innerHTML = bPrevHTML(s) }, 120) }
+    const d = S_().d[3]; if (!d || V !== 3 || d.phase !== 'menu') return; const s = sel(3); if (!s.b || s.b.mode !== 'pick') return;
+    const [t, x] = bType(d, s.b), el = () => document.getElementById('bprev');
+    if (!t) { s.bprev = { ok: false, hint: true, error: s.b.vars.length ? 'Chọn thêm biến để hệ thống gợi ý cách xem.' : 'Chọn biến ở hai khung bên trên để xem hệ thống hiểu thế nào.' }; if (el()) el().innerHTML = bPrevHTML(s); return }
+    const sp = bSpec(d, s.b, t, x), key = JSON.stringify(sp); if (s.bprev && s.bprev.key === key && !s.bprev.hint) return;
+    const r = await api('/api/a3/spec', { spec: sp }); if (!r) return;
+    s.bprev = { key, ok: r.ok, spec: r.spec, error: r.error }; if (el()) el().innerHTML = bPrevHTML(s) }, 120) }
 function bPrevHTML(s) {
   const p = s.bprev, full = (s.specs || []).length >= 12;
-  if (!p) return '<span class="sub">Chọn biến ở trên để xem hệ thống hiểu thế nào.</span>';
-  const add = `<button type="button" class="btn sm" data-a="badd" ${p.ok && !full ? '' : 'disabled'}>+ Thêm vào danh sách phân tích</button>`;
+  const add = `<button type="button" class="btn sm" data-a="badd" ${p && p.ok && !full ? '' : 'disabled'}>+ Thêm vào danh sách phân tích</button>`;
+  if (!p) return `<span class="sub">Chọn biến ở hai khung bên trên để xem hệ thống hiểu thế nào.</span>${add}`;
+  if (p.hint) return `<span class="sub">${esc(p.error || '')}</span>${add}`;
   return p.ok ? `<div class="bpo"><span class="ar">→</span><div><b>${esc(p.spec.title)}</b><small>${esc(p.spec.goal)}</small></div></div>${add}${full ? '<small class="w">Đã đủ 12 phân tích tự ghép.</small>' : ''}` : `<div class="bpo bad"><span class="ar">!</span><div><small>${esc(p.error || '')}</small></div></div>${add}` }
-function bSelect(b, key, opts, cur, placeholder) { return `<select data-b="${key}">${placeholder ? `<option value="">${esc(placeholder)}</option>` : ''}${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` }
-const cOpt = (cols, f, withN = true) => cols.filter(f).map(c => [c.name, `${c.label}${withN && (c.kind === 'num' && c.unique <= 20 || c.kind === 'cat') ? ' · ' + c.unique + ' nhóm' : ''}`]);
-function bSlots(d, b) {
-  const f = bFile(d, b); if (!f) return ''; const nums = f.cols.filter(isNum), meas = [['*', 'Đếm số bản ghi'], ...cOpt(f.cols, isNum, false)];
-  const mrow = (i, opt) => `<div class="bro"><label>${i ? 'Chỉ số thứ hai' : 'Chỉ số'}</label>${bSelect(b, 'mcol' + i, meas, b.m[i].col, opt ? '— không thêm' : '')}${b.m[i].col && b.m[i].col !== '*' ? bSelect(b, 'magg' + i, BAGG, b.m[i].agg) : ''}</div>`;
-  const dimO = cOpt(f.cols, isDim), timO = cOpt(f.cols, isTime), tm = !timO.length ? '<span class="w">Bảng này không có cột thời gian.</span>' : '';
-  if (b.type === 'compare') return mrow(0) + (nums.length ? mrow(1, true) : '') + `<div class="bro"><label>Chia theo</label>${bSelect(b, 'by0', dimO, b.by[0], '— chọn biến')}${bSelect(b, 'by1', dimO.filter(o => o[0] !== b.by[0]), b.by[1], '— thêm biến thứ hai (tùy chọn)')}</div>`;
-  if (b.type === 'trend') return mrow(0) + `<div class="bro"><label>Cột thời gian</label>${timO.length ? bSelect(b, 'tc', timO, b.tc) : tm}<span class="seg" role="group" aria-label="Theo">${BGRAIN.map(([v, l]) => `<button type="button" class="${b.grain === v ? 'on' : ''}" data-a="bgrain" data-v="${v}">${l}</button>`).join('')}</span></div><div class="bro"><label>Tách đường theo</label>${bSelect(b, 'by0', dimO, b.by[0], '— không tách')}</div>`;
-  if (b.type === 'cross') return `<div class="bro"><label>Hàng</label>${bSelect(b, 'by0', dimO, b.by[0], '— chọn biến')}<label class="x">Cột</label>${bSelect(b, 'by1', dimO.filter(o => o[0] !== b.by[0]), b.by[1], '— chọn biến')}</div>` + mrow(0);
-  if (b.type === 'rate') { const bins = f.cols.filter(c => c.bin), dimR = dimO.filter(o => !b.rc.includes(o[0]));
-    return (bins.length ? `<div class="bro"><label>Tiêu chí</label><span class="bcr">${bins.map(c => `<label class="bc2"><input type="checkbox" data-b="rcx" value="${esc(c.name)}" ${b.rc.includes(c.name) ? 'checked' : ''}> ${esc(c.label)}</label>`).join('')}</span></div>` : '<div class="bro"><span class="w">Bảng này chưa có cột Đạt / Không đạt (cột chỉ có hai giá trị kiểu Đạt / Không đạt, Có / Không).</span></div>')
-      + `<div class="bro"><label>Xem</label><span class="seg" role="group" aria-label="Xem theo">${[['none', 'Chung'], ['by', 'Theo nhóm'], ['time', 'Theo thời gian']].map(([v, l]) => `<button type="button" class="${b.rg === v ? 'on' : ''}" data-a="brg" data-v="${v}">${l}</button>`).join('')}</span></div>`
-      + (b.rg === 'by' ? `<div class="bro"><label>Chia theo</label>${bSelect(b, 'by0', dimR, b.by[0], '— chọn biến')}</div>` : '') + (b.rg === 'time' ? `<div class="bro"><label>Cột thời gian</label>${timO.length ? bSelect(b, 'tc', timO, b.tc) : tm}<span class="seg" role="group" aria-label="Theo">${BGRAIN.filter(g => g[0] !== 'week').map(([v, l]) => `<button type="button" class="${b.grain === v ? 'on' : ''}" data-a="bgrain" data-v="${v}">${l}</button>`).join('')}</span></div>` : '') }
-  if (b.type === 'pareto') return `<div class="bro"><label>Chỉ số</label>${bSelect(b, 'mcol0', meas, b.m[0].col)}<small class="sub">Tính theo Tổng (80/20 chỉ dùng cho chỉ số cộng được)</small></div><div class="bro"><label>Xếp hạng theo</label>${bSelect(b, 'by0', dimO, b.by[0], '— chọn biến')}</div>`;
-  if (b.type === 'correlate') return `<div class="bro"><label>Biến X</label>${bSelect(b, 'x', cOpt(f.cols, isNum, false), b.x, '— chọn biến')}<label class="x">Biến Y</label>${bSelect(b, 'y', cOpt(f.cols, isNum, false).filter(o => o[0] !== b.x), b.y, '— chọn biến')}</div>`;
-  return `<div class="bro"><label>Biến</label>${bSelect(b, 'c', cOpt(f.cols, c => isNum(c) || c.kind === 'cat'), b.c, '— chọn biến')}</div>` }
-function bChips(d, b) {                                       // danh sách MỌI biến của bảng: bấm một biến để đưa vào ô còn trống phù hợp
-  const f = bFile(d, b); if (!f) return '';
-  const used = new Set([...b.m.map(x => x.col), ...b.by, ...(b.rc || []), b.tc, b.x, b.y, b.c]);
-  return `<div class="bch"><small>Biến của bảng (${f.cols.length}) · bấm để đưa vào ô còn trống phù hợp:</small><div class="bcl">${f.cols.map(c => `<button type="button" class="vc k-${(KL[c.kind] || KL.text)[1]} ${used.has(c.name) ? 'used' : ''}" data-a="bchip" data-v="${esc(c.name)}" title="${esc(c.name)} · ${(KL[c.kind] || KL.text)[0]} · ${N(c.unique)} giá trị khác nhau${c.missing ? ' · thiếu ' + N(c.missing) : ''}">${esc(c.label)}<i>${(KL[c.kind] || KL.text)[0]}</i></button>`).join('')}</div></div>` }
-function bAssign(d, b, name) {
-  const f = bFile(d, b), c = f && f.cols.find(x => x.name === name); if (!c) return;
-  const put = (arr, i) => { arr[i] = name };
-  if (b.type === 'rate') { if (c.bin) { if (!b.rc.includes(name)) b.rc.push(name) } else if (isTime(c)) { b.tc = name; b.rg = 'time' } else if (isDim(c)) { b.by[0] = name; b.rg = 'by' } return }
-  if (b.type === 'compare' || b.type === 'trend' || b.type === 'cross' || b.type === 'pareto') {
-    if (isNum(c) && b.type !== 'cross' || (isNum(c) && !isDim(c))) { const i = b.m[0].col && b.m[0].col !== '*' ? 1 : 0; if (b.type === 'compare' || i === 0) b.m[i] = { col: name, agg: b.m[i].agg }; else b.m[0] = { col: name, agg: b.m[0].agg }; return }
-    if (isTime(c) && b.type === 'trend') { b.tc = name; return }
-    if (isDim(c)) { const lim = b.type === 'cross' ? 2 : b.type === 'trend' || b.type === 'pareto' ? 1 : 2; const i = b.by.slice(0, lim).findIndex(x => !x); put(b.by, i >= 0 ? i : lim - 1); return } }
-  else if (b.type === 'correlate' && isNum(c)) { if (!b.x || b.y) b.x = name; else b.y = name; if (b.x === b.y) b.y = ''; return }
-  else if (b.type === 'distribution') { b.c = name; return } }
+/* ---- vẽ từng phần (chỉ vẽ lại phần đổi, giữ vị trí cuộn của hai khung) ---- */
+const bChip = (d, b, f, c, role) => { const i = b.vars.findIndex(v => v.f === f && v.c === c.name && v.role === role), on = i >= 0, k = (KL[c.kind] || KL.text)[1],
+    sub = c.name === '*' ? '' : role === 'meas' ? (c.unit || '') : isTime(c) ? ({ birth: 'ngày sinh', signup: 'đăng ký' }[(dateRole(f, c.name) || {}).role] || 'thời gian') : c.bin ? 'đạt / không' : `${N(c.unique)} nhóm`;
+  return `<button type="button" class="vc bv k-${k} ${on ? 'on' : ''}" data-a="bvar" data-v="${esc(JSON.stringify([role, f, c.name]))}" aria-pressed="${on}" title="${esc(c.name)} · ${(KL[c.kind] || KL.text)[0]}${c.name === '*' ? '' : ` · ${N(c.unique)} giá trị khác nhau`}${c.missing ? ` · thiếu ${N(c.missing)}` : ''}">${on ? '<em class="ck">✓</em>' : ''}${esc(c.label)}${sub ? `<i>${esc(sub)}</i>` : ''}</button>` };
+function bPanel(d, b, role, title, hint, test, extra) {
+  const q = (b.q || '').trim().toLowerCase(), hit = c => !q || `${c.label} ${c.name}`.toLowerCase().includes(q);
+  const gs = (d.cols || []).map(fl => ({ fl, cs: fl.cols.filter(c => test(c) && hit(c)) })).filter(g => g.cs.length), n = gs.reduce((t, g) => t + g.cs.length, 0);
+  return `<div class="bpanel"><div class="bph"><b>${title} <small>${N(n)}</small></b><small>${hint}</small></div><div class="bpl">${extra && hit({ label: 'Đếm số bản ghi', name: '*' }) ? `<div class="bcs">${extra}</div>` : ''}${gs.map(g => `<div class="bgh"><b>${esc(dlabel(g.fl.file, d.cols))}</b><small>${N(g.fl.rows)} dòng</small></div><div class="bcs">${g.cs.map(c => bChip(d, b, g.fl.file, c, role)).join('')}</div>`).join('') || (extra ? '' : '<p class="sub">Không có biến nào khớp.</p>')}</div></div>` }
+const bBoardHTML = (d, b) => bPanel(d, b, 'dim', 'Biến phân loại và thời gian', 'Dùng để chia nhóm hoặc xem theo thời gian. Mã, tên riêng hay biến có hơn 60 giá trị không hiện ở đây.', c => isTime(c) || isDim(c))
+  + bPanel(d, b, 'meas', 'Biến định lượng', 'Dùng để đo: tổng, trung bình, đếm...', isNum, bChip(d, b, '', { name: '*', label: 'Đếm số bản ghi', kind: 'num', unique: 0, missing: 0 }, 'meas'));
+function bSelHTML(d, b) {
+  const x = bSel(d, b); if (!b.vars.length) return '<span class="sub">Chưa chọn biến nào. Ví dụ: chọn «Thành tiền» ở khung bên phải và «Danh mục» ở khung bên trái.</span>';
+  const one = v => `<span class="vc bsc k-${(KL[v.col.kind] || KL.text)[1]}"><b>${esc(v.col.label)}</b>${v.f ? `<small>${esc(dlabel(v.f, d.cols))}</small>` : ''}${v.role === 'meas' && v.c !== '*' ? `<select data-b="agg" data-k="${esc(vk(v))}" aria-label="Cách tính">${BAGG.map(([k, l]) => `<option value="${k}" ${(b.agg[vk(v)] || (v.col.avg ? 'mean' : 'sum')) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<button type="button" class="rm" data-a="bvar" data-v="${esc(JSON.stringify([v.role, v.f, v.c]))}" aria-label="Bỏ chọn ${esc(v.col.label)}">×</button></span>`;
+  return `<small>Đang chọn:</small>${[...x.meas, ...x.dims].map(one).join('')}<button type="button" class="lnk" data-a="bclear">Xóa chọn</button>` }
+function bTypesHTML(d, b) {
+  const [t, x] = bType(d, b);
+  return BTYPES.map(([k, l, tx]) => { const ok = BNEED[k][1](x); return `<button type="button" class="${t === k ? 'on' : ''} ${ok ? '' : 'off'}" data-a="btype" data-v="${k}" ${ok ? '' : 'disabled'} aria-pressed="${t === k}"><b>${l}${t === k && !b.manual ? ' <span class="rec">Gợi ý</span>' : ''}</b><small>${ok ? tx : esc(BNEED[k][0])}</small></button>` }).join('') }
+function bGrainHTML(d, b) {
+  const [t, x] = bType(d, b); if (!(t === 'trend' || (t === 'rate' && x.times.length))) return '';
+  const g = t === 'rate' && b.grain === 'week' ? 'month' : b.grain;
+  return `<div class="bro"><label>Xem theo</label><span class="seg" role="group" aria-label="Đơn vị thời gian">${BGRAIN.filter(([k]) => t !== 'rate' || k !== 'week').map(([k, l]) => `<button type="button" class="${g === k ? 'on' : ''}" data-a="bgrain" data-v="${k}">${l}</button>`).join('')}</span></div>` }
+function bPaint() {                                            // vẽ lại các phần phụ thuộc lựa chọn, giữ nguyên vị trí cuộn của hai khung biến
+  const d = S_().d[3], s = sel(3); if (!d || !s.b || s.b.mode !== 'pick') return; const b = s.b, keep = [...document.querySelectorAll('#bboard .bpl')].map(e => e.scrollTop), put = (id, h) => { const e = document.getElementById(id); if (e) e.innerHTML = h };
+  put('bboard', bBoardHTML(d, b)); put('bsel', bSelHTML(d, b)); put('btypes', bTypesHTML(d, b)); put('bgr', bGrainHTML(d, b));
+  [...document.querySelectorAll('#bboard .bpl')].forEach((e, i) => { e.scrollTop = keep[i] || 0 }); bValidate() }
+function bToggle(d, b, role, f, c) {
+  const i = b.vars.findIndex(v => v.f === f && v.c === c && v.role === role); if (i >= 0) { b.vars.splice(i, 1); return true }
+  if (b.vars.filter(v => v.role === role).length >= (role === 'dim' ? BMAXD : BMAXM)) { notify(role === 'dim' ? `Chọn tối đa ${BMAXD} biến phân loại / thời gian một lần.` : `Chọn tối đa ${BMAXM} chỉ số một lần.`, 'warn'); return false }
+  b.vars.push({ f, c, role }); return true }
+const relLine = d => { const R = d.rel || [], n = (d.cols || []).length;
+  return R.length ? `<p class="brl"><b>Các bảng liên kết với nhau:</b> ${R.map(r => `<span>${esc(dlabel(r.many, d.cols))} → ${esc(dlabel(r.one, d.cols))} <small>(${esc(r.key)})</small></span>`).join('')}<small class="sub">Chọn biến ở nhiều bảng là được, hệ thống tự nối.</small></p>`
+    : n > 1 ? '<p class="brl"><small class="sub">Các bảng chưa có cột khóa chung nên chỉ ghép được biến trong cùng một bảng.</small></p>' : '' };
 function specCard(x, i) { const sp = x.spec;
   return `<div class="spc3"><div class="spch"><b>${esc(sp.title)}</b>${srcTag(x.src)}<button type="button" class="rm" data-a="brm" data-v="${i}" title="Bỏ phân tích này" aria-label="Bỏ phân tích này">${ico('trash', 15)}</button></div><p>${esc(sp.goal || '')}</p>${varChips(sp.vars, S_().d[3].cols)}</div>` }
 function bBuilder(d, s) {
-  const b = bState(d, s), mode = b.mode, f = bFile(d, b), files = d.cols || [];
+  const b = bState(d, s), mode = b.mode;
   const tabs = `<span class="seg" role="group" aria-label="Cách ghép biến"><button type="button" class="${mode === 'pick' ? 'on' : ''}" data-a="bmode" data-v="pick">Chọn biến</button><button type="button" class="${mode === 'text' ? 'on' : ''}" data-a="bmode" data-v="text">Mô tả bằng lời</button></span>`;
   const list = (s.specs || []).length ? `<div class="spl"><b>Phân tích bạn đã ghép (${s.specs.length})</b>${s.specs.map(specCard).join('')}</div>` : '';
   let body;
-  if (mode === 'pick') body = `${files.length > 1 ? `<div class="bro"><label>Bảng dữ liệu</label>${bSelect(b, 'file', files.map(x => [x.file, `${x.file} · ${N(x.rows)} dòng`]), b.file)}</div>` : ''}
-${bChips(d, b)}<div class="btp" role="group" aria-label="Kiểu phân tích">${BTYPES.map(([k, l, t]) => `<button type="button" class="${b.type === k ? 'on' : ''}" data-a="btype" data-v="${k}"><b>${l}</b><small>${t}</small></button>`).join('')}</div>
-<div class="bsl">${bSlots(d, b)}</div><div class="bpv" id="bprev">${bPrevHTML(s)}</div>`;
+  if (mode === 'pick') body = `<div class="bstep"><span class="bn">1</span><div><b>Chọn biến</b><small>Bấm vào biến để chọn hoặc bỏ chọn. Có thể chọn biến ở nhiều bảng (sheet) cùng lúc, hệ thống tự nối các bảng.</small></div><input type="search" class="bq" data-b="q" placeholder="Tìm biến…" value="${esc(b.q || '')}" aria-label="Tìm biến"></div>
+${relLine(d)}<div class="bboard" id="bboard">${bBoardHTML(d, b)}</div><div class="bselbar" id="bsel">${bSelHTML(d, b)}</div>
+<div class="bstep"><span class="bn">2</span><div><b>Chọn cách xem</b><small>Hệ thống gợi ý cách phù hợp nhất với các biến bạn chọn, bạn có thể đổi sang cách khác.</small></div></div>
+<div class="btp" id="btypes" role="group" aria-label="Cách xem">${bTypesHTML(d, b)}</div><div id="bgr">${bGrainHTML(d, b)}</div>
+<div class="bstep"><span class="bn">3</span><div><b>Kiểm tra và thêm vào danh sách</b></div></div><div class="bpv" id="bprev">${bPrevHTML(s)}</div>`;
   else { const r = s.bres;
     body = `<p class="sub">Viết điều bạn muốn xem. AI đọc, <b>nhận diện đúng biến trong dữ liệu</b> rồi đưa vào danh sách bên dưới để bạn kiểm tra trước khi chạy. Ví dụ: <i>“doanh thu theo khu vực và theo tháng”</i>, <i>“đơn giá có liên quan tới số lượng bán không”</i>.</p>
 <textarea data-b="text" data-pn="Mô tả biến cần ghép" class="bta" placeholder="Bạn muốn ghép biến nào với biến nào?">${esc(s.btxt || '')}</textarea>
@@ -207,7 +219,7 @@ ${r ? `${r.rejected.map(x => `<div class="note" style="margin-top:8px">Chưa nh�
 function a3Menu(d, s) {
   const on = m => s['a' + m.id] ?? m.recommended, nA = d.menu.filter(on).length, nS = (s.specs || []).length;
   const card = m => `<div class="mc3 ${on(m) ? 'on' : ''}"><label class="mch"><input type="checkbox" data-s="3" data-k="a${m.id}" ${on(m) ? 'checked' : ''}><span class="mct"><b>${esc(m.title)}</b>${adjTag(d, m.title)}${m.recommended ? '<span class="rec">Khuyên dùng</span>' : ''}</span></label>
-<p class="mg">${esc(m.goal || '')}</p>${m.action ? `<p class="mact">${esc(m.action)}</p>` : ''}${varChips(m.vars, d.cols)}${(m.metrics || []).length ? `<div class="mm">${m.metrics.map(x => `<code>${esc(x)}</code>`).join('')}</div>` : ''}${m.why ? `<details><summary>Vì sao nên làm</summary><p>${esc(m.why)}</p></details>` : ''}</div>`;
+<div class="mcb"><p class="mg">${esc(m.goal || '')}</p>${m.action ? `<p class="mact">${esc(m.action)}</p>` : ''}${varChips(m.vars, d.cols)}${(m.metrics || []).length ? `<div class="mm">${m.metrics.map(x => `<code>${esc(x)}</code>`).join('')}</div>` : ''}${m.why ? `<details><summary>Vì sao nên làm</summary><p>${esc(m.why)}</p></details>` : ''}</div></div>`;
   const ang = m => m.angle || m.type || 'Phân tích', names = [...new Set(d.menu.map(ang))].sort((p, q) => (q === 'Góc nhìn mới') - (p === 'Góc nhìn mới')), grp = names.map(t => [t, d.menu.filter(m => ang(m) === t)]);
   return `<h2>Phân tích</h2><p class="lead">Chọn các phân tích AI đề xuất và/hoặc tự ghép biến ở bên dưới. Sau đó hệ thống viết code, chạy trên dữ liệu đã làm sạch, và cho bạn xem kết quả trước khi đi tiếp.</p>${adjBanner(d)}
 <div class="a3h"><b>AI đề xuất (${d.menu.length})</b><span><button type="button" class="lnk" data-a="a3sel" data-v="all">Chọn tất cả</button> · <button type="button" class="lnk" data-a="a3sel" data-v="none">Bỏ chọn</button></span></div>
@@ -374,7 +386,7 @@ window.addEventListener('message', e => { const m = e.data, f = document.querySe
 /* ======================= sự kiện của các thành phần trên ======================= */
 document.addEventListener('click', e => {
   const t = e.target;
-  const dk = t.closest('[data-dk]'); if (dk) { const [k, ...v] = dk.dataset.dk.split(':'), val = v.join(':'); if (k === 'file') { DIST.file = val; DIST.more = false } else if (k === 'kind') { DIST.kind = val; DIST.more = false } else if (k === 'more') DIST.more = !DIST.more; stage(); return }
+  const dk = t.closest('[data-dk]'); if (dk) { const [k, ...v] = dk.dataset.dk.split(':'), val = v.join(':'); if (k === 'smp') SMP.file = val; else if (k === 'file') { DIST.file = val; DIST.more = false } else if (k === 'kind') { DIST.kind = val; DIST.more = false } else if (k === 'more') DIST.more = !DIST.more; stage(); return }
   const dpa = t.closest('[data-dpa]'); if (dpa && !RO()) { const S = S_(), d = S.d[5], s = sel(5), plan = dpState(d, s); if (dpa.dataset.dpa === 'rm') s.dash = plan.filter(x => x.id !== dpa.dataset.v); libPaint(); return }
   const dw = t.closest('[data-dw]'); if (dw && !RO()) { const S = S_(), d = S.d[5], s = sel(5), T = S.d[3].result.tables, cat = catOf(d), a = dw.dataset.dw, v = dw.dataset.v;
     if (a === 'open') dwOpen(dw.dataset.t); else if (a === 'close') dwClose(); else if (a === 'tab') { DW.t = v; dwPaint() } else if (a === 'ds') { DW.ds = +v; DW.b = DW.k = null; dwPaint() }
@@ -391,10 +403,10 @@ document.addEventListener('click', e => {
   if (a === 'a3sel') { d.menu.forEach(m => s['a' + m.id] = v === 'all'); stage() }
   else if (a === 'a3more') { sel(3); keepSnap(3); if (KEEP[3]) KEEP[3].more = true; post('/api/a3/more').then(ok => { if (!ok) delete KEEP[3] }) }       // giữ lựa chọn đang chọn dở; mục mới do «góc nhìn khác» để bạn tự tick
   else if (a === 'bmode') { bState(d, s).mode = v; stage() }
-  else if (a === 'btype') { const bb = bState(d, s); bb.type = v; bDefaults(d, bb); stage(); bValidate() }
-  else if (a === 'brg') { bState(d, s).rg = v; stage(); bValidate() }
-  else if (a === 'bgrain') { bState(d, s).grain = v; stage(); bValidate() }
-  else if (a === 'bchip') { const bb = bState(d, s); bAssign(d, bb, v); stage(); bValidate() }
+  else if (a === 'btype') { const bb = bState(d, s); bb.type = v; bb.manual = true; bPaint() }
+  else if (a === 'bgrain') { bState(d, s).grain = v; bPaint() }
+  else if (a === 'bvar') { const bb = bState(d, s), [role, f, c] = JSON.parse(v); if (bToggle(d, bb, role, f, c)) bPaint() }
+  else if (a === 'bclear') { const bb = bState(d, s); bb.vars = []; bb.manual = false; bPaint() }
   else if (a === 'badd') { const p = s.bprev; if (p && p.ok && (s.specs || []).length < 12) { s.specs = s.specs || []; if (!s.specs.some(x => JSON.stringify(x.spec) === JSON.stringify(p.spec))) s.specs.push({ spec: p.spec, src: 'pick' }); stage() } }
   else if (a === 'brm') { (s.specs || []).splice(+v, 1); stage() }
   else if (a === 'bfree') { s.specs = s.specs || []; s.specs.push({ spec: { type: 'free', text: v, title: v.slice(0, 70), goal: v, vars: [] }, src: 'text' }); if (s.bres) s.bres.unclear = ''; stage() }
@@ -416,13 +428,9 @@ document.addEventListener('change', e => {
     else if (f && ['task', 'fx', 'fy', 'fkind'].includes(k)) { if (k === 'task') { f.task = +v; f.x = f.y = '' } else if (k === 'fx') f.x = v; else if (k === 'fy') f.y = v; else f.kind = v }
     else if (kp && ['kk', 'km', 'kb', 'kl'].includes(k)) { if (k === 'kk') { kp.kind = v; kp.m = kp.by = '' } else if (k === 'km') kp.m = v; else if (k === 'kb') kp.by = v; else kp.label = v }
     dwPaint(); return }
-  if (t.dataset.b && !RO()) { const S = S_(), d = S.d[3], s = sel(3), b = bState(d, s), k = t.dataset.b, v = t.value;
-    if (k === 'file') { b.file = v; b.m = [{ col: '', agg: 'sum' }, { col: '', agg: 'sum' }]; b.by = ['', '']; b.tc = b.x = b.y = b.c = ''; b.rc = []; b.rg = 'none'; bDefaults(d, b) }
-    else if (k === 'rcx') { const i = b.rc.indexOf(v); if (t.checked && i < 0) b.rc.push(v); else if (!t.checked && i >= 0) b.rc.splice(i, 1) }
-    else if (/^mcol\d$/.test(k)) { b.m[+k[4]].col = v } else if (/^magg\d$/.test(k)) { b.m[+k[4]].agg = v }
-    else if (/^by\d$/.test(k)) { b.by[+k[2]] = v; if (b.by[0] && b.by[0] === b.by[1]) b.by[1] = '' } else if (k !== 'text') b[k] = v;
-    if (k !== 'text') { stage(); bValidate() } } });
+  if (t.dataset.b === 'agg' && !RO()) { const d = S_().d[3], b = bState(d, sel(3)); b.agg[t.dataset.k] = t.value; bPaint() } });
 document.addEventListener('input', e => { const t = e.target; if (t.dataset.b === 'text' && !RO()) sel(3).btxt = t.value;
+  if (t.dataset.b === 'q' && !RO()) { const d = S_().d[3], b = bState(d, sel(3)); b.q = t.value; const e2 = document.getElementById('bboard'); if (e2) e2.innerHTML = bBoardHTML(d, b); return }
   if (t.dataset.dwi === 'q' && !RO()) { DW.q = t.value; dwPaint(); const q = DW.el && DW.el.querySelector('[data-dwi="q"]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length) } }
   else if (t.dataset.dwi === 'kl' && DW.k) DW.k.label = t.value });
 document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.o && !RO()) sel(+d.dataset.s)[d.dataset.o] = d.open }, true);

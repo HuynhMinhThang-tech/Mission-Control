@@ -108,13 +108,14 @@ with sync_playwright() as p:
     check("làm sạch: không còn thẻ 'Gộp giá trị viết khác nhau' riêng; gợi ý gộp nằm trong bảng đếm", pg.locator("text=Gộp giá trị viết khác nhau").count() == 0 and pg.locator(".cg table").count() >= 1)
     acc(pg); pg.wait_for_selector(".a3b")
 
-    # ---- 1. ghép biến bằng cách chọn
-    check("ghép biến: chỉ số mặc định là cột tiền, chia theo biến phân loại", pg.locator("select[data-b=mcol0]").input_value() == "doanh_thu" and pg.locator("select[data-b=by0]").input_value() == "khu_vuc")
-    pg.locator(".bch [data-v=khu_vuc]").click(); pg.wait_for_selector("#bprev .bpo b")
-    check("ghép biến: hệ thống nói lại bằng một câu tiếng Việt", pg.locator("#bprev .bpo b").inner_text() == "Tổng doanh thu theo khu vực")
+    # ---- 1. ghép biến bằng cách chọn: hai khung biến (phân loại + thời gian | định lượng), hệ thống gợi ý cách xem
+    pick = lambda role, col: pg.click(f"[data-a=bvar][data-v*='\"{role}\"'][data-v*='\"{col}\"']")      # noqa: E731
+    check("ghép biến: có HAI khung biến (phân loại + thời gian | định lượng); chưa chọn gì thì nút Thêm bị khóa", pg.locator(".bpanel").count() == 2 and pg.locator("[data-a=badd]").is_disabled())
+    pick("meas", "doanh_thu"); pick("dim", "khu_vuc"); pg.wait_for_selector("#bprev .bpo b")
+    check("ghép biến: chọn 1 chỉ số + 1 biến phân loại: gợi ý «So sánh theo nhóm» và nói lại bằng một câu tiếng Việt",
+          pg.locator("#bprev .bpo b").inner_text() == "Tổng doanh thu theo khu vực" and pg.locator("[data-a=btype].on").get_attribute("data-v") == "compare")
     pg.click("[data-a=badd]")
-    pg.click("[data-a=btype][data-v=cross]"); pg.select_option("select[data-b=by1]", ""); pg.wait_for_timeout(500)
-    check("ghép biến: thiếu biến thì báo lỗi và khóa nút Thêm", pg.locator("[data-a=badd]").is_disabled() and "hai biến" in pg.locator("#bprev").inner_text())
+    check("ghép biến: kiểu «Chéo hai biến phân loại» chưa dùng được khi mới chọn 1 biến phân loại, nói rõ cần chọn gì", pg.locator("[data-a=btype][data-v=cross]").is_disabled() and "2 biến phân loại" in pg.locator("[data-a=btype][data-v=cross]").inner_text())
     # ---- 1. cách 2: mô tả bằng lời
     pg.click("[data-a=bmode][data-v=text]"); ft(pg, "textarea[data-b=text]", "xu hướng theo tháng, thêm nhân sự")
     pg.click("[data-a=bparse]"); pg.wait_for_selector(".spc3 .srt.ai", timeout=20000)
@@ -135,10 +136,9 @@ with sync_playwright() as p:
           pg.locator(".mc3").count() == n_cards + 1 and pg.locator(".a3g h4").first.inner_text().lower().startswith("✦ góc nhìn mới") and not pg.locator(".mc3:has-text('Nhóm nhỏ kéo cả chỉ số') input").is_checked() and pg.locator(".mc3:has-text('Doanh thu theo khu vực') input").first.is_checked() == first_on,
           str((pg.locator(".mc3").count(), n_cards, pg.locator(".a3g h4").first.inner_text(), pg.locator(".mc3:has-text('Nhóm nhỏ kéo cả chỉ số') input").is_checked(), pg.locator(".mc3:has-text('Doanh thu theo khu vực') input").first.is_checked(), first_on)))
     pg.click("[data-a=bmode][data-v=pick]"); pg.wait_for_selector("[data-a=btype]")
-    pg.click("[data-a=btype][data-v=rate]")
-    check("ghép biến 'Tỷ lệ đạt': dữ liệu không có cột Đạt / Không đạt thì báo rõ, không sập", "chưa có cột Đạt / Không đạt" in pg.locator(".bsl").inner_text() and not pg.locator("#bprev .btn:not([disabled])").count())
+    check("ghép biến 'Tỷ lệ đạt': dữ liệu không có cột Đạt / Không đạt thì kiểu này bị mờ và nói rõ cần gì, không sập", pg.locator("[data-a=btype][data-v=rate]").is_disabled() and "Đạt / Không đạt" in pg.locator("[data-a=btype][data-v=rate]").inner_text())
     pg.click("[data-a=btype][data-v=pareto]"); pg.wait_for_timeout(900)
-    check("ghép biến 'Xếp hạng 80/20': có ô chỉ số và ô xếp hạng theo; chỉ số có giá trị âm (doanh thu có trả hàng) thì báo lý do rõ thay vì tính sai", "Xếp hạng theo" in pg.locator(".bsl").inner_text() and "giá trị âm" in pg.locator("#bprev").inner_text(), pg.locator("#bprev").inner_text()[:200])
+    check("ghép biến 'Xếp hạng 80/20': chỉ số có giá trị âm (doanh thu có trả hàng) thì báo lý do rõ thay vì tính sai và khóa nút Thêm", "giá trị âm" in pg.locator("#bprev").inner_text() and pg.locator("[data-a=badd]").is_disabled(), pg.locator("#bprev").inner_text()[:200])
     pg.click("[data-a=btype][data-v=compare]")
     pg.wait_for_timeout(500)
     st = pg.evaluate("() => { const d = ST.d[3], s = sel(3); return { m1: s['a' + d.menu[1].id] ?? d.menu[1].recommended, specs: (s.specs || []).length, anc: s.anc } }")

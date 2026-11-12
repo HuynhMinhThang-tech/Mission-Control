@@ -179,6 +179,7 @@ function vcEff(d, c, mm) {                      // phép gộp đang hiệu lự
   Object.entries(vcSuggest(d, c)).forEach(([k, g]) => { if (g.sure) m[k] = g.to });
   Object.entries(man).forEach(([k, x]) => { if (x) m[k] = x; else delete m[k] });
   return m }
+const VC_ROWS = 12;                                          // bảng đếm giá trị chỉ cao khoảng ngần này dòng, dài hơn thì cuộn TRONG bảng (CSS .vcd .tw), không kéo dài cả trang
 function uniTable(d, c, ci, aw, s, eff) {
   const sg = vcSuggest(d, c), man = (s.mm || {})[VKEY(c)] || {}, mx = Math.max(...c.top.map(r => r[1]), 1), vals = c.top.filter(r => r[0] !== '(thiếu)').map(r => r[0]);
   const rows = c.top.map(([k, n]) => {
@@ -189,7 +190,7 @@ function uniTable(d, c, ci, aw, s, eff) {
     const pick = aw && k !== '(thiếu)' ? `<select class="mmsel" data-mm="${ci}" data-val="${esc(k)}" aria-label="Gộp «${esc(k)}» vào"><option value="">Giữ nguyên</option>${names.map(x => `<option value="${esc(x)}" ${to === x ? 'selected' : ''}>Gộp vào «${esc(x)}»</option>`).join('')}</select>` : '';
     const base = [`<span class="vv">${esc(k)}</span>${tag}`, `<span class="mb"><i style="width:${Math.max(2, n / mx * 100)}%"></i></span>${N(n)}`, FMT.pct(n * 100 / (c.total || 1))];
     return aw ? [...base, pick] : base });
-  return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Xử lý'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` }
+  return `<p class="sub"><code>${esc(c.cmd)}</code>${c.skipped ? ` · ${esc(c.skipped)}` : ''}</p>${tbl(aw ? ['Giá trị', 'Số lượng', 'Tỷ lệ', 'Xử lý'] : ['Giá trị', 'Số lượng', 'Tỷ lệ'], rows)}${c.top.length > VC_ROWS ? `<small class="sub vcs-hint">Bảng chỉ hiện khoảng ${VC_ROWS} dòng, cuộn trong bảng để xem đủ ${N(c.top.length)} dòng.</small>` : ''}${c.more ? `<small class="sub">…và ${N(c.more)} giá trị khác (ít xuất hiện hơn)</small>` : ''}` }
 /* Cột chữ nhưng thực chất là NGÀY hoặc SỐ: không gộp giá trị như biến phân loại. Chỉ cho biết đọc được bao nhiêu, các cách viết, ô nào không đọc được. */
 function kindTable(c) {
   const i = c.info || {}, sum = (a) => (a || []).reduce((t, r) => t + r[1], 0), rows = [['Đọc được', `${N(i.ok)}/${N(i.n)} ô · ${FMT.pct(i.ok * 100 / (i.n || 1))}`]];
@@ -305,6 +306,22 @@ function dlMemo(i) { const m = S_().memo && S_().memo[i]; if (!m) return;
   const u = URL.createObjectURL(new Blob([m.md], { type: 'text/markdown;charset=utf-8' })), x = document.createElement('a'); x.href = u; x.download = `tong_hop_${i === 0 ? 'de_bai' : 'buoc_' + i}.md`; document.body.appendChild(x); x.click(); x.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000) }
 
 /* ---------- 7 bước ---------- */
+/* Bước 1 với NHIỀU bảng (sheet): danh sách bảng + liên kết, các cột ngày và ý nghĩa của từng cột, xem nhanh từng bảng */
+const ROLE_TAG = { event: ['Ngày phát sinh', 'ok'], birth: ['Ngày sinh', 'w'], signup: ['Ngày đăng ký / tham gia', 'w'], other: ['Ngày khác', ''] }, SMP = { file: null };
+const dlabel = (f, all) => { const nm = String(f).includes('::') ? tabName(f) : String(f).replace(/\.[^.]+$/, ''); return (all || []).filter(x => (x.file || x) !== f && (String(x.file || x).includes('::') ? tabName(x.file || x) : String(x.file || x).replace(/\.[^.]+$/, '')) === nm).length ? `${nm} · ${grpOf(f).replace(/\.[^.]+$/, '')}` : nm };
+function tablesInfo(d) {
+  const T = d.tables || []; if (T.length < 2) return '';
+  const rel = d.relations || [], link = f => [...rel.filter(r => r.many === f).map(r => `→ ${esc(tabName(r.one))} <small>(${esc(r.key)})</small>`), ...rel.filter(r => r.one === f).map(r => `← ${esc(tabName(r.many))}`)].join('<br>') || '<span class="sub">—</span>';
+  return `<div class="ovw"><h3>Các bảng dữ liệu <small>${T.length}</small></h3>${tbl(['Bảng', 'Tệp', 'Số dòng', 'Số cột', 'Liên kết', 'Cột ngày'], T.map(t => [`<b>${esc(t.table)}</b>`, esc(t.group), N(t.rows), N(t.cols), link(t.file), t.dates ? N(t.dates) : '<span class="sub">—</span>']))}
+<small class="sub">${rel.length ? '→ nối sang bảng khác theo cột khóa trong ngoặc · ← được bảng khác tham chiếu tới.' : 'Chưa thấy cột khóa chung giữa các bảng nên chưa nối được chúng với nhau.'}</small></div>` }
+function datesInfo(d) {
+  const D = d.dates || []; if (!D.length) return '';
+  const per = d.period;
+  return `<div class="ovw"><h3>Các cột ngày <small>${D.length}</small></h3><p class="sub">Chỉ <b>ngày phát sinh</b> (ngày đặt hàng, giao dịch...) mới cho biết dữ liệu nói về khoảng thời gian nào. Ngày sinh hay ngày đăng ký là thông tin của khách hàng, không dùng làm kỳ của dữ liệu.</p>${tbl(['Cột', 'Bảng', 'Ý nghĩa', 'Từ', 'Đến', 'Vai trò trong báo cáo'], D.map(x => { const r = ROLE_TAG[x.role] || ROLE_TAG.other, isP = per && per.file === x.file && per.col === x.col;
+    return [`<b>${esc(x.label)}</b>`, esc(x.table), `<span class="tag ${r[1]}">${r[0]}${x.guess ? ' (đoán theo giá trị)' : ''}</span>`, esc(x.min), esc(x.max), isP ? '<span class="tag ok">Kỳ của dữ liệu</span>' : x.role === 'birth' || x.role === 'signup' ? '<span class="sub">Thuộc tính, không dùng làm kỳ</span>' : '<span class="sub">—</span>'] }))}</div>` }
+function samplePanel(d) {
+  const L = d.samples && d.samples.length ? d.samples : [{ file: '', ...d.sample }], cur = L.find(x => x.file === SMP.file) || L[0]; SMP.file = cur.file;
+  return `<div class="ovw">${L.length > 1 ? `<div class="dfl"><b>Xem nhanh từng bảng</b><span class="seg" role="group" aria-label="Bảng xem nhanh">${L.map(x => `<button type="button" class="${x.file === cur.file ? 'on' : ''}" data-dk="smp:${esc(x.file)}">${esc(dlabel(x.file, L))}</button>`).join('')}</span><small class="sub">5 dòng đầu</small></div>` : ''}${tbl(cur.cols, cur.rows.map(r => r.map(cell)))}</div>` }
 const VIEW = [
   () => { const S = S_(), d = S.st[0] === 'done', F = S.files, br = S.brief || {}, ctx = d ? (br.ctx ?? S.ctx) : U.ctx, dec = d ? (br.decision || '') : U.dec, lev = d ? (br.levers || '') : U.lev;
     const drop = d ? '' : `<label class="drop ${F.length ? 'has' : ''} ${UPL ? 'busy' : ''}" id="dz" for="file">${UPL ? '<span class="spin lg"></span><span><b>Đang đọc tệp…</b></span>' : ico('upload', 24) + `<span><b>${F.length ? 'Đã có ' + F.length + ' tệp · bấm để thêm' : 'Kéo thả hoặc bấm để chọn tệp'}</b><small>CSV, XLSX, XLS</small></span>`}</label><input type="file" id="file" multiple hidden accept=".csv,.xlsx,.xls,.xlsm">`;
@@ -315,7 +332,7 @@ const VIEW = [
 <label for="dec">Bạn cần ra quyết định gì từ kết quả này? (không bắt buộc)</label><textarea id="dec" data-i="dec" data-pn="Quyết định cần đưa ra" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: có tăng ngân sách quảng cáo tháng sau không?">${esc(dec)}</textarea>
 <label for="lev">Bạn có thể thay đổi những gì? (không bắt buộc)</label><textarea id="lev" data-i="lev" data-pn="Những gì bạn có thể thay đổi" rows="2" ${d ? 'readonly' : ''} placeholder="Ví dụ: giá bán, ngân sách quảng cáo, lịch làm việc">${esc(lev)}</textarea></div>
 ${d ? '' : '<div class="act"><button class="btn" data-a="start">' + ico('play', 16) + 'Bắt đầu phân tích</button></div>'}` },
-  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tbl(d.sample.cols, d.sample.rows.map(r => r.map(cell)))}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), cleanTag(f.tag, f.text))).join('')}
+  () => { const d = S_().d[1]; return `<h2>Kiểm tra và mô tả dữ liệu</h2>${adjBanner(d)}${kpo(d.kpis)}${tablesInfo(d)}${datesInfo(d)}${samplePanel(d)}${(d.structure || []).map(x => fnd(`<b>${esc(x.file)}</b>: ${esc(x.issues.join('; ') || 'ổn')}${x.actions.length ? '<br><small>Đã xử lý: ' + esc(x.actions.join('; ')) + '</small>' : ''}`, 'Cấu trúc · ' + ({ fixed: 'đã chuẩn hóa', detected: 'đã nhận diện bảng', warn: 'cần lưu ý', bad: 'không phù hợp' }[x.verdict] || ''), x.verdict === 'bad' ? 'risk' : x.verdict === 'warn' ? '' : 'act')).join('')}${d.findings.map(f => fnd(esc(f.text), cleanTag(f.tag, f.text))).join('')}
 ${distPanel(d)}<details><summary>Thống kê chi tiết theo cột</summary>${d.profile.map(p => `<p><b>${esc(p.file)}</b> · ${N(p.shape[0])} dòng × ${p.shape[1]} cột</p>` + tbl(['Cột', 'Kiểu', 'Thiếu', '% thiếu', 'Duy nhất', 'Ví dụ'], p.rows.map(r => r.map(c => esc(c))))).join('')}</details>
 <details><summary>Danh sách vấn đề phát hiện (${d.issues.length})</summary>${d.issues.length ? tbl(['Tệp', 'Cột', 'Vấn đề', 'Số lượng', 'Phương án đề xuất xử lý'], d.issues.map(r => [esc(r.file), esc(r.col), esc(r.issue), N(r.n), `<span class="wrapc">${esc(r.fix || FIX0[r.issue] || 'Xem lại thủ công')}</span>`])) : 'Không phát hiện vấn đề tự động.'}</details>` },
   () => { const S = S_(), d = S.d[2], s = sel(2), aw = S.st[2] === 'await' && !RO();

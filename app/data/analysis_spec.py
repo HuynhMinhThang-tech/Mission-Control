@@ -14,12 +14,15 @@ Các loại phân tích (`type`):
   rate        Tỷ lệ Đạt / tuân thủ của một hoặc nhiều cột nhị phân (Đạt / Không đạt, Có / Không...), theo nhóm, theo thời gian hoặc chung.
   pareto      Xếp hạng và 80/20: nhóm nào tạo ra phần lớn tổng (tỷ trọng và tỷ trọng cộng dồn).
   free        Yêu cầu viết tự do (không nhận diện được hết) -> chuyển nguyên văn cho AI viết code.
+Biến có thể lấy từ NHIỀU bảng (sheet): mỗi biến là tên cột hoặc {"file": bảng, "col": cột}. Hệ thống tự nối các bảng theo cột khóa chung
+(relations.py), chỉ theo chiều nhiều -> một nên không nhân dòng; spec chuẩn hóa ghi lại `joins` để code và kiểm tra dùng đúng cùng một khung dữ liệu.
 Code sinh ra chỉ dùng cú pháp mà sandbox cho phép (không import, không thuộc tính bắt đầu bằng gạch dưới)."""
 import re
 
 import pandas as pd
 
 from .. import labels as lb
+from . import relations as R
 from .binary import sides as _sides
 from .describe import KIND_LABEL, kind_of
 
@@ -98,14 +101,86 @@ def _is_time(d, col):
     return _kinds(d, col) == "date"
 
 
+def _nm(v):
+    """Tên cột của một tham chiếu biến (chuỗi hoặc {"file", "col"})."""
+    return v.get("col") if isinstance(v, dict) else v
+
+
+def _map_refs(spec, fn):
+    """Bản sao của spec với MỌI tham chiếu biến được thay bằng fn(tham chiếu)."""
+    sp = dict(spec)
+    if "measures" in sp:
+        sp["measures"] = [{**m, "col": fn(m["col"]) if m.get("col") not in (None, "", "*") else m.get("col")} if isinstance(m, dict) else m for m in sp["measures"] or []]
+    for k in ("by", "cols"):
+        if k in sp:
+            sp[k] = [fn(v) if v else v for v in sp[k] or []]
+    if isinstance(sp.get("time"), dict):
+        sp["time"] = {**sp["time"], "col": fn(sp["time"]["col"]) if sp["time"].get("col") else sp["time"].get("col")}
+    for k in ("x", "y", "col"):
+        if sp.get(k):
+            sp[k] = fn(sp[k])
+    return sp
+
+
+def _refs(spec):
+    out = []
+    _map_refs(spec, lambda v: (out.append(v), v)[1])
+    return out
+
+
+def _prepare(spec, clean):
+    """Đưa spec về dạng một khung dữ liệu: (spec với tên cột trong khung nối, base, joins). Ném ValueError nếu không nối được.
+    Spec đã chuẩn hóa (có `joins`) giữ nguyên; spec thuộc một bảng (không có tham chiếu dạng dict) cũng giữ nguyên."""
+    if spec.get("joins"):
+        return spec, spec.get("file"), spec["joins"]
+    refs = _refs(spec)
+    if not any(isinstance(r, dict) for r in refs):
+        return spec, None, []
+    base = spec.get("file") if spec.get("file") in clean else None
+    meas_ref = next((m.get("col") for m in spec.get("measures") or [] if isinstance(m, dict) and isinstance(m.get("col"), dict)), None)
+    cand = [base] if base else [meas_ref["file"]] if meas_ref else []                  # bảng chính: do người dùng chỉ định, hoặc bảng chứa chỉ số (nơi mỗi dòng là một lần phát sinh)
+    if not cand:                                                                         # chỉ chọn biến chia nhóm / đếm: thử trước các bảng có biến được chọn, rồi mọi bảng khác; lấy bảng NHIỀU DÒNG NHẤT mà nối được tới mọi bảng cần
+        mine = {r["file"] for r in refs if isinstance(r, dict)}
+        cand = sorted(mine, key=lambda f: -len(clean[f])) + sorted((f for f in clean if f not in mine), key=lambda f: -len(clean[f]))
+    err, done = None, None
+    for b in cand:
+        if b not in clean:
+            err = err or ValueError("Chưa chọn bảng dữ liệu.")
+            continue
+        wanted = []
+        for r in refs:
+            f = r.get("file") if isinstance(r, dict) else b
+            if f not in clean:
+                raise ValueError(f"Không có bảng «{f}».")
+            c = _find_col(clean[f], _nm(r))
+            if c is None:
+                raise ValueError(f"Không thấy cột «{_nm(r)}» trong bảng {R.short(f)}.")
+            wanted.append((f, c))
+        try:
+            joins, names = R.plan(clean, b, wanted)
+        except ValueError as e:
+            err = err or e
+            continue
+        done = (b, joins, names)
+        break
+    if done is None:
+        raise err or ValueError("Chưa chọn bảng dữ liệu.")
+    base, joins, names = done
+
+    def fn(r):
+        f = r.get("file") if isinstance(r, dict) else base
+        return names[(f, _find_col(clean[f], _nm(r)))]
+    return _map_refs(spec, fn), base, joins
+
+
 def _pick_file(clean, spec):
     f = spec.get("file")
     if f in clean:
         return f
     if len(clean) == 1:
         return next(iter(clean))
-    want = [spec.get("x"), spec.get("y"), spec.get("col"), (spec.get("time") or {}).get("col")] + list(spec.get("by") or []) + [m.get("col") for m in spec.get("measures") or [] if isinstance(m, dict)]
-    want = [w for w in want if w]
+    want = [spec.get("x"), spec.get("y"), spec.get("col"), (spec.get("time") or {}).get("col")] + list(spec.get("by") or []) + list(spec.get("cols") or []) + [m.get("col") for m in spec.get("measures") or [] if isinstance(m, dict)]
+    want = [_nm(w) for w in want if w]
     best = max(clean, key=lambda n: sum(_find_col(clean[n], w) is not None for w in want)) if want else None
     return best
 
@@ -121,11 +196,20 @@ def normalize(spec, clean):
         return ({"type": "free", "text": txt[:600], "title": txt[:70] or "Yêu cầu riêng", "goal": txt[:600], "vars": []}, None) if txt else (None, "Yêu cầu trống.")
     if t not in TYPES:
         return None, "Chưa chọn kiểu phân tích."
-    f = _pick_file(clean, spec)
+    try:
+        spec, base, joins = _prepare(spec, clean)
+    except (ValueError, KeyError) as e:
+        return None, str(e.args[0]) if e.args else "Không nối được các bảng."
+    f = base or _pick_file(clean, spec)
     if f is None or f not in clean:
         return None, "Chưa chọn bảng dữ liệu."
-    d = clean[f]
+    try:
+        d = R.frame(clean, f, joins) if joins else clean[f]
+    except KeyError:
+        return None, "Dữ liệu đã thay đổi nên không nối lại được các bảng đã chọn. Hãy chọn lại biến."
     out = {"type": t, "file": f}
+    if joins:
+        out["joins"] = joins
 
     def col(name, what, ok, need):
         c = _find_col(d, name)
@@ -210,8 +294,19 @@ def normalize(spec, clean):
     except ValueError as e:
         return None, str(e)
     title, goal = describe(out)
+    if joins:
+        goal = (goal + " " + R.join_text(f, joins)).strip()
+        out["src"] = {v: _src_of(v, f, joins) for v in used_vars(out)}
     out.update(title=title, goal=goal, vars=used_vars(out))
     return out, None
+
+
+def _src_of(name, base, joins):
+    """Bảng gốc của một cột trong khung đã nối (để giao diện hiện biến này đến từ sheet nào)."""
+    for j in joins:
+        if name in j["cols"].values():
+            return j["file"]
+    return base
 
 
 def used_vars(sp):
@@ -315,8 +410,9 @@ def _num_fmt(d, c):
 def build_code(sp, clean):
     """Code pandas cho spec (đã chuẩn hóa). Đọc được, có chú thích; kết quả gán vào `result`."""
     t, f = sp["type"], sp.get("file")
+    D = R.frame(clean, f, sp.get("joins")) if f in clean else None       # khung đã nối (bảng chính + các bảng nối thêm); không nối thì chính là bảng gốc
     one = lambda t: " ".join(str(t).split())                 # một dòng: tên cột lạ có thể chứa xuống dòng, không để nó thoát khỏi comment  # noqa: E731
-    L = [f"# {one(sp['title'])}", f"# {one(sp['goal'])}", f"df = dfs[{_q(f)}]"]
+    L = [f"# {one(sp['title'])}", f"# {one(sp['goal'])}", f"df = dfs[{_q(f)}]", *R.join_code(sp.get("joins"))]
     ms = sp.get("measures") or []
     names = _mnames(ms)
 
@@ -388,7 +484,7 @@ def build_code(sp, clean):
         L.append(f"result = w.reset_index().rename(columns={{'r': {_q(lb.label(a))}}}).round(2).reset_index(drop=True)")
     elif t == "correlate":
         xc, yc = sp["x"], sp["y"]
-        nd = _num_fmt(clean[f], xc)
+        nd = _num_fmt(D, xc)
         L.append(f"x = pd.DataFrame({{'x': pd.to_numeric(df[{_q(xc)}], errors='coerce'), 'y': pd.to_numeric(df[{_q(yc)}], errors='coerce')}}).dropna()")
         L.append("x['bin'] = pd.qcut(x['x'], q=10, duplicates='drop')")
         L.append("g = x.groupby('bin', observed=True).agg(xm=('x', 'mean'), ym=('y', 'mean'), n=('y', 'size')).reset_index()")
@@ -398,8 +494,8 @@ def build_code(sp, clean):
     elif t == "distribution":
         c = sp["col"]
         # tính tỷ lệ bằng phép chia trên Series của pandas (chia thẳng trên mảng numpy .values bị sandbox chặn ở một số bản numpy/pandas)
-        if _kinds(clean[f], c) == "num" and clean[f][c].nunique() > 12:
-            nd = _num_fmt(clean[f], c)
+        if _kinds(D, c) == "num" and D[c].nunique() > 12:
+            nd = _num_fmt(D, c)
             L.append(f"v = pd.to_numeric(df[{_q(c)}], errors='coerce').dropna()")
             L.append("cnt = pd.cut(v, bins=12).value_counts(sort=False)")
             L.append(f"labs = [f'{{b.left:,.{nd}f}} – {{b.right:,.{nd}f}}'.replace(',', '.') for b in cnt.index]")
@@ -419,7 +515,7 @@ def build_code(sp, clean):
         L.append("    return pd.Series(np.where(v.isin(pos), 1.0, np.where(v.isin(neg), 0.0, np.nan)), index=s.index)")
         L.append("x = pd.DataFrame({")
         for j, c in enumerate(cs):
-            _, _, pv, nv = _sides(clean[f][c])
+            _, _, pv, nv = _sides(D[c])
             L.append(f"    'c{j}': ok(df[{_q(c)}], {pv!r}, {nv!r}),")
         names_c = [lb.label(c) for c in cs]
         keys = []
@@ -473,7 +569,7 @@ def build_code(sp, clean):
 def spec_facts(sp, clean):
     """Vài con số kèm kết quả mà bảng không tự thể hiện (hiện hệ số tương quan của spec 'correlate')."""
     if sp.get("type") == "pareto" and sp.get("file") in clean:
-        d, m = clean[sp["file"]], sp["measures"][0]
+        d, m = R.frame(clean, sp["file"], sp.get("joins")), sp["measures"][0]
         v = pd.to_numeric(d[m["col"]], errors="coerce") if m.get("col") else pd.Series(1, index=d.index)
         g = v.groupby(d[sp["by"][0]]).sum().sort_values(ascending=False)
         if len(g) < 2 or g.sum() <= 0:
@@ -483,7 +579,7 @@ def spec_facts(sp, clean):
         return [f"{k} trên {len(g)} nhóm ({k * 100 // len(g)}% số nhóm) tạo ra khoảng 80% tổng; nhóm đứng đầu chiếm {str(round(g.iloc[0] / g.sum() * 100, 1)).replace('.', ',')}%."]
     if sp.get("type") != "correlate" or sp.get("file") not in clean:
         return []
-    d = clean[sp["file"]]
+    d = R.frame(clean, sp["file"], sp.get("joins"))
     x = pd.DataFrame({"x": pd.to_numeric(d[sp["x"]], errors="coerce"), "y": pd.to_numeric(d[sp["y"]], errors="coerce")}).dropna()
     if len(x) < 8 or x["x"].nunique() < 2 or x["y"].nunique() < 2:
         return ["Chưa đủ dữ liệu để tính hệ số tương quan."]

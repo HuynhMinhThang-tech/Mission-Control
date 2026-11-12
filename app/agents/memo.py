@@ -37,6 +37,11 @@ def _n(x):
         return str(x)
 
 
+def _short(name):
+    s = str(name)
+    return s.split("::", 1)[1] if "::" in s else re.sub(r"\.[A-Za-z0-9]{1,5}$", "", s)
+
+
 def _cut(s, n):
     s = " ".join(str(s or "").split())
     return s if len(s) <= n else s[: n - 1] + "…"
@@ -63,6 +68,15 @@ def facts_0():
 def facts_1():
     d = A["d"][1]
     L = ["## Quy mô dữ liệu"] + [f"- {k['label']}: {k['value']}" + (f" ({k['delta']})" if k.get("delta") else "") for k in d.get("kpis") or []]
+    tb = d.get("tables") or []
+    L += _lines(f"## Các bảng dữ liệu ({len(tb)})", [f"- {t['table']} ({t['group']}): {_n(t['rows'])} dòng × {_n(t['cols'])} cột" for t in tb]) if len(tb) > 1 else []
+    rl = d.get("relations") or []
+    L += _lines("## Liên kết giữa các bảng", [f"- {_short(r['many'])} → {_short(r['one'])} theo cột {r['key']} (khớp {fmt_pct(r['match'])})" for r in rl])
+    per = d.get("period") or {}
+    dt = d.get("dates") or []
+    L += _lines("## Các cột ngày", [f"- {x['label']} ({x['table']}): {x['min']} → {x['max']} · {x['role_label'].lower()}"
+                                   + (" · dùng làm kỳ của dữ liệu" if per and x["file"] == per.get("file") and x["col"] == per.get("col") else " · thuộc tính, không phải kỳ của dữ liệu" if x["role"] in ("birth", "signup") else "")
+                                   for x in dt])
     L += _lines("## Cấu trúc tệp", [f"- {x['file']}: {x['verdict']} — {_cut('; '.join(x.get('issues') or []) or 'ổn', 160)}" + (f"; đã xử lý: {_cut('; '.join(x['actions']), 120)}" if x.get("actions") else "")
                                    for x in d.get("structure") or []])
     from .profiler import clean_tag                    # nạp muộn: tránh vòng import
