@@ -35,7 +35,7 @@ def check(cond, label):
 # ------------------------------------------------------------------ 1. số và đơn vị --
 known = numfmt.Known.from_dfs([pd.DataFrame({"Tháng": ["9", "8"], "Doanh thu": [2240813537.5, 1935760431.25]})])
 t = numfmt.fix_text("Doanh thu tháng 9 đạt 2.24 trillion VNĐ, cao nhất trong năm.", known)
-check("trillion" not in t and "VNĐ" not in t and "2.240.813.537,50 đ" in t, f"'2.24 trillion VNĐ' -> số ĐỦ đúng như bảng '2.240.813.537,50 đ' ({t})")
+check("trillion" not in t and "VNĐ" not in t and "2.240.813.538 đ" in t, f"'2.24 trillion VNĐ' -> số ĐỦ như bảng, tiền nguyên đồng '2.240.813.538 đ' (bảng 2.240.813.537,5; {t})")
 t = numfmt.fix_text("Doanh thu tháng 9 lên tới 2 241 813 537 điểm, vượt 12 % so với tháng 8.", known)
 check("2.241.813.537 đ" in t and "12,00%" in t and "điểm" not in t, f"số ngăn bằng dấu cách + 'điểm' -> chuẩn Việt, tiền ký hiệu đ, % 2 chữ số ({t})")
 t = numfmt.fix_text("Tháng 9 = 2240813537.5, tỷ lệ tăng 2240813537.5/1935760431.25-1≈0.157", known)
@@ -44,7 +44,7 @@ t = numfmt.fix_text("Tỷ lệ hoàn trả cao nhất tháng 3 (6.97%), vượt 
 check("6,97%" in t and "4,90%" in t and "24.10.2026" in t and "1.2.3" in t and "2.240 đ" in t, f"đổi dấu thập phân (% luôn 2 chữ số) nhưng không đụng ngày/phiên bản/số nghìn ({t})")
 check(numfmt.fix_text(numfmt.fix_text("Tổng 2.24 trillion VNĐ, 6.97%", known), known) == numfmt.fix_text("Tổng 2.24 trillion VNĐ, 6.97%", known), "chuẩn hóa là idempotent (chạy hai lần không đổi)")
 kp = numfmt.fix_kpi({"label": "Doanh thu tổng năm 2026", "value": "11773398767.5"})
-check(kp["value"] == "11.773.398.767,50 đ", f"KPI tiền ghi ĐỦ số, có dấu ngăn nghìn, đơn vị đ: {kp['value']}")
+check(kp["value"] == "11.773.398.768 đ", f"KPI tiền ghi ĐỦ số, có dấu ngăn nghìn, đơn vị đ, nguyên đồng: {kp['value']}")
 check(numfmt.fix_kpi({"label": "Số đơn", "value": "14500"})["value"] == "14.500", "KPI số đếm có dấu ngăn nghìn")
 check(numfmt.fix_kpi({"label": "Tỷ lệ hoàn trả", "value": "0.0697"})["value"] == "6,97%", "KPI tỷ lệ 0-1 -> phần trăm")
 check(not numfmt.has_value(numfmt.fix_kpi({"label": "Tỷ trọng bán hàng theo vùng", "value": ""})), "KPI rỗng bị nhận diện để loại")
@@ -66,6 +66,28 @@ check("24.600 đ" in t and "155.000 đ" in t and "71,90%" in t and "5 đồng ng
 check(numfmt.fix_text(t) == t, "chuẩn hóa số idempotent")
 check(numfmt.fix_kpi({"label": "Chi tiêu trung bình", "value": "24600"})["value"] == "24.600 đ" and numfmt.fix_kpi({"label": "Tỷ trọng sinh hoạt", "value": "71.95"})["value"] == "71,95%", "KPI: tiền đủ số, tỷ lệ 2 chữ số")
 
+# ---- tiền ghi nguyên đồng (không có phần thập phân), số lẻ khác giữ nguyên ----
+from app.utils import fmt_num, is_money_unit  # noqa: E402
+check(fmt_val(3724488031.25, "đ") == "3.724.488.031 đ" and fmt_val(1850743100, "đ") == "1.850.743.100 đ", "tiền có phần lẻ -> nguyên đồng: 3.724.488.031,25 -> 3.724.488.031 đ")
+check(fmt_val(651418562.5, "đ") == "651.418.563 đ" and fmt_val(674584587.5, "đ") == "674.584.588 đ" and fmt_val(-2.5, "đ") == "-3 đ", "làm tròn nửa ra xa số 0 (giống trình duyệt), không làm tròn về số chẵn của Python")
+check(fmt_val(5.42, "kg") == "5,42 kg" and vn(0.41) == "0,41" and fmt_val(1234.5, "") == "1.234,50" and fmt_val(54.2, "%") == "54,20%", "số thập phân KHÔNG phải tiền giữ nguyên 2 chữ số (kg, số thuần, %)")
+check(is_money_unit("đ") and is_money_unit("VNĐ") and is_money_unit("vnd") and not is_money_unit("kg") and not is_money_unit("%") and not is_money_unit(""), "nhận đơn vị tiền")
+check(fmt_num(1234.5, "đ") == "1.235" and fmt_num(1234.5, "kg") == "1.234,50" and fmt_num(1234.5) == "1.234,50", "nhãn số trên biểu đồ theo đơn vị (không kèm đơn vị)")
+check(col_fmt([1.5, 2, 3], "đ")(1234.5) == "1.235" and col_fmt([1.5, 2, 3], "kg")(1234.5) == "1.234,50", "cột tiền luôn nguyên đồng kể cả khi có ô lẻ; cột lẻ khác vẫn 2 chữ số")
+_k = numfmt.fix_kpi({"label": "Tổng tiền hàng tới TP. Hồ Chí Minh", "value": "3.724.488.031,25 đ", "delta": "+26,12%"})
+check(_k["value"] == "3.724.488.031 đ" and _k["delta"] == "+26,12%", f"KPI tiền: bỏ phần thập phân, delta giữ nguyên ({_k})")
+check(numfmt.fix_kpi({"label": "Doanh thu", "value": 11773398767.5})["value"] == "11.773.398.768 đ" and numfmt.fix_kpi({"label": "Trọng lượng trung bình", "value": 5.4166})["value"] == "5,42", "KPI số thật: tiền nguyên đồng, số lẻ không phải tiền giữ 2 chữ số")
+_t = numfmt.fix_text("Tổng tiền hàng 3724488031.25 đồng, trọng lượng 5,42 kg, tỷ trọng 67,36%, điểm 4,35, 674.584.587,5 đ")
+check("3.724.488.031 đ" in _t and "674.584.588 đ" in _t and "5,42 kg" in _t and "67,36%" in _t and "4,35" in _t, f"văn bản AI: chỉ số đứng trước ký hiệu đ bị bỏ phần thập phân ({_t})")
+check(numfmt.fix_text(_t) == _t, "chuẩn hóa tiền idempotent")
+check(labels.unit("Điểm đánh giá") == "" and labels.unit("DanhGia") == "" and labels.unit("Tổng tiền hàng") == "đ" and labels.unit("TrongLuongKg") == "kg", "«Điểm đánh giá» không bị nhận là tiền (tiền bị bỏ phần thập phân, điểm thì không)")
+from app.data.sandbox import df_table  # noqa: E402
+_tb = df_table(pd.DataFrame({"Tỉnh": ["A", "B"], "Tổng tiền hàng": [1.5, 2.5], "Trọng lượng (kg)": [0.41, 3.63]}), "x")
+check(_tb["units"] == ["", "đ", "kg"], f"bảng kết quả mang đơn vị từng cột để giao diện biết cột nào là tiền ({_tb['units']})")
+from app.agents.charts import valid_charts  # noqa: E402
+_vc = valid_charts([{"task": 0, "x": "Tỉnh", "y": "Tổng tiền hàng", "kind": "bars", "unit": ""}, {"task": 0, "x": "Tỉnh", "y": "Trọng lượng (kg)", "kind": "bars", "unit": "VNĐ"}], [_tb])
+check(_vc[0]["unit"] == "đ" and _vc[1]["unit"] == "đ", f"biểu đồ: AI để trống đơn vị thì suy từ cột (tiền -> đ); VNĐ gộp về đ ({[c['unit'] for c in _vc]})")
+
 # bản JavaScript (giao diện) phải ra CHÍNH XÁC cùng kết quả với bản Python (báo cáo, slide, bản tổng hợp)
 import json as _json, shutil as _sh, subprocess as _sp  # noqa: E402
 if _sh.which("node"):
@@ -73,10 +95,11 @@ if _sh.which("node"):
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _js = ("const fs=require('fs'),vm=require('vm');const c=vm.createContext({Intl});vm.runInContext(fs.readFileSync('static/js/fmt.js','utf8')+';this.FMT=FMT',c);"
            "const v=JSON.parse(process.argv[1]);console.log(JSON.stringify({num:v.map(x=>c.FMT.num(x)),dec:v.map(x=>c.FMT.dec(x)),pct:v.map(x=>c.FMT.pct(x)),val:v.map(x=>c.FMT.val(x,'đ')),"
-           "ci:c.FMT.colFmt([1,2,3])(1000),cf:c.FMT.colFmt([1,2.5])(1000)}))")
+           "ci:c.FMT.colFmt([1,2,3])(1000),cf:c.FMT.colFmt([1,2.5])(1000),nm:v.map(x=>c.FMT.numU(x,'đ')),nk:v.map(x=>c.FMT.numU(x,'kg')),vk:v.map(x=>c.FMT.val(x,'kg')),cm:v.map(x=>c.FMT.colFmt([1.5],'đ')(x))}))")
     _r = _json.loads(_sp.run(["node", "-e", _js, _json.dumps(_vec)], cwd=_root, capture_output=True, text=True, check=True).stdout)
     _py = {"num": [vn(x) for x in _vec], "dec": [fmt_dec(x) for x in _vec], "pct": [fmt_pct(x) for x in _vec], "val": [fmt_val(x, "đ") for x in _vec],
-           "ci": col_fmt([1, 2, 3])(1000), "cf": col_fmt([1, 2.5])(1000)}
+           "ci": col_fmt([1, 2, 3])(1000), "cf": col_fmt([1, 2.5])(1000), "nm": [fmt_num(x, "đ") for x in _vec], "nk": [fmt_num(x, "kg") for x in _vec],
+           "vk": [fmt_val(x, "kg") for x in _vec], "cm": [col_fmt([1.5], "đ")(x) for x in _vec]}
     check(_r == _py, f"JS (fmt.js) và Python (utils.py) định dạng số GIỐNG HỆT nhau: {[(k, a, b) for k in _py for a, b in [(_r[k], _py[k])] if a != b][:2]}")
 else:
     print("BỎ QUA  đối chiếu JS/Python: không có node")
@@ -175,7 +198,7 @@ ppt = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.
 for name, body in [("báo cáo HTML", html), ("Markdown", md), ("PPTX", ppt), ("dashboard", dash)]:
     check(not re.search(r"trillion|billion|million|VNĐ|VND", body.replace("VND_", "")) , f"{name}: không còn trillion/VND tiếng Anh")
     check("11773398767.5" not in body and "2240813537.5" not in body and "1935760431.25" not in body, f"{name}: không còn số thô thiếu dấu ngăn nghìn")
-check("11.773.398.767,50 đ" in html and "11.773.398.767,50 đ" in md, "KPI hiện đủ số '11.773.398.767,50 đ' ở HTML và Markdown")
+check("11.773.398.768 đ" in html and "11.773.398.768 đ" in md and "11.773.398.767,50" not in html, "KPI hiện đủ số, nguyên đồng '11.773.398.768 đ' ở HTML và Markdown")
 for name, body in [("báo cáo HTML", html), ("Markdown", md), ("PPTX", ppt), ("dashboard", dash)]:
     check(not re.search(r"\d\s*(?:nghìn tỷ|tỷ|triệu)\b(?!\s*lệ|\s*trọng)", re.sub(r"<[^>]+>", " ", body)) or name == "dashboard", f"{name}: không còn số tiền viết tắt tỷ/triệu")
 check("Tỷ trọng bán hàng theo vùng" not in html and "Tỷ trọng bán hàng theo vùng" not in ppt, "KPI rỗng không lên báo cáo và PPTX")
@@ -232,8 +255,8 @@ check(kv("Tổng chi tiêu", "936.000 đ") == "936.000 đ", "KPI '936.000 đ' (�
 check(kv("Số giao dịch", "1.250") == "1.250" and kv("Số giao dịch", "1.250.000") == "1.250.000", "KPI số đếm '1.250' là một nghìn hai trăm năm mươi, không phải 1,25")
 check(kv("Số tiền", 936000.0) == "936.000 đ" and kv("Điểm trung bình", 936.123) == "936,12" and kv("Điểm trung bình", 4.5) == "4,50",
       "giá trị là SỐ THẬT thì dùng đúng giá trị (936.123 là 936,12, không bị đoán là kiểu Việt Nam)")
-check(kv("Tỷ trọng chi tiêu sinh hoạt", "84.51%") == "84,51%" and kv("Tổng chi tiêu", "1,234.56") == "1.234,56 đ" and kv("Tổng chi tiêu", "936,000") == "936.000 đ",
-      "các kiểu viết khác vẫn đúng: 84.51% · 1,234.56 · 936,000")
+check(kv("Tỷ trọng chi tiêu sinh hoạt", "84.51%") == "84,51%" and kv("Tổng chi tiêu", "1,234.56") == "1.235 đ" and kv("Tổng chi tiêu", "936,000") == "936.000 đ",
+      "các kiểu viết khác vẫn đúng: 84.51% · 1,234.56 (tiền nên nguyên đồng) · 936,000")
 check(kv("Điểm trung bình", "12.500", numfmt.Known([12.5, 3.0, 8.2])) == "12,50" and kv("Doanh thu", "12.500", numfmt.Known([12500, 3.0])) == "12.500 đ",
       "chuỗi mơ hồ '12.500': bảng kết quả chỉ có 12,5 thì là số lẻ; có 12500 thì là mười hai nghìn năm trăm")
 a = numfmt.fix_kpi({"label": "Tổng chi tiêu", "value": "936.000"})

@@ -417,3 +417,60 @@ button.vc.bv.on{box-shadow:0 0 0 2px var(--pri) inset;font-weight:700}
 .vc.bsc .rm{border:0;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;padding:0 6px;opacity:.7}.vc.bsc .rm:hover{opacity:1}
 .btp button{position:relative}.btp button.off{opacity:.55;cursor:not-allowed;background:var(--p2)}
 .seg button.on small{color:inherit;opacity:.85}
+
+/* ===== Nhịp khoảng cách =====
+   Các khối (KPI, biểu đồ, phát hiện, bảng, ghi chú) cách nhau rõ ràng, không dính liền. Ba mức: trong một nhóm (--sp2), giữa các khối (--sp3), giữa các phần (--sp4).
+   Đặt ở cuối tệp để thay các giá trị khoảng cách cũ phía trên mà không đổi màu, chữ hay bố cục. */
+:root{--sp1:8px;--sp2:14px;--sp3:22px;--sp4:34px}
+.card{padding:24px 26px}
+.card h2{margin-bottom:var(--sp3)}.lead{margin-bottom:var(--sp3)}
+.kpis{gap:var(--sp2);margin-bottom:var(--sp4)}
+.kpi{padding:16px 18px}.kpi b{margin-bottom:4px}
+.two{gap:var(--sp3);margin-bottom:var(--sp4)}
+.box{padding:18px 20px;margin-bottom:var(--sp3)}.box h4{margin-bottom:16px}
+.box .hin{margin-top:14px}
+.two>.box,.gx>.box{margin-bottom:0}
+.gx{--gg:22px}
+.br{margin:10px 0}
+.cols{margin-top:6px}
+.tw{margin-bottom:var(--sp3)}
+.sh3{margin:var(--sp4) 0 var(--sp2)}
+/* phát hiện / hành động / rủi ro: cách nhau trong nhóm 14px, sang nhóm khác 22px */
+.f{padding:14px 18px;margin-bottom:var(--sp2)}
+.f details{margin-top:12px;padding:8px 12px}
+.f.sum+.f.ins,.f.sum+.f.act,.f.sum+.f.risk,.f.ins+.f.act,.f.ins+.f.risk,.f.act+.f.risk{margin-top:var(--sp3)}
+details{margin-top:12px}
+.note{margin-top:var(--sp2)}.hint{margin-top:8px}
+.act{margin-top:var(--sp3)}.dl{margin-top:var(--sp3)}.fb{margin-top:var(--sp2)}
+.tb{margin-bottom:var(--sp2)}
+.opt{margin-bottom:var(--sp1)}.fl{margin-top:var(--sp1)}
+/* khối tổng hợp (memo) và văn bản markdown trong đó */
+.memo{padding:16px 18px;margin-bottom:var(--sp3)}
+.memo .md{line-height:1.65}.memo .md p{margin:8px 0}.memo .md ul,.memo .md ol{margin:8px 0 8px 22px}.memo .md li+li{margin-top:4px}
+.memo .md h3{margin:18px 0 10px}.memo .md h4,.memo .md h5,.memo .md h6{margin:18px 0 6px}
+.memo .md blockquote{margin:12px 0}
+/* bước Dữ liệu và bước Phân tích: tiêu đề, mô tả, bảng, ghi chú, vùng tự ghép biến */
+.ovw{margin:0 0 var(--sp4)}.ovw h3{margin-bottom:8px}.ovw>.sub{margin-bottom:var(--sp2)}
+.dpn{margin:var(--sp4) 0}.dph p{margin-bottom:var(--sp2)}
+.dfl{margin-bottom:var(--sp2)}.dpht{margin-bottom:var(--sp1)}
+.a3b{margin-top:var(--sp4);padding:18px 20px}.a3bh{margin-bottom:var(--sp2)}
+@media (max-width:640px){
+  :root{--sp3:18px;--sp4:26px}
+  .card{padding:18px 16px}.kpi{padding:12px 14px}.box{padding:14px 16px}.f{padding:12px 14px}
+}
+
+/* ===== Các dạng biểu đồ mới: kẹo mút · treemap · bộ nút chọn loại nhiều lựa chọn ===== */
+.br.lp .tr{background:none;position:relative;overflow:visible;height:12px;margin-right:6px}
+.br.lp .tr::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+.br.lp .bf{position:absolute;left:0;top:50%;height:2.5px;margin-top:-1.25px;border-radius:2px;min-width:2px}
+.br.lp .bf::after{content:"";position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:inherit}
+.tmw{position:relative;width:100%;height:190px;margin:4px 0}
+.tm{position:absolute;box-sizing:border-box;padding:5px 7px;border:2px solid var(--panel);border-radius:6px;color:#fff;overflow:hidden;font-size:11px;line-height:1.3}
+.tm b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tm span{opacity:.92;font-size:10.5px}
+/* nhiều loại biểu đồ: các nút tự xuống dòng; loại ít phù hợp vẫn chọn được nhưng mờ hơn, viền nét đứt */
+.seg.kinds,.cpb .seg.kinds{display:flex;flex-wrap:wrap;gap:6px;width:100%;border:0;border-radius:0;overflow:visible;background:none}
+.seg.kinds button,.cpb .seg.kinds button{flex:0 1 auto;border:1px solid var(--line);border-radius:8px;padding:5px 11px;white-space:nowrap}
+.seg.kinds button+button{border-left:1px solid var(--line)}
+.seg.kinds button.on{border-color:var(--pri)}
+.seg.kinds button.off:not(.on){opacity:.6;border-style:dashed}
+.seg.kinds button.off:hover{opacity:1}

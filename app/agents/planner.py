@@ -15,7 +15,8 @@ from ..llm import llm, llm_json, strip_code
 from ..state import A, LOCK, bump, next_gen, put, tick
 from ..utils import J
 from .base import SYS, ctx_txt, prev
-from .charts import is_num, valid_charts
+from ..data.names import code_names, decode_frame
+from .charts import is_num, unit_for, valid_charts
 
 ROLE_PLAN = "Agent Hoạch định phân tích"
 ROLE_CODE = "Agent Phân tích dữ liệu (pandas)"
@@ -63,7 +64,7 @@ def code_env(clean):
 PROMPT_SUM = (
     'Trả về DUY NHẤT JSON: {"kpis":[{"label":"","value":"","delta":""}],"charts":[{"task":<số thứ tự bảng>,"x":"cột nhãn","y":"cột số","kind":"bars|cols|line|donut","title":"","unit":""}],'
     '"findings":[{"tag":"Mô tả|Chẩn đoán|Dự báo|Lưu ý","text":"có số liệu"}]}\n'
-    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, giá trị không âm). x,y phải là tên cột có thật." + SUM_RULES)
+    "3-6 KPI: value/delta lấy hoặc tính trực tiếp từ bảng, không bịa. 3-5 biểu đồ, ĐA DẠNG loại và KHÔNG trùng nhau (mỗi biểu đồ một bảng/cột khác). kind: 'line' chuỗi thời gian (nhấn xu hướng); 'area' chuỗi thời gian khi muốn nhấn quy mô tích lũy; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'lollipop' xếp hạng gọn khi có nhiều nhóm; 'pareto' khi cần chỉ ra ít nhóm nào tạo phần lớn tổng (80/20, giá trị không âm, từ 4 nhóm); 'donut' hoặc 'pie' cơ cấu tỷ trọng (<=7 phần, không âm); 'treemap' cơ cấu của nhiều nhóm (8-24 phần, không âm). Chọn dạng hợp với câu hỏi, đừng dùng mãi cột. x,y phải là tên cột có thật." + SUM_RULES)
 
 
 def _menu_vars(items):
@@ -239,6 +240,8 @@ def execute(codes, t0=0):
             errs.append(err)
     tick(t0 + 2)
     dfs = localize_results(dfs, [t["title"] for t in d["tasks"]])       # tên cột kết quả: một thứ tiếng (tiếng Việt), không xen tiếng Anh
+    A["names"] = code_names(A["clean"])                                  # mã -> tên (MaSP -> TenSP): báo cáo gọi đối tượng bằng tên, không bằng mã
+    dfs = [decode_frame(df, A["names"]) for df in dfs]
     tabs = [df_table(df, t["title"], e) for df, t, e in zip(dfs, d["tasks"], errs)]
     if all(x is None for x in dfs):
         raise RuntimeError("Không có phân tích nào chạy thành công: " + "; ".join(t["err"] or "" for t in tabs)[:300])
@@ -249,7 +252,7 @@ def execute(codes, t0=0):
     A["x"][3] = dfs
     txt = "\n\n".join(f"### [{i}] {t['title']} (cột: {t['cols']})\n{dfs[i].head(30).to_csv(index=False)}" for i, t in enumerate(tabs) if dfs[i] is not None)
     r = llm_json(SYS(ROLE_SUM), ctx_txt() + f"Các bảng kết quả:\n{txt[:14000]}\n\n" + PROMPT_SUM)
-    known = numfmt.Known.from_dfs(dfs)                                   # mọi số có thật trong bảng kết quả: dùng để đoán đúng độ lớn và đối chiếu
+    known = numfmt.Known.from_dfs(dfs, A.get("names"))                   # mọi số có thật trong bảng kết quả: dùng để đoán đúng độ lớn và đối chiếu
     kpis = numfmt.fix_kpis(r.get("kpis"), known)                          # KPI: 11773398767.5 -> "11.773.398.767,50 đ"
     r = {**numfmt.fix_payload({k: v for k, v in r.items() if k != "kpis"}, known), "kpis": kpis}
     charts = valid_charts(r.get("charts", []), tabs)
@@ -257,7 +260,7 @@ def execute(codes, t0=0):
         for i, t in enumerate(tabs):
             num = [c for c in t["cols"] if is_num(t, c)]
             if num and t["cols"][0] != num[0]:
-                charts.append({"task": i, "x": t["cols"][0], "y": num[0], "kind": "bars", "title": t["title"], "unit": ""})
+                charts.append({"task": i, "x": t["cols"][0], "y": num[0], "kind": "bars", "title": t["title"], "unit": unit_for({"y": num[0]}, t)})
     with LOCK:
         d["result"] = {"kpis": r.get("kpis", []), "charts": charts, "findings": r.get("findings", []), "tables": tabs}
         d["phase"] = "result"

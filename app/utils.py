@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import html
 import json
+import math
 
 import numpy as np
 
@@ -27,15 +28,31 @@ def _finite(v):
 #   số nguyên           -> 1.234.567                (không có phần thập phân)
 #   số thập phân        -> 1.234,50                 (luôn đúng 2 chữ số sau dấu phẩy)
 #   tỷ lệ / phần trăm   -> 54,20%                   (luôn đúng 2 chữ số sau dấu phẩy)
-#   tiền                -> 1.234.567 đ              (ghi ĐỦ số, có dấu ngăn nghìn, đơn vị theo dữ liệu; KHÔNG viết tắt nghìn/triệu/tỷ)
+#   tiền                -> 1.234.567 đ              (ghi ĐỦ số, có dấu ngăn nghìn, đơn vị theo dữ liệu; KHÔNG viết tắt nghìn/triệu/tỷ;
+#                                                 KHÔNG có phần thập phân: 3.724.488.031,25 đ hiện là 3.724.488.031 đ)
+# Chỉ TIỀN bị bỏ phần thập phân. Số thập phân không phải tiền (trọng lượng, điểm, trung bình...) giữ nguyên 2 chữ số: 0,41 · 3,63.
 # Bản JavaScript của cùng quy tắc nằm ở static/js/fmt.js và export/assets/live.js; sửa ở đâu thì sửa cả ba.
+MONEY_UNITS = {"đ", "đồng", "vnd", "vnđ", "₫"}
+
+
+def is_money_unit(unit):
+    """Đơn vị này là TIỀN (đồng Việt Nam) không? Tiền ghi nguyên đồng, không có phần thập phân."""
+    return str(unit or "").strip().lower() in MONEY_UNITS
+
+
+def _round_half_away(x):
+    """Làm tròn nửa ra xa số 0 (2,5 -> 3 · -2,5 -> -3), giống Intl.NumberFormat của trình duyệt. round() của Python làm tròn nửa về số chẵn
+    (651418562,5 -> 651418562) nên sẽ lệch một đồng so với màn hình."""
+    return int(math.copysign(math.floor(abs(x) + 0.5), x))
+
+
 def vn(v, nd=2):
     """Số kiểu Việt Nam: nguyên thì không có phần thập phân, lẻ thì đúng `nd` chữ số sau dấu phẩy (1.234,50)."""
     x = _finite(v)
     if x is None:
         return str(v)
     if nd <= 0 or abs(x - round(x)) < 1e-9:           # số nguyên THẬT thì không có phần thập phân; 99,999 là số lẻ nên hiện 100,00
-        return _sep(f"{int(round(x)):,}")
+        return _sep(f"{_round_half_away(x):,}")
     return _sep(f"{x:,.{nd}f}")
 
 
@@ -52,19 +69,27 @@ def fmt_pct(p, nd=2):
 
 
 def fmt_val(v, unit=""):
-    """Giá trị kèm đơn vị của dữ liệu: '%' -> 54,20% · 'đ' -> 1.234.567 đ · 'kg' -> 12,50 kg."""
+    """Giá trị kèm đơn vị của dữ liệu: '%' -> 54,20% · 'đ' -> 1.234.567 đ (tiền: không có phần thập phân) · 'kg' -> 12,50 kg."""
     if unit == "%":
         return fmt_pct(v)
-    s = vn(v)
+    s = vn(v, 0) if is_money_unit(unit) else vn(v)
     return f"{s} {unit}" if unit and _finite(v) is not None else s
+
+
+def fmt_num(v, unit=""):
+    """Số KHÔNG kèm đơn vị (nhãn trên biểu đồ đã có đơn vị ở tiêu đề), nhưng vẫn theo quy tắc của đơn vị: tiền thì nguyên đồng, còn lại như vn()."""
+    return vn(v, 0) if is_money_unit(unit) else vn(v)
 
 
 def fmt_money(v, unit="đ"):
     return fmt_val(v, unit)
 
 
-def col_fmt(values):
-    """Hàm định dạng CHUNG cho một cột bảng: cột có số lẻ thì mọi ô đều 2 chữ số thập phân, cột toàn số nguyên thì không có phần thập phân."""
+def col_fmt(values, unit=""):
+    """Hàm định dạng CHUNG cho một cột bảng: cột có số lẻ thì mọi ô đều 2 chữ số thập phân, cột toàn số nguyên thì không có phần thập phân.
+    Cột TIỀN (unit 'đ') luôn nguyên đồng, kể cả khi có ô lẻ."""
+    if is_money_unit(unit):
+        return lambda v: vn(v, 0)
     frac = False
     for v in values:
         x = _finite(v) if not isinstance(v, bool) else None

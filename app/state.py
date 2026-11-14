@@ -24,7 +24,7 @@ def fresh():
     return {"id": uuid.uuid4().hex[:12], "created": datetime.now().isoformat(timespec="seconds"), "started": None, "finished": None,
             "question": "", "ctx": "", "brief": {}, "files": [], "dirty": [], "raw": {}, "struct": {}, "alt": {}, "clean": None, "st": ["pending"] * 7, "d": {}, "x": {},
             "ag": dict(AG), "approved": False, "job": {"running": False, "step": None, "k": -1}, "err": None, "log": [],
-            "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}, "memo": {}}
+            "ver": next(_VER), "outputs": [], "applied": [], "fbh": {}, "memo": {}, "names": {}}
 
 
 # ------------------------------------------------------------ Phiên theo người dùng --

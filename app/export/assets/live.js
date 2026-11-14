@@ -7,18 +7,21 @@
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const PAL = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
   /* QUY TẮC SỐ (giống app/utils.py và static/js/fmt.js; sửa ở đâu thì sửa cả ba):
-     nguyên 1.234.567 · lẻ 1.234,50 (luôn 2 chữ số) · tỷ lệ 54,20% · tiền ghi ĐỦ số kèm đơn vị của dữ liệu (1.234.567 đ), không viết tắt nghìn/triệu/tỷ. */
+     nguyên 1.234.567 · lẻ 1.234,50 (luôn 2 chữ số) · tỷ lệ 54,20% · tiền ghi ĐỦ số kèm đơn vị của dữ liệu (1.234.567 đ), không viết tắt nghìn/triệu/tỷ,
+     và KHÔNG có phần thập phân (3.724.488.031,25 đ hiện là 3.724.488.031 đ). Chỉ tiền bị bỏ phần thập phân; số lẻ khác (kg, điểm, trung bình) giữ 2 chữ số. */
   const mkf = d => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });
   const f0 = mkf(0), f2 = mkf(2);
   const ok = v => v != null && v !== '' && typeof v !== 'boolean' && isFinite(+v), isInt = x => Math.abs(x - Math.round(x)) < 1e-9;
   const num = v => !ok(v) ? '—' : isInt(+v) ? f0.format(Math.round(+v)) : f2.format(+v);
+  const isMoney = u => /^(đ|đồng|vnd|vnđ|₫)$/i.test(String(u ?? '').trim());
+  const nu = (v, u) => !ok(v) ? '—' : isMoney(u) ? f0.format(+v) : num(v);                    // số theo đơn vị: tiền thì nguyên đồng (Intl làm tròn nửa ra xa số 0, giống Python)
   const compact = num;                                                                     // tên cũ, nay KHÔNG còn rút gọn
   const pctv = x => ok(x) ? f2.format(+x) + '%' : '—';                                     // x theo đơn vị %
   const pct = x => ok(x) ? f2.format(+x * 100) + '%' : '—';                                // x là tỷ lệ 0..1
-  const val = (v, u) => u === '@rate' ? pct(v) : u === '%' ? pctv(v) : !ok(v) ? '—' : u ? num(v) + ' ' + u : num(v);        // '@rate': chỉ số tỷ lệ (0..1) hiện dạng %
-  const full = (v, m) => !ok(v) ? '' : m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : num(v);
-  const fv = (v, m, a) => a === 'count' ? f0.format(v) : (m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : num(v));          // giá trị trên trục / đầu cột
-  const colFmt = vs => vs.some(v => ok(v) && !isInt(+v)) ? (v => ok(v) ? f2.format(+v) : '') : (v => ok(v) ? f0.format(Math.round(+v)) : '');
+  const val = (v, u) => u === '@rate' ? pct(v) : u === '%' ? pctv(v) : !ok(v) ? '—' : isMoney(u) ? f0.format(+v) + ' đ' : u ? num(v) + ' ' + u : num(v);        // '@rate': chỉ số tỷ lệ (0..1) hiện dạng %
+  const full = (v, m) => !ok(v) ? '' : m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : nu(v, m && m.unit);
+  const fv = (v, m, a) => a === 'count' ? f0.format(v) : (m && m.rate ? pct(v) : m && m.unit === '%' ? pctv(v) : nu(v, m && m.unit));          // giá trị trên trục / đầu cột
+  const colFmt = (vs, u) => isMoney(u) ? (v => ok(v) ? f0.format(+v) : '') : vs.some(v => ok(v) && !isInt(+v)) ? (v => ok(v) ? f2.format(+v) : '') : (v => ok(v) ? f0.format(Math.round(+v)) : '');
   const ml = s => { const p = String(s).split('-'); return p.length === 2 && /^\d{4}$/.test(p[0]) ? 'T' + (+p[1]) + '/' + p[0] : s };
   const lc = s => s.charAt(0).toLowerCase() + s.slice(1);
   const stripTong = s => s.replace(/^tổng\s+/i, '');
@@ -100,15 +103,15 @@
 <span class="bl" title="${esc(r.l)}">${esc(r.l)}</span><span class="bt"><i style="width:${Math.max(0, r.v / mx * 100)}%"></i></span>
 <span class="bv">${a === 'count' ? f0.format(r.v) : val(r.v, u)}${add && tot > 0 ? `<small>${pct(Math.max(r.v, 0) / tot)}</small>` : ''}</span></div>`).join('')}</div>${extra > 0 ? `<p class="more">và ${extra} nhóm khác không hiển thị</p>` : ''}`;
   }
-  function donutHTML(g, by, m, a) {
+  function donutHTML(g, by, m, a, hole = true) {                  // hole=false: tròn đặc (pie)
     let rows = g.filter(r => r.v > 0).sort((x, y) => (x.na - y.na) || (y.v - x.v));
     if (rows.length > 6) { const rest = rows.slice(5); rows = [...rows.slice(0, 5), { q: -1, l: 'Khác', v: rest.reduce((s, r) => s + r.v, 0), rows: rest.reduce((s, r) => s + r.rows, 0), na: false }] }
-    const tot = rows.reduce((s, r) => s + r.v, 0) || 1, R = 66, Cc = 2 * Math.PI * R, u = m ? m.unit : ''; let acc = 0, pi = 0;
+    const tot = rows.reduce((s, r) => s + r.v, 0) || 1, R = hole ? 66 : 33, SW = hole ? 24 : 66, Cc = 2 * Math.PI * R, u = m ? m.unit : ''; let acc = 0, pi = 0;
     const col = r => r.na ? 'var(--na)' : PAL[pi++ % PAL.length], cols = rows.map(col); acc = 0;
     const segs = rows.map((r, i) => { const len = r.v / tot * Cc, o = acc, gap = rows.length > 1 ? 2.5 : 0; acc += len;
-      return `<circle class="seg ${r.q >= 0 ? cls(by, r.q) : ''}" ${r.q >= 0 ? `data-k="${by}" data-q="${r.q}"` : ''} data-tt="${tt(r, m, a)}" cx="88" cy="88" r="${R}" fill="none" style="stroke:${cols[i]}" stroke-width="24" stroke-dasharray="${Math.max(len - gap, .1)} ${Cc - len + gap}" stroke-dashoffset="${-o}" transform="rotate(-90 88 88)"/>` }).join('');
-    return `<div class="donut"><svg viewBox="0 0 176 176" role="img"><circle cx="88" cy="88" r="${R}" fill="none" stroke-width="24" style="stroke:var(--track)"/>${segs}
-<text class="t1" x="88" y="87" text-anchor="middle">${esc(a === 'count' ? f0.format(tot) : compact(tot))}</text><text class="t2" x="88" y="106" text-anchor="middle">${esc(a === 'count' ? 'bản ghi' : (u || 'tổng'))}</text></svg>
+      return `<circle class="seg ${r.q >= 0 ? cls(by, r.q) : ''}" ${r.q >= 0 ? `data-k="${by}" data-q="${r.q}"` : ''} data-tt="${tt(r, m, a)}" cx="88" cy="88" r="${R}" fill="none" style="stroke:${cols[i]}" stroke-width="${SW}" stroke-dasharray="${Math.max(len - gap, .1)} ${Cc - len + gap}" stroke-dashoffset="${-o}" transform="rotate(-90 88 88)"/>` }).join('');
+    return `<div class="donut"><svg viewBox="0 0 176 176" role="img"><circle cx="88" cy="88" r="${R}" fill="none" stroke-width="${SW}" style="stroke:var(--track)"/>${segs}
+${hole ? `<text class="t1" x="88" y="87" text-anchor="middle">${esc(a === 'count' ? f0.format(tot) : nu(tot, u))}</text><text class="t2" x="88" y="106" text-anchor="middle">${esc(a === 'count' ? 'bản ghi' : (u || 'tổng'))}</text>` : ''}</svg>
 <div class="legend">${rows.map((r, i) => `<div class="lg ${r.na ? 'na' : ''} ${r.q >= 0 ? cls(by, r.q) : ''}" ${r.q >= 0 ? `data-k="${by}" data-q="${r.q}"` : ''} data-tt="${tt(r, m, a)}"><i style="background:${cols[i]}"></i><span title="${esc(r.l)}">${esc(r.l)}</span><b>${pct(r.v / tot)}</b></div>`).join('')}</div></div>`;
   }
   /* các mốc trục "tròn" (1, 2, 2,5, 5 × 10^n) để trục dễ đọc */
@@ -206,11 +209,39 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const cell = (g, j) => { const x = per[j][g.q]; if (!x) return '<td class="hc na">—</td>';
       return `<td class="hc ${cls(by, g.q)}" data-k="${by}" data-q="${g.q}" style="--v:${Math.round(Math.max(0, Math.min(1, x.v)) * 100)}" data-tt="${esc(g.l + ' · ' + (ms[j].short || ms[j].label) + ': ' + pct(x.v) + ' (' + f0.format(x.rows) + ' lượt)')}">${pct(x.v)}</td>` };
     return `<div class="tw"><table class="heat"><thead><tr><th></th>${ms.map(m => `<th title="${esc(m.label)}">${esc(m.short || m.label)}</th>`).join('')}</tr></thead><tbody>${base.map(g => `<tr><th class="hl ${cls(by, g.q)}" data-k="${by}" data-q="${g.q}" title="${esc(g.l)}">${esc(g.l)}<small>${f0.format(g.rows)}</small></th>${ms.map((m, j) => cell(g, j)).join('')}</tr>`).join('')}</tbody></table></div>` }
+  /* Các dạng biểu đồ của thẻ lấy từ kết quả phân tích: kẹo mút, Pareto (80/20), treemap. Cùng thuật toán với static/js/app.js và app/export/svg.py. */
+  const TMP = ['#4F46E5', '#0369A1', '#047857', '#B45309', '#B91C1C', '#6D28D9', '#475569'];
+  function paretoHTML(labs, vs, u) {
+    const rs = labs.map((l, i) => [l, vs[i]]).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    if (rs.length < 3) return '';
+    const n = rs.length, tot = rs.reduce((s, r) => s + r[1], 0), W = 520, H = 270, pl = 8, pr = 44, pt = 22, pb = 58, pw = W - pl - pr, ph = H - pt - pb, slot = pw / n, bw = Math.min(slot * .62, 56), base = pt + ph, mx = rs[0][1], y80 = pt + .2 * ph;
+    let acc = 0; const cum = rs.map(r => (acc += r[1]) / tot * 100), k80 = cum.findIndex(c => c >= 80) < 0 ? n - 1 : cum.findIndex(c => c >= 80);
+    const pts = cum.map((c, i) => [pl + slot * (i + .5), pt + (1 - c / 100) * ph]);
+    const bars = rs.map(([l, v], i) => { const cx = pl + slot * (i + .5), h = Math.max(v / mx * ph, 1.5), ly = H - pb + 16;
+      return `<g data-tt="${esc(l + ': ' + val(v, u) + ' · cộng dồn ' + pctv(cum[i]))}"><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" style="fill:${i <= k80 ? 'var(--acc)' : 'var(--mute)'}"/>${n <= 8 ? `<text x="${cx.toFixed(1)}" y="${(base - h - 5).toFixed(1)}" text-anchor="middle" style="fill:var(--ink);font-size:11px;font-weight:600">${esc(nu(v, u))}</text>` : ''}<text x="${cx.toFixed(1)}" y="${ly}" text-anchor="${n > 7 ? 'end' : 'middle'}" ${n > 7 ? `transform="rotate(-35 ${cx.toFixed(1)} ${ly})"` : ''} style="fill:var(--sub);font-size:11px">${esc(l.length > 12 ? l.slice(0, 11) + '…' : l)}</text></g>` }).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" style="width:100%;height:auto;display:block"><line x1="${pl}" y1="${base}" x2="${W - pr}" y2="${base}" style="stroke:var(--line)"/><line x1="${pl}" y1="${y80.toFixed(1)}" x2="${W - pr}" y2="${y80.toFixed(1)}" style="stroke:var(--bad);stroke-dasharray:5 4;opacity:.7"/><text x="${W - pr + 6}" y="${(y80 + 4).toFixed(1)}" style="fill:var(--mute);font-size:11px">80%</text><text x="${W - pr + 6}" y="${pt + 4}" style="fill:var(--mute);font-size:11px">100%</text>${bars}<polyline points="${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}" style="fill:none;stroke:var(--warn);stroke-width:2.4;stroke-linejoin:round"/>${pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === k80 ? 4.5 : 2.6}" style="fill:var(--surface);stroke:var(--warn);stroke-width:2"/>`).join('')}<text x="${pts[k80][0].toFixed(1)}" y="${(pts[k80][1] - 10).toFixed(1)}" text-anchor="middle" style="fill:var(--ink);font-size:11.5px;font-weight:700">${esc(pctv(cum[k80]))}</text></svg><p class="pn">${f0.format(k80 + 1)}/${f0.format(n)} nhóm đầu chiếm ${esc(pctv(cum[k80]))} tổng</p>`;
+  }
+  function treemapHTML(labs, vs, u) {
+    const rs = labs.map((l, i) => [l, vs[i]]).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 16), tot = rs.reduce((s, r) => s + r[1], 0) || 1, cells = [];
+    if (rs.length < 2) return '';
+    const lay = (it, x, y, w, h) => { if (!it.length) return; if (it.length === 1) { cells.push([it[0], x, y, w, h]); return }
+      const s = it.reduce((a, r) => a + r[1], 0); let acc = 0, k = 1, best = Infinity;
+      for (let j = 1; j < it.length; j++) { acc += it[j - 1][1]; const d = Math.abs(acc - s / 2); if (d < best) { best = d; k = j } }
+      const a = it.slice(0, k), b = it.slice(k), sa = a.reduce((q, r) => q + r[1], 0) / s;
+      if (w >= h) { lay(a, x, y, w * sa, h); lay(b, x + w * sa, y, w * (1 - sa), h) } else { lay(a, x, y, w, h * sa); lay(b, x, y + h * sa, w, h * (1 - sa)) } };
+    lay(rs, 0, 0, 100, 100);
+    return `<div class="tmw">${cells.map(([it, x, y, w, h]) => `<div class="tm" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;width:${w.toFixed(2)}%;height:${h.toFixed(2)}%;background:${TMP[rs.indexOf(it) % 7]}" data-tt="${esc(it[0] + ': ' + val(it[1], u) + ' (' + pctv(it[1] / tot * 100) + ')')}">${w >= 12 && h >= 14 ? `<b>${esc(it[0])}</b><span>${esc(nu(it[1], u))} · ${esc(pctv(it[1] / tot * 100))}</span>` : ''}</div>`).join('')}</div>`;
+  }
   function staticHTML(c, n) {
     const vs = c.values, labs = c.labels, u = c.unit || '', mx = Math.max(...vs.map(Math.abs), 0) || 1, fmt = v => val(v, u);
-    const sw = labs.length > 5 && Math.max(...vs.map(v => compact(v).length)) * 6.4 > 560 / labs.length, shi = vs.indexOf(Math.max(...vs)), slo = vs.indexOf(Math.min(...vs));
-    if (c.kind === 'cols') return `<div class="cols">${labs.map((l, i) => `<div class="col" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="cv">${sw && i !== shi && i !== slo ? '' : esc(compact(vs[i]))}</span><span class="cb"><i style="height:${Math.max(2, Math.abs(vs[i]) / mx * 100)}%"></i></span><span class="cl" title="${esc(l)}">${esc(l)}</span></div>`).join('')}</div>`;
-    if (c.kind === 'line') { jobs.push({ id: 'stl' + n, g: labs.map((l, i) => ({ q: -1, l, v: vs[i], rows: 0 })), m: null, a: 'sum', ro: true }); return `<div class="trend" id="stl${n}"></div>` }
+    const sw = labs.length > 5 && Math.max(...vs.map(v => nu(v, u).length)) * 6.4 > 560 / labs.length, shi = vs.indexOf(Math.max(...vs)), slo = vs.indexOf(Math.min(...vs));
+    if (c.kind === 'cols') return `<div class="cols">${labs.map((l, i) => `<div class="col" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="cv">${sw && i !== shi && i !== slo ? '' : esc(nu(vs[i], u))}</span><span class="cb"><i style="height:${Math.max(2, Math.abs(vs[i]) / mx * 100)}%"></i></span><span class="cl" title="${esc(l)}">${esc(l)}</span></div>`).join('')}</div>`;
+    const M = u ? { unit: u } : null, G = () => labs.map((l, i) => ({ q: -1, l, v: vs[i], rows: 0, na: false }));
+    if (c.kind === 'donut' || c.kind === 'pie') return donutHTML(G(), '', M, 'sum', c.kind === 'donut');
+    if (c.kind === 'pareto') { const h = paretoHTML(labs, vs, u); if (h) return h }
+    if (c.kind === 'treemap') { const h = treemapHTML(labs, vs, u); if (h) return h }
+    if (c.kind === 'lollipop') return `<div class="bars lp">${labs.map((l, i) => `<div class="bar" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="bl" title="${esc(l)}">${esc(l)}</span><span class="bt"><i style="width:calc(${Math.max(0, vs[i] / mx * 100)}% - 6px)"></i></span><span class="bv">${esc(fmt(vs[i]))}</span></div>`).join('')}</div>`;
+    if (c.kind === 'line' || c.kind === 'area') { jobs.push({ id: 'stl' + n, g: labs.map((l, i) => ({ q: -1, l, v: vs[i], rows: 0 })), m: u ? { unit: u } : null, a: 'sum', ro: true }); return `<div class="trend" id="stl${n}"></div>` }
     return `<div class="bars">${labs.map((l, i) => `<div class="bar" data-tt="${esc(l + ': ' + fmt(vs[i]))}"><span class="bl" title="${esc(l)}">${esc(l)}</span><span class="bt"><i style="width:${Math.max(0, vs[i] / mx * 100)}%"></i></span><span class="bv">${esc(fmt(vs[i]))}</span></div>`).join('')}</div>` }
   /* chế độ chỉnh (chỉ ở bản xem thử trong ứng dụng): mỗi thẻ có nút di chuyển, đổi dạng, ẩn; bản xuất ra không có */
   const edBar = (id, i, n, kind) => D.edit ? `<div class="edb"><button data-ed="up" title="Đưa lên" aria-label="Đưa lên" ${i === 0 ? 'disabled' : ''}>↑</button><button data-ed="down" title="Đưa xuống" aria-label="Đưa xuống" ${i === n - 1 ? 'disabled' : ''}>↓</button>${kind ? '<button data-ed="kind" title="Đổi dạng biểu đồ" aria-label="Đổi dạng biểu đồ">⇄</button>' : ''}<button data-ed="hide" title="Ẩn biểu đồ này" aria-label="Ẩn biểu đồ này">✕</button></div>` : '';
@@ -239,7 +270,7 @@ ${i % every === 0 || i === n - 1 && (n - 1) % every > every / 2 ? `<text x="${pt
     const by2 = {}; mc.forEach(m => by2[m.k] = groupBy(by, m.k, aggOf(m))); const base = groupBy(by, '', 'count');
     let rows = base.map(b => { const o = { l: b.l, rows: b.rows }; mc.forEach(m => { const x = by2[m.k].find(y => y.q === b.q); o[m.k] = x ? x.v : null }); return o });
     rows.sort((x, y) => (typeof x[t.sort] === 'string' ? x[t.sort].localeCompare(y[t.sort], 'vi', { numeric: true }) : (x[t.sort] ?? -Infinity) - (y[t.sort] ?? -Infinity)) * t.dir); rows = rows.slice(0, 60);
-    const cf = {}; mc.forEach(m => { cf[m.k] = m.rate ? pct : m.unit === '%' ? pctv : colFmt(rows.map(r => r[m.k])) });
+    const cf = {}; mc.forEach(m => { cf[m.k] = m.rate ? pct : m.unit === '%' ? pctv : colFmt(rows.map(r => r[m.k]), m.unit) });
     const cell = (v, k) => k === 'l' ? esc(by === 't' ? ml(v) : v) : k === 'rows' ? f0.format(v) : esc(cf[k](v));
     return `<section class="card c12"><div class="ch row"><div><h3>Bảng chi tiết</h3><p>Tổng hợp theo từng nhóm, bấm tiêu đề cột để sắp xếp.</p></div>
 <label class="pill"><span class="k">Nhóm theo</span><select data-tb="by">${keys().map(k => `<option value="${k}" ${k === by ? 'selected' : ''}>${esc(L[k])}</option>`).join('')}</select></label></div>

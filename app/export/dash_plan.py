@@ -21,6 +21,7 @@ KINDS = ("bars", "cols", "donut", "trend")
 KIND_LABEL = {"bars": "Cột ngang", "cols": "Cột dọc", "donut": "Tròn (cơ cấu)", "trend": "Đường (theo thời gian)"}
 MAX_CHARTS = 16
 TYPES = ("chart", "score", "heat", "static")
+STATIC_KINDS = ("bars", "cols", "line", "area", "donut", "pie", "lollipop", "pareto", "treemap")       # dạng biểu đồ của thẻ lấy từ kết quả phân tích
 LAYOUTS = {"auto": "Tự động", "overview": "Tổng quan và xu hướng", "rank": "Xếp hạng các nhóm", "compliance": "Tuân thủ đạt / không đạt", "story": "Kể chuyện (kết luận trước)"}
 KPI_KINDS = ("sum", "avg", "rate", "rate_all", "rate_low", "count", "distinct", "latest", "top", "missing")
 KPI_LABEL = {"sum": "Tổng", "avg": "Trung bình", "rate": "Tỷ lệ của một tiêu chí", "rate_all": "Tỷ lệ đạt chung", "rate_low": "Tiêu chí thấp nhất", "count": "Số bản ghi",
@@ -140,7 +141,7 @@ def _static(it):
     sid = str(it.get("sid") or it.get("title") or "")[:80]
     if not sid:
         return None
-    n = {"type": "static", "sid": sid, "ds": "", "by": "", "m": "", "agg": "", "kind": it.get("kind") if it.get("kind") in ("bars", "cols", "line") else "bars",
+    n = {"type": "static", "sid": sid, "ds": "", "by": "", "m": "", "agg": "", "kind": it.get("kind") if it.get("kind") in STATIC_KINDS else "bars",
          "title": str(it.get("title") or "")[:90], "why": str(it.get("why") or "")[:200], "labels": labels, "values": vals, "unit": str(it.get("unit") or "")[:20],
          "src": "analysis", "on": bool(it.get("on", True))}
     n["id"] = cid(n)

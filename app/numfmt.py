@@ -11,6 +11,7 @@ import re
 import numpy as np
 import pandas as pd
 
+from .data import names as _names
 from .utils import fmt_dec, fmt_pct, fmt_val, vn
 
 # ------------------------------------------------------------------ định dạng --
@@ -41,9 +42,10 @@ class Known:
         da = np.asarray([float(v) for v in dv if v is not None and np.isfinite(v)], dtype=float)
         self.d = np.unique(np.abs(da)) if da.size else da
         self.frames = []                         # các bảng kết quả (DataFrame) để đối chiếu từng ô được trích, xem check_cells
+        self.names = None                        # {map: {mã: tên}, cols}: mã còn sót trong văn bản AI viết sẽ được đổi thành tên (data/names.py)
 
     @classmethod
-    def from_dfs(cls, dfs):
+    def from_dfs(cls, dfs, names=None):
         vals, frames, direct = [], [], []
         for df in (dfs.values() if isinstance(dfs, dict) else dfs or []):
             if df is None or not hasattr(df, "columns"):
@@ -63,6 +65,7 @@ class Known:
                     vals.extend((a[:, None] + a[None, :]).ravel().tolist())
         k = cls(vals, direct)
         k.frames = frames
+        k.names = names
         return k
 
     def snap(self, x, tol):
@@ -169,7 +172,20 @@ def fix_text(text, known=None):
     s = _RE_DONG.sub(" đ", s)
     if money_ctx:                                               # "2.241.813.537 điểm" trong câu nói về tiền -> đ
         s = _RE_DIEM.sub(r"\1\2đ", s)
-    return s
+    s = _RE_MONEY_DEC.sub(_money_whole, s)                     # tiền ghi nguyên đồng: "3.724.488.031,25 đ" -> "3.724.488.031 đ"
+    return _names.decode_text(s, getattr(known, "names", None))     # mã còn sót (SP003) -> tên (Điện thoại Viet-Tech Pro); làm SAU CÙNG để số trong tên không bị chuẩn hóa nhầm
+
+
+# Số có phần thập phân đứng ngay trước ký hiệu tiền «đ»: tiền ghi nguyên đồng nên bỏ phần thập phân (làm tròn), số không kèm «đ» giữ nguyên.
+_RE_MONEY_DEC = re.compile(r"(?<![\d.,])(\d{1,3}(?:\.\d{3})*|\d+),(\d+)(\s*đ)(?!\w)")
+
+
+def _money_whole(m):
+    try:
+        x = float(m.group(1).replace(".", "") + "." + m.group(2))
+    except ValueError:
+        return m.group(0)
+    return vn(x, 0) + m.group(3)
 
 
 def _two(x):

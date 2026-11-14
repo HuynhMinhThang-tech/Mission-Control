@@ -162,6 +162,8 @@ def unit(col):
         if t == "luong" and i > 0 and toks[i - 1] in _NOT_MONEY_BEFORE:
             toks = toks[:i - 1] + ["_"] + toks[i + 1:]
     joined = " ".join(toks)
+    if re.search(r"(^| )(diem|danh gia|rating|score)( |$)", joined):         # "Điểm đánh giá" có chữ "giá" nhưng là điểm số, không phải tiền (tiền thì bị bỏ phần thập phân)
+        return ""
     if any(re.search(rf"(^| ){re.escape(p)}( |$)", joined) for p in MONEY_PHRASES):
         return "đ"
     return ""

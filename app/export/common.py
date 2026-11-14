@@ -12,6 +12,12 @@ pp = numfmt.pretty_period          # 2026-03-01 -> T3/2026 (nhãn kỳ gọn, kh
 PRI_ORDER = {"Cao": 0, "Trung bình": 1, "Thấp": 2}
 
 
+def col_units(t):
+    """Đơn vị từng cột của một bảng kết quả {cols, units?}: 'đ' (tiền) · '%' · 'kg'... Bản lưu cũ chưa có `units` thì suy từ tên cột."""
+    u = t.get("units")
+    return list(u) if u and len(u) == len(t["cols"]) else [labels.unit(c) for c in t["cols"]]
+
+
 def trunc(s, n):
     s = str(s or "").strip()
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
@@ -90,7 +96,7 @@ def facts(rows, kind="bars", unit=""):
         return []
     f = lambda v: fmt_val(v, unit)          # noqa: E731
     out = []
-    if is_time_like(rows) and kind in ("cols", "line"):
+    if is_time_like(rows) and kind in ("cols", "line", "area"):
         a, b = rows[0], rows[-1]
         s = f"{pp(a[0])} → {pp(b[0])}: {f(a[1])} → {f(b[1])}"
         if a[1]:
@@ -109,4 +115,11 @@ def facts(rows, kind="bars", unit=""):
     tot = sum(v for _, v in rows)
     if all(v >= 0 for _, v in rows) and tot > 0 and len(rows) > 1:
         out.append(f"{hi[0]} chiếm {fmt_pct(hi[1] / tot * 100)} tổng ({f(tot)})")
+        if kind == "pareto" and len(rows) >= 3:                      # bao nhiêu nhóm đầu tạo ra 80% tổng
+            acc, k = 0, 0
+            for k, (_, v) in enumerate(sorted(rows, key=lambda r: -r[1]), 1):
+                acc += v
+                if acc / tot >= .8:
+                    break
+            out.append(f"{k}/{len(rows)} nhóm đầu chiếm {fmt_pct(acc / tot * 100)} tổng")
     return out

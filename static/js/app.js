@@ -21,11 +21,11 @@ const S_ = () => R || ST, RO = () => !!R;
 const sel = i => { const d = S_().d[i], g = d && d.gen; if (!SEL[i] || SEL[i].g !== g) SEL[i] = KEEP[i] ? carry(i, d, { g }) : seed(i, d, { g }); return SEL[i] };   // KEEP/carry: analysis.js (giữ lựa chọn khi AI chạy lại theo góp ý)
 
 /* ---------- thành phần hiển thị ---------- */
-const bar = (rows, u = '') => { if (!rows.length) return ''; const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, sg = rows.some(r => r[1] < 0);
-  return rows.map(([l, v]) => `<div class="br"><span class="l" title="${esc(l)}">${esc(l)}</span><span class="tr"><span class="bf ${v < 0 ? 'neg' : ''}" style="width:${Math.abs(v) / m * 100}%"></span></span><span class="v">${sg ? (v > 0 ? '+' : v < 0 ? '−' : '') : ''}${N(Math.abs(v))}${esc(u)}</span></div>`).join('') };
-const cols = rows => { rows = rows.slice(-14); const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, hi = rows.findIndex(r => Math.abs(r[1]) === m);
-  return `<div class="cols">${rows.map(([l, v], i) => `<div><i class="${i === hi ? 'hi' : ''}" style="height:${Math.abs(v) / m * 80}px"></i>${esc(String(l).slice(0, 8))}<br>${NC(v)}</div>`).join('')}</div>` };
-const fv = v => { const s = String(v ?? '').trim(); return /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s : /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô của máy -> 11.773.398.767,50; chuỗi ĐÃ có dấu chấm ngăn nghìn (936.000, 1.250) giữ nguyên, không đọc lại thành số lẻ
+const bar = (rows, u = '', f = N, k = '') => { if (!rows.length) return ''; const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, sg = rows.some(r => r[1] < 0);
+  return rows.map(([l, v]) => `<div class="br ${k}"><span class="l" title="${esc(l)}">${esc(l)}</span><span class="tr"><span class="bf ${v < 0 ? 'neg' : ''}" style="width:${Math.abs(v) / m * 100}%"></span></span><span class="v">${sg ? (v > 0 ? '+' : v < 0 ? '−' : '') : ''}${f(Math.abs(v))}${esc(u)}</span></div>`).join('') };
+const cols = (rows, f = NC) => { rows = rows.slice(-14); const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, hi = rows.findIndex(r => Math.abs(r[1]) === m);
+  return `<div class="cols">${rows.map(([l, v], i) => `<div><i class="${i === hi ? 'hi' : ''}" style="height:${Math.abs(v) / m * 80}px"></i>${esc(String(l).slice(0, 8))}<br>${f(v)}</div>`).join('')}</div>` };
+const fv = v => { const s = FMT.money(String(v ?? '').trim()); return /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s : /^-?\d+(\.\d+)?$/.test(s) ? N(+s) : s };   // số thô của máy -> 11.773.398.767,50; chuỗi ĐÃ có dấu chấm ngăn nghìn (936.000, 1.250) giữ nguyên, không đọc lại thành số lẻ
 const kp = a => `<div class="kpis">${a.filter(x => String(x[1] ?? '').trim()).map(([l, v, d]) => `<div class="kpi"><b>${esc(fv(v))}</b><small>${esc(l)}${d ? ' · ' + esc(d) : ''}</small></div>`).join('')}</div>`;
 const kpo = a => kp(a.map(k => [k.label, k.value, k.delta]));
 const tbl = (h, r) => `<div class="tw"><table><thead><tr>${h.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${r.map(x => `<tr>${x.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -38,40 +38,67 @@ const vfNote = x => (x.calc_mismatch || []).length ? 'Phép tính không khớp:
   : x.verify === 'unverified' ? 'Chưa kiểm được bằng chứng này (không có phép tính để tính lại, ô trích không đối chiếu được với bảng)' : '';
 const ISOD = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$/;
 const fdt = s => { const m = ISOD.exec(s); return m ? (m[4] + m[5] + m[6] === '000000' ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`) : s };   // 2026-01-01T00:00:00.000 -> 01/01/2026
-const cell = c => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? N(c) : fdt(String(c)));
+const cell = (c, u = '') => c === null ? '<span style="color:var(--warn)">thiếu</span>' : esc(typeof c === 'number' ? FMT.numU(c, u) : fdt(String(c)));
+/* hàm định dạng cho từng cột của một bảng kết quả: cột tiền -> nguyên đồng; cột có số lẻ khác -> mọi ô đủ 2 chữ số; cột toàn số nguyên -> không thập phân */
+const colFmts = t => t.cols.map((_, j) => FMT.colFmt(t.rows.map(r => r[j]).filter(v => typeof v === 'number'), FMT.colUnit(t, j)));
 const tableOf = t => { if (t.err && !t.cols.length) return `<div class="note">${esc(t.title)}: ${esc(t.err)}</div>`;
-  const cf = t.cols.map((_, j) => FMT.colFmt(t.rows.map(r => r[j]).filter(v => typeof v === 'number')));   // cột có số lẻ thì mọi ô đều 2 chữ số, cột số nguyên thì không có phần thập phân
+  const cf = colFmts(t);                                                                                    // cột tiền nguyên đồng · cột có số lẻ thì mọi ô đều 2 chữ số · cột số nguyên thì không có phần thập phân
   return tbl(t.cols, t.rows.slice(0, 30).map(r => r.map((c, j) => c === null ? cell(c) : typeof c === 'number' ? esc(cf[j](c)) : cell(c)))) };
 const numCols = t => t.cols.filter((c, i) => t.rows.some(r => typeof r[i] === 'number'));
 const PAL = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
 const TIME = /^(\d{4}[-\/]\d{1,2}|\d{1,2}[-\/]\d{4}|Q[1-4]|T\d{1,2}|Tháng|W\d|\d{4}$)/i;
 function uniq(rows, kind) { const seen = new Set(), o = []; rows.forEach(r => { const k = r[0] + '|' + r[1]; if (!seen.has(k)) { seen.add(k); o.push(r) } });
-  if (kind === 'line' || (rows.length >= 4 && rows.filter(r => TIME.test(r[0])).length / rows.length >= .6)) return o;
+  if (kind === 'line' || kind === 'area' || (rows.length >= 4 && rows.filter(r => TIME.test(r[0])).length / rows.length >= .6)) return o;
   const m = new Map(); o.forEach(([l, v]) => m.set(l, (m.get(l) || 0) + v)); return [...m] }
 const pp = s => { const m = /^(\d{4})-(\d{1,2})(?:-\d{1,2})?(?:[ T].*)?$/.exec(String(s)); return m ? `T${+m[2]}/${m[1]}` : String(s) };      // 2026-03-01 -> T3/2026
-const line = rows => { rows = rows.slice(-24); if (rows.length < 2) return bar(rows); const W = 300, H = 110, mx = Math.max(...rows.map(r => r[1])), mn = Math.min(...rows.map(r => r[1])), sp = (mx - mn) || 1;
+/* fill=true: biểu đồ VÙNG (tô phần dưới đường) */
+const line = (rows, fill = false) => { rows = rows.slice(-24); if (rows.length < 2) return bar(rows); const W = 300, H = 110, mx = Math.max(...rows.map(r => r[1])), mn = Math.min(...rows.map(r => r[1])), sp = (mx - mn) || 1;
   const pts = rows.map((r, i) => [6 + i * (W - 12) / Math.max(rows.length - 1, 1), 8 + (mx - r[1]) / sp * (H - 30)]);
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block"><polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(pp(rows[0][0]))}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(pp(rows[rows.length - 1][0]))}</text></svg>` };
-const donut = rows => { rows = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]); if (rows.length < 2) return bar(rows); if (rows.length > 7) { const rest = rows.slice(6).reduce((s, r) => s + r[1], 0); rows = [...rows.slice(0, 6), ['Khác', rest]] }
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:360px;height:auto;display:block">${fill ? `<polygon fill="var(--pri)" opacity=".22" points="${pts.map(p => p.join(',')).join(' ')} ${pts[pts.length - 1][0]},${H - 22} ${pts[0][0]},${H - 22}"/>` : ''}<polyline fill="none" stroke="var(--pri)" stroke-width="2.2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="var(--pri)"/>`).join('')}<text x="6" y="${H - 4}" font-size="9" fill="var(--sub)">${esc(pp(rows[0][0]))}</text><text x="${W - 6}" y="${H - 4}" font-size="9" text-anchor="end" fill="var(--sub)">${esc(pp(rows[rows.length - 1][0]))}</text></svg>` };
+/* hole=false: tròn đặc (pie) */
+const donut = (rows, hole = true) => { rows = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]); if (rows.length < 2) return bar(rows); if (rows.length > 7) { const rest = rows.slice(6).reduce((s, r) => s + r[1], 0); rows = [...rows.slice(0, 6), ['Khác', rest]] }
   const tot = rows.reduce((s, r) => s + r[1], 0) || 1; let acc = 0; const g = rows.map((r, i) => { const a = acc / tot * 100; acc += r[1]; return `${PAL[i % 7]} ${a}% ${acc / tot * 100}%` }).join(',');
-  return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative"><div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div></div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${FMT.pct(r[1] / tot * 100)}</b></div>`).join('')}</div></div>` };
-const KIND = { bars: 'Cột ngang', cols: 'Cột dọc', line: 'Đường', donut: 'Tròn' };
+  return `<div style="display:flex;gap:16px;align-items:center"><div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(${g});flex:none;position:relative">${hole ? '<div style="position:absolute;inset:26px;border-radius:50%;background:var(--p2)"></div>' : ''}</div><div style="font-size:12px;flex:1">${rows.map((r, i) => `<div><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PAL[i % 7]};margin-right:6px"></span>${esc(r[0])} <b>${FMT.pct(r[1] / tot * 100)}</b></div>`).join('')}</div></div>` };
+/* Các dạng biểu đồ mới (cùng bộ dữ liệu [nhãn, giá trị]): kẹo mút, Pareto 80/20, treemap. Vẽ tương ứng ở app/export/svg.py (báo cáo) và export/assets/live.js (bảng điều khiển). */
+const pie = rows => donut(rows, false);
+const lollipop = (rows, f = N) => bar(rows, '', f, 'lp');
+const TMP = ['#4F46E5', '#0369A1', '#047857', '#B45309', '#B91C1C', '#6D28D9', '#475569'];      // đủ đậm để chữ trắng đọc rõ
+const pareto = (rows, f = N) => { const rs = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 12); if (rs.length < 3) return bar(rows, '', f);
+  const n = rs.length, tot = rs.reduce((s, r) => s + r[1], 0), W = 360, H = 150, pl = 4, pr = 30, pt = 14, pb = 34, pw = W - pl - pr, ph = H - pt - pb, slot = pw / n, bw = Math.min(slot * .64, 30), base = pt + ph, mx = rs[0][1], y80 = pt + .2 * ph;
+  let acc = 0; const cum = rs.map(r => (acc += r[1]) / tot * 100), i80 = cum.findIndex(c => c >= 80), k = i80 < 0 ? n - 1 : i80;
+  const pts = cum.map((c, i) => [pl + slot * (i + .5), pt + (1 - c / 100) * ph]);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:420px;height:auto;display:block"><line x1="${pl}" y1="${base}" x2="${W - pr}" y2="${base}" stroke="var(--line)"/><line x1="${pl}" y1="${y80}" x2="${W - pr}" y2="${y80}" stroke="var(--bad)" stroke-dasharray="4 3" opacity=".7"/><text x="${W - pr + 3}" y="${y80 + 3}" font-size="8" fill="var(--sub)">80%</text><text x="${W - pr + 3}" y="${pt + 3}" font-size="8" fill="var(--sub)">100%</text>${rs.map(([l, v], i) => { const cx = pl + slot * (i + .5), h = Math.max(v / mx * ph, 1.5);
+    return `<g><title>${esc(l)}: ${esc(f(v))} · cộng dồn ${FMT.pct(cum[i])}</title><rect x="${cx - bw / 2}" y="${base - h}" width="${bw}" height="${h}" rx="2" fill="${i <= k ? 'var(--pri)' : 'var(--sub)'}" opacity="${i <= k ? 1 : .45}"/><text x="${cx}" y="${H - pb + 10}" font-size="8" fill="var(--sub)" text-anchor="${n > 6 ? 'end' : 'middle'}" ${n > 6 ? `transform="rotate(-35 ${cx} ${H - pb + 10})"` : ''}>${esc(String(l).length > 8 ? String(l).slice(0, 7) + '…' : l)}</text></g>` }).join('')}<polyline fill="none" stroke="var(--warn)" stroke-width="2" points="${pts.map(p => p.join(',')).join(' ')}"/>${pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i === k ? 3.6 : 2.2}" fill="var(--panel)" stroke="var(--warn)" stroke-width="1.6"/>`).join('')}<text x="${pts[k][0]}" y="${pts[k][1] - 7}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--ink)">${FMT.pct(cum[k])}</text></svg><div class="hint">${N(k + 1)}/${N(n)} nhóm đầu chiếm ${FMT.pct(cum[k])} tổng</div>` };
+const treemap = (rows, f = N) => { const rs = rows.filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 16); if (rs.length < 2) return bar(rows, '', f);
+  const tot = rs.reduce((s, r) => s + r[1], 0) || 1, cells = [];
+  const lay = (it, x, y, w, h) => { if (!it.length) return; if (it.length === 1) { cells.push([it[0], x, y, w, h]); return }       // tách thành hai nhóm có tổng gần bằng nhau, cắt theo cạnh dài hơn
+    const s = it.reduce((a, r) => a + r[1], 0); let acc = 0, k = 1, best = Infinity;
+    for (let j = 1; j < it.length; j++) { acc += it[j - 1][1]; const d = Math.abs(acc - s / 2); if (d < best) { best = d; k = j } }
+    const a = it.slice(0, k), b = it.slice(k), sa = a.reduce((q, r) => q + r[1], 0) / s;
+    if (w >= h) { lay(a, x, y, w * sa, h); lay(b, x + w * sa, y, w * (1 - sa), h) } else { lay(a, x, y, w, h * sa); lay(b, x, y + h * sa, w, h * (1 - sa)) } };
+  lay(rs, 0, 0, 100, 100);
+  return `<div class="tmw">${cells.map(([it, x, y, w, h]) => `<div class="tm" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;background:${TMP[rs.indexOf(it) % 7]}" title="${esc(it[0])}: ${esc(f(it[1]))} (${FMT.pct(it[1] / tot * 100)})">${w >= 14 && h >= 16 ? `<b>${esc(it[0])}</b><span>${esc(f(it[1]))} · ${FMT.pct(it[1] / tot * 100)}</span>` : ''}</div>`).join('')}</div>` };
+const KIND = { bars: 'Cột ngang', cols: 'Cột dọc', lollipop: 'Kẹo mút', pareto: 'Pareto 80/20', line: 'Đường', area: 'Vùng', donut: 'Vành khuyên', pie: 'Tròn đặc', treemap: 'Khối (treemap)' };
 const kindSel = (s, k, cur) => `<select data-s="${s}" data-k="${k}">${Object.entries(KIND).map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
 function chartRows(c, T) { const t = T[c.task]; if (!t) return null; const xi = t.cols.indexOf(c.x), yi = t.cols.indexOf(c.y); if (xi < 0 || yi < 0) return null;
   return uniq(t.rows.map(r => [String(r[xi]), Number(r[yi]) || 0]), c.kind).slice(0, 24) }
-function chartBody(c, T) { const rows = chartRows(c, T); if (!rows) return ''; return c.kind === 'cols' ? cols(rows) : c.kind === 'line' ? line(rows) : c.kind === 'donut' ? donut(rows) : bar(rows, '') }
+function chartBody(c, T) { const rows = chartRows(c, T); if (!rows) return ''; const f = v => FMT.numU(v, c.unit);          // đơn vị biểu đồ quyết định số có phần thập phân hay không (tiền: không)
+  return ({ cols: () => cols(rows, f), line: () => line(rows), area: () => line(rows, true), donut: () => donut(rows), pie: () => pie(rows), lollipop: () => lollipop(rows, f), pareto: () => pareto(rows, f), treemap: () => treemap(rows, f) }[c.kind] || (() => bar(rows, '', f)))() }
 function chart(c, T) { if (!chartRows(c, T)) return '';
   return `<div class="box"><h4>${esc(c.title)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</h4>${chartBody(c, T)}${c.insight ? `<div class="hint">${esc(c.insight)}</div>` : ''}</div>` }
 /* Bộ chọn biểu đồ: chỉ đưa ra các loại PHÙ HỢP với hình dạng dữ liệu (thay vì mọi loại + ba ô chọn rời rạc) */
-const KWHY = { line: 'thấy xu hướng theo thời gian', cols: 'so sánh từng kỳ hoặc ít nhóm', bars: 'xếp hạng; nhãn dài vẫn dễ đọc', donut: 'tỷ trọng các phần trong tổng (tối đa 7 phần)' };
+const KWHY = { line: 'thấy xu hướng theo thời gian', area: 'xu hướng theo thời gian, nhấn vào quy mô tích lũy', cols: 'so sánh từng kỳ hoặc ít nhóm', bars: 'xếp hạng; nhãn dài vẫn dễ đọc', lollipop: 'xếp hạng gọn, ít mực hơn cột khi nhiều nhóm', pareto: 'ít nhóm nào tạo phần lớn tổng (quy tắc 80/20)', donut: 'tỷ trọng các phần trong tổng (tối đa 7 phần)', pie: 'tỷ trọng các phần trong tổng (tối đa 7 phần)', treemap: 'cơ cấu của nhiều nhóm theo diện tích' };
 function kindsFor(rows) { const n = rows.length, tl = n >= 3 && rows.filter(r => TIME.test(String(r[0]))).length / n >= .6, neg = rows.some(r => r[1] < 0);
-  if (n < 2) return ['bars']; if (tl) return n >= 4 ? ['line', 'cols'] : ['cols', 'line']; if (n <= 7 && !neg) return ['bars', 'cols', 'donut']; return n <= 12 ? ['bars', 'cols'] : ['bars'] }
+  if (n < 2) return ['bars']; if (tl) return n >= 4 ? ['line', 'area', 'cols'] : ['cols', 'line'];
+  const k = ['bars']; if (n <= 12) k.push('cols'); if (n >= 3 && n <= 24) k.push('lollipop'); if (!neg && n >= 4 && n <= 24) k.push('pareto'); if (n <= 7 && !neg) k.push('donut', 'pie'); if (!neg && n >= 5 && n <= 24) k.push('treemap'); return k }
+/* Nút chọn loại biểu đồ: loại PHÙ HỢP với dữ liệu đứng trước, các loại còn lại vẫn chọn được (nét đứt) để người dùng tự quyết định */
+const kindBtns = (i, kd, ks) => `<div class="seg kinds" role="group" aria-label="Loại biểu đồ">${[...ks, ...Object.keys(KIND).filter(k => !ks.includes(k))].map(k => `<button type="button" class="${k === kd ? 'on' : ''}${ks.includes(k) ? '' : ' off'}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k] + (ks.includes(k) ? '' : ' · ít phù hợp với dữ liệu hiện tại'))}">${KIND[k]}</button>`).join('')}</div>`;
 function chartCard(c, i, s, T) { const t = T[c.task]; if (!t) return '';
   const on = s['c' + i] ?? c.recommended, kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [];
-  const ks = kindsFor(rows), all = [...new Set([...ks, kd])], fit = ks.includes(kd);
+  const ks = kindsFor(rows), fit = ks.includes(kd);
   return `<div class="cpc ${on ? 'on' : ''}"><label class="cph"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span><b>${esc(c.title)}</b><small>${esc(c.insight || '')}</small></span></label>
 <div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
-<div class="cpk"><div class="seg" role="group" aria-label="Loại biểu đồ">${all.map(k => `<button type="button" class="${k === kd ? 'on' : ''}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k])}">${KIND[k]}</button>`).join('')}</div>
+<div class="cpk">${kindBtns(i, kd, ks)}
 <small class="${fit ? 'sub' : 'sub warn'}">${fit ? (kd === ks[0] ? 'Phù hợp nhất: ' : 'Phù hợp: ') + KWHY[kd] : 'Loại này ít phù hợp với dữ liệu hiện tại'} · từ: ${esc(t.title)}</small></div>
 <details class="cpa"><summary>Tùy chỉnh trục</summary><div class="hint">Nhãn ${sel$(5, 'x' + i, t.cols, x)} Giá trị ${sel$(5, 'y' + i, numCols(t), y)}</div></details></div>` }
 const sel$ = (s, k, opts, cur) => `<select data-s="${s}" data-k="${k}">${opts.map(o => `<option ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;

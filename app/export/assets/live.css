@@ -193,3 +193,12 @@ h2.sec{font-family:var(--fh);margin:36px 0 14px;font-size:18px;font-weight:700;l
 .addc{display:grid;place-items:center;border-style:dashed;background:transparent;box-shadow:none}.addc button{border:0;background:none;color:var(--acc);font-weight:700;padding:10px 20px;font-size:14px}
 @media(max-width:1000px){.edb{opacity:1}}
 @media print{.edb,.kx,.addc{display:none}}
+/* kẹo mút · Pareto · treemap (thẻ lấy từ kết quả phân tích) */
+.bars.lp .bt{background:none;position:relative;overflow:visible;height:12px;margin-right:6px}
+.bars.lp .bt::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+.bars.lp .bt i{position:absolute;left:0;top:50%;height:2.5px;margin-top:-1.25px;border-radius:2px;min-width:2px}
+.bars.lp .bt i::after{content:"";position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:var(--acc)}
+.pn{margin:8px 0 0;font-size:12.5px;color:var(--sub)}
+.tmw{position:relative;width:100%;height:260px}
+.tm{position:absolute;box-sizing:border-box;padding:6px 8px;border:2px solid var(--surface);border-radius:8px;color:#fff;overflow:hidden;font-size:12px;line-height:1.35}
+.tm b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tm span{opacity:.92;font-size:11.5px}

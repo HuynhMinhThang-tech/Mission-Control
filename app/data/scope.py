@@ -11,6 +11,7 @@ import warnings
 import pandas as pd
 
 from .. import labels
+from .names import naming_note
 
 # từ gợi ý cột "loại bản ghi" (xét theo TỪ của tên cột, không dấu)
 KIND_WORDS = {"loai", "type", "kind", "trang", "thai", "status", "hinh", "thuc", "phuong", "kenh", "channel", "nhom", "direction", "state", "giai", "doan"}
@@ -123,4 +124,4 @@ def data_card(dfs, max_tables=6, max_cols=40):
         return ""
     return ("THẺ DỮ LIỆU (do máy lập từ dữ liệu thật):\n" + "\n".join(out) + "\n"
             "Chỉ được dựa vào những bảng, cột và kỳ thời gian nêu trên. Điều gì không có ở đây (vd nguyên nhân, chi phí, thiết bị, con người) KHÔNG được khẳng định; "
-            "chỉ nêu như giả thuyết cần kiểm chứng kèm dữ liệu cần thu thêm.\n\n")
+            "chỉ nêu như giả thuyết cần kiểm chứng kèm dữ liệu cần thu thêm.\n\n" + naming_note(dfs))

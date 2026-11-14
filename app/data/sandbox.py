@@ -363,4 +363,5 @@ def df_table(df, title, err=None):
     for c in d.columns:
         if pd.api.types.is_datetime64_any_dtype(d[c]):
             d[c] = d[c].dt.strftime("%Y-%m-%d")
-    return {"title": title, "cols": list(d.columns), "rows": json.loads(d.head(200).to_json(orient="values")), "err": err}
+    return {"title": title, "cols": list(d.columns), "rows": json.loads(d.head(200).to_json(orient="values")), "err": err,
+            "units": [lb.unit(c) for c in d.columns]}         # đơn vị từng cột ('đ' · '%' · ''): giao diện dựa vào đây để tiền ghi nguyên đồng, số lẻ khác giữ 2 chữ số

@@ -16,7 +16,7 @@ from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 from .. import numfmt
-from ..utils import fmt_pct, vn
+from ..utils import fmt_num, fmt_pct, vn
 from . import fonts
 from .common import PRI_ORDER, chart_rows, facts, pp, trunc, unit_of
 
@@ -217,7 +217,7 @@ def kpi_slide(d):
 
 def _label(s, v, unit=""):
     """Nhãn số trên biểu đồ: số GHI ĐỦ theo quy tắc số chung (1.234.567; 54,20%). Viết thẳng thành chữ nên không phụ thuộc ngôn ngữ máy người mở (Excel format #,##0 sẽ ra 1,234,567 trên máy tiếng Anh)."""
-    return fmt_pct(v) if unit == "%" else vn(v)
+    return fmt_pct(v) if unit == "%" else fmt_num(v, unit)
 
 
 def _point_label(ser, i, text, size, color=None, pos=None):
@@ -236,9 +236,13 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
     cd = CategoryChartData()
     cd.categories = [trunc(pp(l), 18) for l, _ in rows]
     cd.add_series("Giá trị", [float(v) for _, v in rows])
-    donut = kind == "donut"
+    # PowerPoint có sẵn: cột ngang/dọc, đường, vùng, vành khuyên, tròn. Kẹo mút, Pareto, treemap không có kiểu gốc nên vẽ gần nhất:
+    # kẹo mút = cột ngang rất mảnh · Pareto = cột dọc sắp giảm dần (đường cộng dồn nằm ở dòng «điều này có nghĩa là») · treemap = cột ngang sắp giảm dần.
+    donut = kind in ("donut", "pie")
     line = kind == "line"
-    ctype = CT.DOUGHNUT if donut else CT.LINE_MARKERS if line else CT.COLUMN_CLUSTERED if kind == "cols" else CT.BAR_CLUSTERED
+    area = kind == "area"
+    ctype = (CT.PIE if kind == "pie" else CT.DOUGHNUT) if donut else CT.LINE_MARKERS if line else CT.AREA if area \
+        else CT.COLUMN_CLUSTERED if kind in ("cols", "pareto") else CT.BAR_CLUSTERED
     ch = s.shapes.add_chart(ctype, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
     ch.has_title = False
     ch.font.size, ch.font.name = Pt(SZ_SMALL), FONT()
@@ -262,7 +266,10 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
     ch.has_legend = False
     hi = max(range(len(rows)), key=lambda i: abs(rows[i][1]))
     lo = min(range(len(rows)), key=lambda i: rows[i][1])
-    if line:
+    if area:                                    # vùng: không ghi nhãn từng điểm (PowerPoint không cho đặt vị trí nhãn của biểu đồ vùng); số đầu, cuối, cao nhất, thấp nhất nằm ở cột bên phải
+        ser.format.fill.solid()
+        ser.format.fill.fore_color.rgb = rgb(PRI)
+    elif line:
         ser.smooth = False
         ser.format.line.color.rgb = rgb(PRI)
         ser.format.line.width = Pt(2.5)
@@ -274,7 +281,7 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
         for i in sorted(show):
             _point_label(ser, i, _label(s, rows[i][1], unit), SZ_SMALL, INK, LP.ABOVE)
     else:
-        pl.gap_width = 55
+        pl.gap_width = 260 if kind == "lollipop" else 55
         pl.vary_by_categories = False
         ser.invert_if_negative = False
         ser.format.fill.solid()
@@ -283,7 +290,7 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
             pt = ser.points[i]
             pt.format.fill.solid()
             pt.format.fill.fore_color.rgb = rgb(BAD if v < 0 else PRI if i == hi else MUTE)
-        show = set(range(len(rows))) if (kind == "bars" or len(rows) <= 6) else {hi, lo}
+        show = set(range(len(rows))) if (kind in ("bars", "lollipop", "treemap") or len(rows) <= 6) else {hi, lo}
         for i in sorted(show):
             _point_label(ser, i, _label(s, rows[i][1], unit), SZ_SMALL, INK, LP.OUTSIDE_END)
     va, ca = ch.value_axis, ch.category_axis
@@ -292,19 +299,21 @@ def _chart(s, x, y, w, h, rows, kind, unit=""):
     ca.has_major_gridlines = False
     ca.tick_labels.font.size, ca.tick_labels.font.name = Pt(SZ_SMALL), FONT()
     ca.format.line.color.rgb = rgb(LINE)
-    if kind == "bars":
+    if kind in ("bars", "lollipop", "treemap"):
         ca.reverse_order = True
 
 
 def chart_slides(d):
     F = d.F
     for c in F["charts"]:
-        rows = chart_rows(F["dfs"][c["task"]], c["x"], c["y"], 12 if c["kind"] in ("bars", "donut") else 24)
+        rows = chart_rows(F["dfs"][c["task"]], c["x"], c["y"], 12 if c["kind"] in ("bars", "donut", "pie", "lollipop", "pareto", "treemap") else 24)
         if not rows:
             continue
+        if c["kind"] in ("lollipop", "pareto", "treemap"):          # các dạng xếp hạng/cơ cấu: lớn đến nhỏ
+            rows = sorted(rows, key=lambda r: -r[1])
         s = d.slide(c.get("insight") or c["title"], "Phân tích")
         unit = unit_of(c)
-        text(s, MX, 1.7, 8.0, .35, c["title"] + (f"  (đơn vị: {unit})" if unit and c["kind"] != "donut" else ""), size=12, bold=True, color=SUB)
+        text(s, MX, 1.7, 8.0, .35, c["title"] + (f"  (đơn vị: {unit})" if unit and c["kind"] not in ("donut", "pie") else ""), size=12, bold=True, color=SUB)
         _chart(s, MX, 2.05, 8.0, 4.5, rows, c["kind"], unit)
         px, pw = 8.95, W - MX - 8.95
         rect(s, px, 1.75, pw, 4.8, fill=SOFT)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .. import numfmt
 from ..utils import E, col_fmt, vn
-from .common import PRI_ORDER, chart_rows, facts, trunc, unit_of
+from .common import PRI_ORDER, chart_rows, col_units, facts, trunc, unit_of
 from .svg import chart_svg
 from . import fonts
 
@@ -97,7 +97,8 @@ def _tbl(t):
         return ""
     head = "".join(f"<th>{E(c)}</th>" for c in t["cols"])
     num = lambda c: isinstance(c, (int, float)) and not isinstance(c, bool)       # noqa: E731
-    fm = [col_fmt([r[j] for r in t["rows"] if j < len(r) and num(r[j])]) for j in range(len(t["cols"]))]      # mỗi cột một định dạng chung: có số lẻ thì mọi ô 2 chữ số
+    un = col_units(t)
+    fm = [col_fmt([r[j] for r in t["rows"] if j < len(r) and num(r[j])], un[j]) for j in range(len(t["cols"]))]      # mỗi cột một định dạng chung: cột tiền nguyên đồng; cột có số lẻ khác thì mọi ô 2 chữ số
     body = "".join("<tr>" + "".join(f"<td>{E(fm[j](c) if num(c) else ('' if c is None else c))}</td>" for j, c in enumerate(r)) + "</tr>"
                    for r in t["rows"][:30])
     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"

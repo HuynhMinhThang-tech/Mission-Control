@@ -39,7 +39,7 @@ def make_final():
     period = period_of(A["d"][1])
     tasks = [{"title": t["title"], "goal": t.get("goal", "")} for t in A["d"][3]["tasks"]]
     method = f"Làm sạch: {', '.join(A.get('applied', [])) or 'không áp dụng'}. Phân tích: {', '.join(t['title'] for t in tasks)}."
-    known = numfmt.Known.from_dfs(A["x"][3])
+    known = numfmt.Known.from_dfs(A["x"][3], A.get("names"))
     kpis = [k for k in numfmt.fix_kpis([kpi_all[i] for i in fin["kpis"] if i < len(kpi_all)], known) if numfmt.has_value(k)]     # KPI rỗng không lên báo cáo
     charts = refine_charts(dedupe_charts(numfmt.fix_payload(fin["charts"], known), A["x"][3]), A["x"][3])
     d4 = numfmt.fix_payload(d4, known)
@@ -55,7 +55,7 @@ def make_final():
 def live_meta(title=None):
     """Thông tin chữ đi kèm dashboard tương tác. Dùng được cả khi chưa duyệt (xem trước ở bước Báo cáo)."""
     d5 = A["d"].get(5) or {}
-    known = numfmt.Known.from_dfs(A["x"].get(3) or [])
+    known = numfmt.Known.from_dfs(A["x"].get(3) or [], A.get("names"))
     d4 = numfmt.fix_payload(A["d"].get(4) or {}, known)               # cùng một lớp chuẩn hóa số/đơn vị như báo cáo HTML, Markdown, PPTX
     ttl = title or (d5.get("final") or {}).get("title") or d5.get("title") or "Bảng điều khiển phân tích"
     return {"title": numfmt.fix_text(ttl, known), "question": A["question"], "ctx": A["ctx"],

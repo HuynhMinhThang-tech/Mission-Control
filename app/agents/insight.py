@@ -28,7 +28,7 @@ def run(fb=""):
                       for i, t in enumerate(r3["tables"]) if A["x"][3][i] is not None)
     tick(1)
     r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(4, fb) + f"Kết quả phân tích:\n{txt[:12000]}\nPhát hiện sơ bộ: {J(r3['findings'], 3000)}\n\n" + data_card(A["clean"]) + scope_block(A["clean"]) + PROMPT)
-    known = numfmt.Known.from_dfs(A["x"][3])
+    known = numfmt.Known.from_dfs(A["x"][3], A.get("names"))
     r = numfmt.fix_payload(r, known)
     ins = numfmt.audit_insights(r.get("insights", []), known)                     # số lớn không có trong bảng nào -> không để "Độ tin cậy: Cao"
     put(4, {"summary": r.get("summary", ""), "insights": ins, "actions": r.get("actions", []), "risks": r.get("risks", [])})

@@ -238,7 +238,7 @@ function resCard(t, i, r, d) {
   return `<div class="rc"><div class="rch"><b>${esc(t.title)}</b>${srcTag(t.src || tk.src)}${adjTag(d, t.title)}<small>${N(rows.length)} dòng</small></div>${(t.goal || tk.goal) ? `<p class="tg2">${esc(t.goal || tk.goal)}</p>` : ''}
 ${(t.facts || []).length ? `<ul class="fx3">${t.facts.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
 ${ch.length ? `<div class="two">${ch.map(c => chart(c, r.tables)).join('')}</div>` : ''}
-${t.err && !t.cols.length ? tableOf(t) : `<div class="tw"><table><thead><tr>${t.cols.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 8).map(x => `<tr>${x.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${rows.length > 8 ? `<details><summary>Xem tất cả ${N(rows.length)} dòng</summary>${tableOf(t)}</details>` : ''}`}
+${t.err && !t.cols.length ? tableOf(t) : `<div class="tw"><table><thead><tr>${t.cols.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${(cf => rows.slice(0, 8).map(x => `<tr>${x.map((c, j) => `<td>${typeof c === 'number' ? esc(cf[j](c)) : cell(c)}</td>`).join('')}</tr>`).join(''))(colFmts(t))}</tbody></table></div>${rows.length > 8 ? `<details><summary>Xem tất cả ${N(rows.length)} dòng</summary>${tableOf(t)}</details>` : ''}`}
 ${varChips(t.vars || tk.vars, d.cols)}${tk.code ? `<details><summary>Cách tính (code đã chạy)</summary><pre class="codepre">${esc(tk.code)}</pre></details>` : ''}</div>` }
 function a3Result(d, s) {
   const r = d.result, T = r.tables;
@@ -250,7 +250,7 @@ const waitList = (S, i) => { const a = (S.ag && S.ag[i]) || [], k = S.job.runnin
    MỘT nơi chọn mọi biểu đồ: từ dữ liệu, từ kết quả phân tích, bảng điểm / ma trận cho dữ liệu đạt-không đạt, kèm thẻ KPI, bố cục, các khối chữ.
    Mỗi biểu đồ có 2 công tắc: hiện trên Bảng điều khiển · đưa vào Báo cáo + Slide (báo cáo và slide dùng chung một danh sách).
    "+ Thêm" mở ngăn kéo bên phải. Bản xem thử cập nhật ngay, không tải lại khung; rê chuột vào biểu đồ trên bản xem thử để ẩn, đổi dạng, di chuyển. */
-const DKIND = { bars: 'Cột ngang', cols: 'Cột dọc', donut: 'Tròn (cơ cấu)', trend: 'Đường theo thời gian', line: 'Đường', score: 'Bảng điểm tiêu chí', heat: 'Ma trận nhiệt', static: 'Từ phân tích' };
+const DKIND = { bars: 'Cột ngang', cols: 'Cột dọc', donut: 'Tròn (cơ cấu)', trend: 'Đường theo thời gian', line: 'Đường', area: 'Vùng', pie: 'Tròn đặc', lollipop: 'Kẹo mút', pareto: 'Pareto 80/20', treemap: 'Khối (treemap)', score: 'Bảng điểm tiêu chí', heat: 'Ma trận nhiệt', static: 'Từ phân tích' };
 const PPT_FONTS = { claude: ['Georgia', 'Segoe UI'], app: ['Georgia', 'Segoe UI'], inter: ['Segoe UI', 'Segoe UI'], bevn: ['Segoe UI', 'Segoe UI'], serif: ['Georgia', 'Georgia'], system: ['Arial', 'Arial'] };   // phải khớp app/export/fonts.py (_PPT); tests/pptx_font_test.py so khớp
 const FONTS = { claude: 'Giống Claude (mặc định)', app: 'Giống giao diện ứng dụng', inter: 'Hiện đại (Inter)', bevn: 'Tối ưu tiếng Việt (Be Vietnam Pro)', serif: 'Báo chí, chữ có chân (Source Serif 4)', system: 'Phông hệ thống (nhẹ nhất, dùng được ngoại tuyến)' };
 const LAYOUTS = { auto: 'Tự động', overview: 'Tổng quan và xu hướng', rank: 'Xếp hạng các nhóm', compliance: 'Tuân thủ đạt / không đạt', story: 'Kể chuyện (kết luận trước)' };
@@ -283,7 +283,7 @@ const dpSrc = (title, plan, bp, edit) => `/api/dash_preview?title=${encodeURICom
 function makeStatic(c, i, s, T) {
   const kd = s['k' + i] ?? c.kind, cc = { ...c, kind: kd, x: s['x' + i] ?? c.x, y: s['y' + i] ?? c.y }, rows = (chartRows(cc, T) || []).filter(r => typeof r[1] === 'number' && isFinite(r[1])).slice(0, 40);
   if (rows.length < 2) return null;
-  return { type: 'static', sid: 'rc' + i, ci: i, ds: '', by: '', m: '', agg: '', kind: kd === 'line' ? 'line' : kd === 'cols' ? 'cols' : 'bars', title: c.title || '', why: c.insight || '', labels: rows.map(r => String(r[0])), values: rows.map(r => r[1]), unit: c.unit || '', src: 'analysis', on: true, id: 'static|rc' + i } }
+  return { type: 'static', sid: 'rc' + i, ci: i, ds: '', by: '', m: '', agg: '', kind: KIND[kd] ? kd : 'bars', title: c.title || '', why: c.insight || '', labels: rows.map(r => String(r[0])), values: rows.map(r => r[1]), unit: c.unit || '', src: 'analysis', on: true, id: 'static|rc' + i } }
 function syncStatic(d, s, T) { const plan = dpState(d, s); plan.forEach((x, k) => { if (x.type === 'static' && x.ci !== undefined && d.charts[x.ci]) { const n = makeStatic(d.charts[x.ci], x.ci, s, T); if (n) plan[k] = { ...n, on: x.on } } }) }
 
 function libRows(d, s, T) {
@@ -292,11 +292,11 @@ function libRows(d, s, T) {
   plan.forEach(x => { if (!(x.type === 'static' && x.ci !== undefined)) rows.push({ k: 'dp', it: x }) });
   return rows }
 function libRow(r, d, s, T, cat) {
-  if (r.k === 'rc') { const { c, i, st } = r, on = s['c' + i] ?? c.recommended, dOn = !!(st && st.on), t = T[c.task], kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [], ks = kindsFor(rows), all = [...new Set([...ks, kd])];
+  if (r.k === 'rc') { const { c, i, st } = r, on = s['c' + i] ?? c.recommended, dOn = !!(st && st.on), t = T[c.task], kd = s['k' + i] ?? c.kind, x = s['x' + i] ?? c.x, y = s['y' + i] ?? c.y, cc = { ...c, kind: kd, x, y }, rows = chartRows(cc, T) || [], ks = kindsFor(rows);
     return `<div class="lrow ${on || dOn ? 'on' : ''}"><div class="lt"><b>${esc(c.title)}</b><small>Từ phân tích · ${esc(t.title)}</small></div>
 <div class="lsw"><label class="sw"><input type="checkbox" data-lb="dash" data-ci="${i}" ${dOn ? 'checked' : ''}><span>Dashboard</span></label><label class="sw"><input type="checkbox" data-s="5" data-k="c${i}" ${on ? 'checked' : ''}><span>Báo cáo · Slide</span></label></div>
 <details class="cpa" data-s="5" data-o="cpa${i}" ${s['cpa' + i] ? 'open' : ''}><summary>Xem trước và tùy chỉnh</summary><div class="cpb"><div class="cpv">${rows.length ? chartBody(cc, T) : '<small class="sub">Chưa có dữ liệu cho cặp trục này.</small>'}</div>
-<div class="seg" role="group" aria-label="Loại biểu đồ">${all.map(k => `<button type="button" class="${k === kd ? 'on' : ''}" data-a="ckind" data-i="${i}" data-v="${k}" title="${esc(KWHY[k])}">${KIND[k]}</button>`).join('')}</div>
+${kindBtns(i, kd, ks)}
 <div class="axes"><label>Nhãn${sel$(5, 'x' + i, t.cols, x)}</label><label>Giá trị${sel$(5, 'y' + i, numCols(t), y)}</label></div></div></details></div>` }
   const it = r.it, tag = it.type === 'static' ? 'Từ phân tích' : it.src === 'user' ? 'Bạn thêm' : 'AI gợi ý', kd = it.type === 'score' || it.type === 'heat' ? DKIND[it.type] : (DKIND[it.kind] || '');
   return `<div class="lrow ${it.on ? 'on' : ''}"><div class="lt"><b>${esc(dpTitle(it, cat))}</b><small>${tag}${kd ? ' · ' + kd : ''}${cat.length > 1 && it.ds ? ' · ' + esc(it.ds) : ''}${it.m === '*' ? ' · theo chỉ số đang chọn' : ''}${it.type === 'static' ? ' · không đổi theo bộ lọc' : ''}${it.why && it.src === 'ai' ? ' · ' + esc(it.why) : ''}</small></div>
@@ -345,7 +345,7 @@ function dwAnalysis(d, s, T) {
   const so = (key, opts, cur) => `<select data-dwi="${key}">${opts.map(o => `<option value="${esc(o)}" ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
   return `<h5>Biểu đồ AI đã đề xuất từ phân tích</h5>${left.map(([c, i]) => `<div class="lrow on"><div class="lt"><b>${esc(c.title)}</b><small>${esc(c.insight || '')}</small></div><button type="button" class="btn g sm" data-dw="addrc" data-i="${i}">+ Thêm</button></div>`).join('') || '<small class="sub">Mọi biểu đồ AI đề xuất đã có trên bảng điều khiển.</small>'}
 <h5>Tự chọn từ một bảng kết quả</h5>${t0 ? `<div class="dwf"><label>Bảng kết quả<select data-dwi="task">${tabs.map(([t, i]) => `<option value="${i}" ${i === f.task ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</select></label><label>Nhãn ${so('fx', t0.cols, f.x)}</label><label>Giá trị ${so('fy', numCols(t0), f.y)}</label>
-<label>Dạng<select data-dwi="fkind">${[['bars', 'Cột ngang'], ['cols', 'Cột dọc'], ['line', 'Đường']].map(([v, l]) => `<option value="${v}" ${f.kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+<label>Dạng<select data-dwi="fkind">${Object.entries(KIND).map(([v, l]) => `<option value="${v}" ${f.kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
 <button type="button" class="btn" data-dw="addfree" ${f.x === f.y ? 'disabled' : ''}>+ Thêm vào bảng điều khiển</button><p class="hint">Biểu đồ từ kết quả phân tích đã được tổng hợp sẵn nên không đổi theo bộ lọc của bảng điều khiển.</p>` : '<small class="sub">Chưa có bảng kết quả có cột số.</small>'}` }
 function dwKpi(d, s) {
   const cat = catOf(d), bp = bpState(d, s); if (!cat.length) return '<small class="sub">Chưa có dữ liệu để tạo thẻ KPI.</small>';

@@ -7,7 +7,7 @@ from . import memo
 
 def _insight_line(ins):
     """Chỉ nói số phát hiện ĐÃ KIỂM ĐƯỢC trên tổng số; dòng bắt đầu bằng ⚠ khi còn phát hiện chưa kiểm được (giao diện không thêm dấu ✓ cho dòng này)."""
-    ins = numfmt.audit_insights(ins, numfmt.Known.from_dfs(A["x"].get(3) or {}))
+    ins = numfmt.audit_insights(ins, numfmt.Known.from_dfs(A["x"].get(3) or {}, A.get("names")))
     ok, n = numfmt.verify_counts(ins)
     if not n:
         return "Chưa có phát hiện nào đủ chắc để nêu từ dữ liệu này"

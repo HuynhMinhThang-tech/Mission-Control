@@ -25,7 +25,7 @@ PROMPT = (
     '"unit":"đơn vị","insight":"1 câu KẾT LUẬN rút ra từ biểu đồ này, có số (dùng làm tiêu đề slide)","recommended":true}],'
     '"dash":[{"ds":"tên bảng","by":"NHÃN chiều phân tích hoặc Thời gian","measure":"NHÃN chỉ số hoặc Số bản ghi","agg":"sum|avg","kind":"bars|cols|donut|trend","title":"tên biểu đồ","why":"một câu: biểu đồ này trả lời điều gì"}],'
     '"bp":{"layout":"auto|overview|rank|compliance|story","kpis":[{"ds":"tên bảng","kind":"...","measure":"NHÃN chỉ số","by":"NHÃN chiều","label":"tên thẻ KPI"}],"table":false}}\n'
-    "x,y phải là tên cột có thật. ĐA DẠNG loại biểu đồ và KHÔNG đề xuất 2 biểu đồ trùng bảng + cột: 'line' cho chuỗi thời gian; 'bars' xếp hạng/so sánh; 'cols' so sánh ít nhóm; 'donut' cơ cấu tỷ trọng (<=7 phần, không âm).")
+    "x,y phải là tên cột có thật. ĐA DẠNG loại biểu đồ và KHÔNG đề xuất 2 biểu đồ trùng bảng + cột: 'line' chuỗi thời gian (nhấn xu hướng); 'area' chuỗi thời gian khi muốn nhấn quy mô tích lũy; 'bars' xếp hạng/so sánh nhiều nhóm; 'cols' so sánh ít nhóm; 'lollipop' xếp hạng gọn khi có nhiều nhóm; 'pareto' khi cần chỉ ra ít nhóm nào tạo phần lớn tổng (80/20, giá trị không âm, từ 4 nhóm); 'donut' hoặc 'pie' cơ cấu tỷ trọng (<=7 phần, không âm); 'treemap' cơ cấu của nhiều nhóm (8-24 phần, không âm). Chọn dạng hợp với câu hỏi, đừng dùng mãi cột.")
 
 
 def run(fb=""):
@@ -39,7 +39,7 @@ def run(fb=""):
     r = llm_json(SYS(ROLE), ctx_txt(fb) + prev(5, fb) + f"Bảng kết quả: {J(cols, 5000)}\nPhát hiện: {J(A['d'][4], 4000)}\nDANH MỤC DASHBOARD: {cat_txt}\n\n" + data_card(A["clean"]) + PROMPT + DASH_RULE)
     charts = valid_charts(r.get("charts", []), tabs) or valid_charts(r3["charts"], tabs)
     tick(1)
-    known = numfmt.Known.from_dfs(A["x"][3])
+    known = numfmt.Known.from_dfs(A["x"][3], A.get("names"))
     r = numfmt.fix_payload(r, known)
     charts = refine_charts(numfmt.fix_payload(charts, known), A["x"][3])        # tiêu đề biểu đồ không khớp số liệu -> thay bằng câu tính từ dữ liệu
     ai = dash_plan.suggest(r.get("dash"), cat)                # gợi ý của AI (đã loại cột bịa) + bổ sung bằng luật nếu quá ít
